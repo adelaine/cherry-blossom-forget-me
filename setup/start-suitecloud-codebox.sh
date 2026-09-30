@@ -12,11 +12,11 @@ if [[ ! -f "$config_file" ]]; then
   exit 1
 fi
 if ! command -v podman >/dev/null 2>&1; then
-  echo 'Podman is not available in this runbox.' >&2
+  echo 'Podman is not available on this codebox.' >&2
   exit 1
 fi
 if ! podman info >/dev/null 2>&1; then
-  echo 'Podman is not ready in this runbox.' >&2
+  echo 'Podman is not ready on this codebox.' >&2
   exit 1
 fi
 
@@ -30,12 +30,25 @@ if ! podman image exists suitecloud-workspace; then
     echo 'Build cancelled.' >&2
     exit 1
   fi
-  podman build --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"
+fi
+podman build --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"
+
+certificate_paths="$(podman run --rm \
+  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \
+  --entrypoint node suitecloud-workspace \
+  /usr/local/bin/clone-repos.mjs --certificate-paths)"
+public_certificate="${certificate_paths%%$'\n'*}"
+private_certificate="${certificate_paths#*$'\n'}"
+if [[ ! -f "$public_certificate" || ! -f "$private_certificate" ]]; then
+  echo 'Certificate files were not found. Update their paths in suiteapps-to-install.json.' >&2
+  exit 1
 fi
 
 mounts=(
   --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json"
   --mount "type=bind,src=$repos_dir,dst=/workspace"
+  --mount "type=bind,src=$public_certificate,dst=/config/certs/public.pem,ro=true"
+  --mount "type=bind,src=$private_certificate,dst=/config/certs/private.pem,ro=true"
 )
 
 for name in .nems.env config.toml; do
@@ -45,4 +58,4 @@ for name in .nems.env config.toml; do
   fi
 done
 
-podman run --rm -it "${mounts[@]}" suitecloud-workspace
+podman run --rm -it "${mounts[@]}" suitecloud-workspace --deploy
