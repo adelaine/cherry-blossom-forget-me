@@ -2,16 +2,19 @@ FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24
 
 USER root
 RUN if command -v dnf >/dev/null 2>&1; then \
-      dnf install -y git ca-certificates && dnf clean all; \
+      dnf install -y git ca-certificates java-21-openjdk-devel && dnf clean all; \
     else \
-      microdnf install -y git ca-certificates && microdnf clean all; \
+      microdnf install -y git ca-certificates java-21-openjdk-devel && microdnf clean all; \
     fi
 
 # Set to true only after accepting the Oracle Free Use Terms and Conditions.
 ARG SUITECLOUD_CLI_ACCEPT_LICENSE=false
 RUN test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \
-    && SUITECLOUD_CLI_ACCEPT_LICENSE=true npm install -g @oracle/suitecloud-cli \
+    && SUITECLOUD_CLI_ACCEPT_LICENSE=true npm install -g --allow-scripts=@oracle/suitecloud-cli @oracle/suitecloud-cli \
+    && test -n "$(find "$HOME/.suitecloud-sdk/cli" -maxdepth 1 -name '*.jar' -print -quit)" \
     && node --version \
+    && java -version \
+    && javac -version \
     && suitecloud --version
 
 COPY clone-repos.mjs gitlab-askpass.sh /usr/local/bin/
