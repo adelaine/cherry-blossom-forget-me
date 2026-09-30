@@ -1,0 +1,16 @@
+{
+  "repositories": [
+    {
+      "url": "https://gitlab.example.com/group/repo-one.git",
+      "directory": "repo-one"
+    },
+    {
+      "url": "https://gitlab.example.com/group/repo-two.git",
+      "directory": "repo-two"
+    },
+    {
+      "url": "https://gitlab.example.com/group/repo-three.git",
+      "directory": "repo-three"
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+
+process.on('uncaughtException', error => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+
+const configPath = '/config/suiteapps-to-install.json';
+const tokenPath = '/tmp/suitecloud-gitlab-token';
+const nemsFiles = ['/config/.nems.env', '/config/config.toml'];
+
+function readToken(file) {
+  if (!existsSync(file)) return '';
+  let contents;
+  try {
+    contents = readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+  let section = '';
+  for (const raw of contents.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const heading = line.match(/^\[([^\]]+)\]$/);
+    if (heading) {
+      section = heading[1].toLowerCase();
+      continue;
+    }
+    const setting = (file.endsWith('.toml') &&
+      line.match(/(?:^|[{,]\s*)((?:nems_)?gitlab_(?:(?:personal|private|access|api)_)?token)\s*=\s*("[^"]*"|'[^']*')/i))
+      || line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.*?)\s*$/);
+    if (!setting) continue;
+    const key = setting[1].toLowerCase();
+    const isGitlabToken = /^(?:nems_)?gitlab_(?:(?:personal|private|access|api)_)?token$/.test(key)
+      || key === 'gitlab_pat'
+      || key === 'gitlab.token'
+      || (section === 'gitlab' && ['token', 'access_token', 'private_token', 'personal_access_token', 'pat'].includes(key));
+    if (!isGitlabToken) continue;
+    let value = setting[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    } else {
+      value = value.replace(/\s+#.*$/, '');
+    }
+    if (value) return value;
+  }
+  return '';
+}
+
+function promptForToken() {
+  const result = spawnSync('bash', ['-c',
+    'read -rsp "GitLab token: " token </dev/tty; printf "\\n" >/dev/tty; printf "%s" "$token"'
+  ], { encoding: 'utf8' });
+  if (result.status !== 0) throw new Error('Could not read the GitLab token.');
+  return result.stdout;
+}
+
+function promptForUrl(number) {
+  while (true) {
+    const result = spawnSync('bash', ['-c',
+      'read -rp "$1" value </dev/tty; printf "%s" "$value"',
+      'bash', `Paste the GitLab HTTPS clone link for repository ${number}: `
+    ], { encoding: 'utf8' });
+    if (result.status !== 0) throw new Error('Could not read the GitLab link.');
+    const url = result.stdout.trim();
+    if (/^https:\/\/[^/]+\/.+\.git$/.test(url)) return url;
+    console.error('Paste an HTTPS clone link from GitLab that ends in .git.');
+  }
+}
+
+function run(command, args) {
+  const result = spawnSync(command, args, { stdio: 'inherit', env: {
+    ...process.env,
+    GIT_ASKPASS: '/usr/local/bin/gitlab-askpass.sh',
+    GIT_TERMINAL_PROMPT: '0'
+  }});
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${command} failed.`);
+}
+
+const config = JSON.parse(readFileSync(configPath, 'utf8'));
+if (!Array.isArray(config.repositories) || config.repositories.length !== 3) {
+  throw new Error('suiteapps-to-install.json must list exactly three repositories.');
+}
+
+let changed = false;
+for (const [index, repo] of config.repositories.entries()) {
+  if (repo && typeof repo.url === 'string' && repo.url.includes('gitlab.example.com/')) {
+    repo.url = promptForUrl(index + 1);
+    changed = true;
+  }
+}
+if (changed) writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+const seen = new Set();
+for (const repo of config.repositories) {
+  if (typeof repo.url !== 'string' || !/^https:\/\/[^/]+\/.+\.git$/.test(repo.url)) {
+    throw new Error('Each repository needs an HTTPS GitLab clone URL ending in .git.');
+  }
+  if (typeof repo.directory !== 'string' ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repo.directory) ||
+      ['.', '..'].includes(repo.directory) || seen.has(repo.directory.toLowerCase())) {
+    throw new Error('Each repository needs a unique folder name without spaces or slashes.');
+  }
+  seen.add(repo.directory.toLowerCase());
+}
+
+try {
+  const token = nemsFiles.map(readToken).find(Boolean) || promptForToken();
+  if (!token) throw new Error('A GitLab token is required.');
+  writeFileSync(tokenPath, token, { mode: 0o600 });
+  for (const repo of config.repositories) {
+    const destination = join('/workspace', repo.directory);
+    if (existsSync(join(destination, '.git'))) {
+      const remote = spawnSync('git', ['-C', destination, 'remote', 'get-url', 'origin'], { encoding: 'utf8' });
+      if (remote.status !== 0 || remote.stdout.trim() !== repo.url) {
+        throw new Error(`${repo.directory} already contains a different repository.`);
+      }
+      console.log(`Already copied: ${repo.directory}`);
+    } else if (existsSync(destination)) {
+      throw new Error(`${repo.directory} already exists but is not a Git repository.`);
+    } else {
+      console.log(`Copying ${repo.directory}...`);
+      try {
+        run('git', ['clone', repo.url, destination]);
+      } catch (error) {
+        rmSync(destination, { recursive: true, force: true });
+        throw error;
+      }
+    }
+  }
+  console.log('Ready. Type exit when you are done.');
+  run('bash', []);
+} finally {
+  rmSync(tokenPath, { force: true });
+}
