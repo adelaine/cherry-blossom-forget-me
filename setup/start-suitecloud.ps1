@@ -38,7 +38,27 @@ for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
     if (-not $validUrl -or -not $validDirectory) {
         throw "SuiteApp $($index + 1) has an invalid URL or directory. Update suiteapps-to-install.json and run start-windows.cmd again."
     }
+    if ($null -ne $suiteapp.branch) {
+        $branch = $suiteapp.branch
+        $invalidPart = $branch -is [string] -and @($branch.Split('/') | Where-Object { $_.StartsWith('.') -or $_.EndsWith('.') -or $_.EndsWith('.lock') }).Count -gt 0
+        if ($branch -isnot [string] -or $branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $branch.Contains('..') -or $branch.Contains('//') -or $invalidPart) {
+            throw "SuiteApp $($index + 1) has an invalid branch. Update suiteapps-to-install.json and run start-windows.cmd again."
+        }
+    }
     $seenDirectories[$directory.ToLowerInvariant()] = $true
+}
+
+if ($config.runbox.account -isnot [string] -or $config.runbox.account -notmatch '^[A-Za-z0-9_-]+$' -or
+    $config.runbox.url -isnot [string] -or $config.runbox.url -notmatch '^[A-Za-z0-9.-]+\.netsuite\.com$' -or
+    $config.certificates.id -isnot [string] -or $config.certificates.id -notmatch '^[A-Za-z0-9_-]+$') {
+    throw 'The runbox account, domain, or certificate ID is invalid. Update suiteapps-to-install.json and run start-windows.cmd again.'
+}
+$publicCertificate = $config.certificates.public
+$privateCertificate = $config.certificates.private
+if ($publicCertificate -isnot [string] -or $privateCertificate -isnot [string] -or
+    -not (Test-Path -LiteralPath $publicCertificate -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $privateCertificate -PathType Leaf)) {
+    throw 'The certificate files were not found. Update their paths in suiteapps-to-install.json and run start-windows.cmd again.'
 }
 
 & (Join-Path $PSScriptRoot 'install-podman-windows.ps1')
@@ -59,7 +79,9 @@ if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 
 $mounts = @(
     '--mount', "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json",
-    '--mount', "type=bind,src=$reposDir,dst=/workspace"
+    '--mount', "type=bind,src=$reposDir,dst=/workspace",
+    '--mount', "type=bind,src=$publicCertificate,dst=/config/certs/public.pem,ro=true",
+    '--mount', "type=bind,src=$privateCertificate,dst=/config/certs/private.pem,ro=true"
 )
 
 foreach ($name in @('.nems.env', 'config.toml')) {
@@ -69,5 +91,5 @@ foreach ($name in @('.nems.env', 'config.toml')) {
     }
 }
 
-& podman run --rm -it --cgroups=disabled @mounts suitecloud-workspace
+& podman run --rm -it --cgroups=disabled @mounts suitecloud-workspace --deploy
 if ($LASTEXITCODE -ne 0) { throw 'The container stopped with an error.' }

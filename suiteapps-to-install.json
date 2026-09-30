@@ -10,11 +10,17 @@
     },
     {
       "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bank-feeds-nsn.git",
-      "directory": "bank-feeds-nsn"
+      "directory": "bank-feeds-nsn",
+      "branch": "develop"
     }
   ],
   "runbox" : {
-    "url": "lazarorodrigf587-runbox-acct1-dusa1-001.vm.eng.netsuite.com",
+    "url": "lazarorodrigf587-runbox-ml-dusa1-001.vm.eng.netsuite.com",
     "account": "000071"
+  },
+  "certificates" : {
+    "id": "",
+    "public": "",
+    "private": ""
   }
 }
