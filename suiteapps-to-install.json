@@ -1,16 +1,20 @@
 {
-  "repositories": [
+  "suiteapps": [
     {
-      "url": "https://gitlab.example.com/group/repo-one.git",
-      "directory": "repo-one"
+      "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/absi-nsn.git",
+      "directory": "absi-nsn"
     },
     {
-      "url": "https://gitlab.example.com/group/repo-two.git",
-      "directory": "repo-two"
+      "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bsp-nsn.git",
+      "directory": "bsp-nsn"
     },
     {
-      "url": "https://gitlab.example.com/group/repo-three.git",
-      "directory": "repo-three"
+      "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bank-feeds-nsn.git",
+      "directory": "bank-feeds-nsn"
     }
-  ]
+  ],
+  "runbox" : {
+    "url": "lazarorodrigf587-runbox-acct1-dusa1-001.vm.eng.netsuite.com",
+    "account": "000071"
+  }
 }

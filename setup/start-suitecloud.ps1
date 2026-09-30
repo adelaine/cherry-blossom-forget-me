@@ -6,22 +6,42 @@ $reposDir = Join-Path $projectDir 'repos'
 $nemsDir = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex'
 
 if (-not (Test-Path -LiteralPath $configFile -PathType Leaf)) {
-    throw 'Missing suiteapps-to-install.json.'
+    throw 'Missing suiteapps-to-install.json. Update the JSON file and run start-windows.cmd again.'
 }
-if (-not (Get-Command podman -ErrorAction SilentlyContinue)) {
-    & (Join-Path $PSScriptRoot 'install-podman-windows.ps1')
+
+try {
+    $config = Get-Content -LiteralPath $configFile -Raw | ConvertFrom-Json -ErrorAction Stop
+} catch {
+    throw 'suiteapps-to-install.json is not valid JSON. Update the file and run start-windows.cmd again.'
 }
-& podman info --format '{{.Host.Arch}}' *> $null
-if ($LASTEXITCODE -ne 0) {
-    $machines = & podman machine list --format '{{.Name}}'
-    if ($LASTEXITCODE -ne 0) { throw 'Could not check the Podman machine.' }
-    if (-not $machines) {
-        & podman machine init
-        if ($LASTEXITCODE -ne 0) { throw 'Could not set up the Podman machine.' }
+if ($null -eq $config.suiteapps -or $config.suiteapps -isnot [array]) {
+    throw 'suiteapps-to-install.json needs a "suiteapps" list. Update the file and run start-windows.cmd again.'
+}
+if ($config.suiteapps.Count -eq 0) {
+    Write-Host 'There are no SuiteApps to install in suiteapps-to-install.json.'
+    return
+}
+
+$seenDirectories = @{}
+for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
+    $suiteapp = $config.suiteapps[$index]
+    $url = $suiteapp.url
+    $directory = $suiteapp.directory
+    $validUrl = $url -is [string] -and (
+        $url -match '^git@gitlab\.eng\.netsuite\.com:[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$' -or
+        $url -match '^https://gitlab\.eng\.netsuite\.com/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$'
+    )
+    $validDirectory = $directory -is [string] -and
+        $directory -match '^[A-Za-z0-9][A-Za-z0-9._-]*$' -and
+        $directory -notin @('.', '..') -and
+        -not $seenDirectories.ContainsKey($directory.ToLowerInvariant())
+    if (-not $validUrl -or -not $validDirectory) {
+        throw "SuiteApp $($index + 1) has an invalid URL or directory. Update suiteapps-to-install.json and run start-windows.cmd again."
     }
-    & podman machine start
-    if ($LASTEXITCODE -ne 0) { throw 'Could not start the Podman machine.' }
+    $seenDirectories[$directory.ToLowerInvariant()] = $true
 }
+
+& (Join-Path $PSScriptRoot 'install-podman-windows.ps1')
 
 New-Item -ItemType Directory -Force -Path $reposDir | Out-Null
 
@@ -31,9 +51,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host 'https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_155929845760.html'
     $answer = Read-Host 'Do you accept these terms? Type yes to continue'
     if ($answer -ne 'yes') { throw 'Build cancelled.' }
-    & podman build --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
-    if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 }
+
+Write-Host 'Preparing the SuiteCloud container...'
+& podman build --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
+if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 
 $mounts = @(
     '--mount', "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json",
@@ -47,5 +69,5 @@ foreach ($name in @('.nems.env', 'config.toml')) {
     }
 }
 
-& podman run --rm -it @mounts suitecloud-workspace
+& podman run --rm -it --cgroups=disabled @mounts suitecloud-workspace
 if ($LASTEXITCODE -ne 0) { throw 'The container stopped with an error.' }

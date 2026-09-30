@@ -7,7 +7,8 @@ process.on('uncaughtException', error => {
   process.exitCode = 1;
 });
 
-const configPath = '/config/suiteapps-to-install.json';
+const validateOnly = process.argv[2] === '--validate';
+const configPath = validateOnly ? process.argv[3] : '/config/suiteapps-to-install.json';
 const tokenPath = '/tmp/suitecloud-gitlab-token';
 const nemsFiles = ['/config/.nems.env', '/config/config.toml'];
 
@@ -53,22 +54,35 @@ function readToken(file) {
 function promptForToken() {
   const result = spawnSync('bash', ['-c',
     'read -rsp "GitLab token: " token </dev/tty; printf "\\n" >/dev/tty; printf "%s" "$token"'
-  ], { encoding: 'utf8' });
+  ], { encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'] });
   if (result.status !== 0) throw new Error('Could not read the GitLab token.');
   return result.stdout;
 }
 
-function promptForUrl(number) {
-  while (true) {
-    const result = spawnSync('bash', ['-c',
-      'read -rp "$1" value </dev/tty; printf "%s" "$value"',
-      'bash', `Paste the GitLab HTTPS clone link for repository ${number}: `
-    ], { encoding: 'utf8' });
-    if (result.status !== 0) throw new Error('Could not read the GitLab link.');
-    const url = result.stdout.trim();
-    if (/^https:\/\/[^/]+\/.+\.git$/.test(url)) return url;
-    console.error('Paste an HTTPS clone link from GitLab that ends in .git.');
+function invalidConfig(message) {
+  throw new Error(`${message} Update suiteapps-to-install.json and run the start script again.`);
+}
+
+function gitlabHttpsUrl(raw) {
+  if (typeof raw !== 'string') return null;
+  let projectPath;
+  const ssh = raw.match(/^git@gitlab\.eng\.netsuite\.com:([A-Za-z0-9._/-]+)$/i);
+  if (ssh) {
+    projectPath = ssh[1];
+  } else {
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'gitlab.eng.netsuite.com' ||
+        parsed.port || parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+    projectPath = parsed.pathname.slice(1);
   }
+  projectPath = projectPath.replace(/\.git$/i, '');
+  if (!/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/.test(projectPath)) return null;
+  return `https://gitlab.eng.netsuite.com/${projectPath}.git`;
 }
 
 function run(command, args) {
@@ -81,51 +95,58 @@ function run(command, args) {
   if (result.status !== 0) throw new Error(`${command} failed.`);
 }
 
-const config = JSON.parse(readFileSync(configPath, 'utf8'));
-if (!Array.isArray(config.repositories) || config.repositories.length !== 3) {
-  throw new Error('suiteapps-to-install.json must list exactly three repositories.');
+let config;
+try {
+  config = JSON.parse(readFileSync(configPath, 'utf8'));
+} catch {
+  invalidConfig('The JSON file could not be read or has a syntax error.');
 }
-
-let changed = false;
-for (const [index, repo] of config.repositories.entries()) {
-  if (repo && typeof repo.url === 'string' && repo.url.includes('gitlab.example.com/')) {
-    repo.url = promptForUrl(index + 1);
-    changed = true;
-  }
+if (!config || !Array.isArray(config.suiteapps)) {
+  invalidConfig('The file needs a "suiteapps" list.');
 }
-if (changed) writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+if (config.suiteapps.length === 0) {
+  console.log('There are no SuiteApps to install in suiteapps-to-install.json.');
+  process.exit(0);
+}
 
 const seen = new Set();
-for (const repo of config.repositories) {
-  if (typeof repo.url !== 'string' || !/^https:\/\/[^/]+\/.+\.git$/.test(repo.url)) {
-    throw new Error('Each repository needs an HTTPS GitLab clone URL ending in .git.');
+for (const [index, repo] of config.suiteapps.entries()) {
+  if (!repo || typeof repo !== 'object' || Array.isArray(repo) || !gitlabHttpsUrl(repo.url)) {
+    invalidConfig(`SuiteApp ${index + 1} needs a GitLab HTTPS or SSH URL from gitlab.eng.netsuite.com.`);
   }
   if (typeof repo.directory !== 'string' ||
       !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repo.directory) ||
       ['.', '..'].includes(repo.directory) || seen.has(repo.directory.toLowerCase())) {
-    throw new Error('Each repository needs a unique folder name without spaces or slashes.');
+    invalidConfig(`SuiteApp ${index + 1} needs a unique "directory" name without spaces or slashes.`);
   }
   seen.add(repo.directory.toLowerCase());
+}
+
+if (validateOnly) {
+  const label = config.suiteapps.length === 1 ? 'SuiteApp is' : 'SuiteApps are';
+  console.log(`${config.suiteapps.length} ${label} listed and valid.`);
+  process.exit(0);
 }
 
 try {
   const token = nemsFiles.map(readToken).find(Boolean) || promptForToken();
   if (!token) throw new Error('A GitLab token is required.');
   writeFileSync(tokenPath, token, { mode: 0o600 });
-  for (const repo of config.repositories) {
+  for (const repo of config.suiteapps) {
     const destination = join('/workspace', repo.directory);
+    const cloneUrl = gitlabHttpsUrl(repo.url);
     if (existsSync(join(destination, '.git'))) {
       const remote = spawnSync('git', ['-C', destination, 'remote', 'get-url', 'origin'], { encoding: 'utf8' });
-      if (remote.status !== 0 || remote.stdout.trim() !== repo.url) {
-        throw new Error(`${repo.directory} already contains a different repository.`);
+      if (remote.status !== 0 || gitlabHttpsUrl(remote.stdout.trim()) !== cloneUrl) {
+        throw new Error(`${repo.directory} already contains a different SuiteApp.`);
       }
       console.log(`Already copied: ${repo.directory}`);
     } else if (existsSync(destination)) {
-      throw new Error(`${repo.directory} already exists but is not a Git repository.`);
+      throw new Error(`${repo.directory} already exists but is not a Git checkout.`);
     } else {
       console.log(`Copying ${repo.directory}...`);
       try {
-        run('git', ['clone', repo.url, destination]);
+        run('git', ['clone', cloneUrl, destination]);
       } catch (error) {
         rmSync(destination, { recursive: true, force: true });
         throw error;
