@@ -7,6 +7,19 @@ $authFile = Join-Path $credentialsDir 'auth.json'
 $reposDir = Join-Path $projectDir 'repos'
 $nemsDir = if ($env:SUITECONTAINER_NEMS_DIR) { $env:SUITECONTAINER_NEMS_DIR } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
 
+function ConvertTo-PodmanMachinePath([string]$path) {
+    $fullPath = [IO.Path]::GetFullPath($path)
+    if ($fullPath -notmatch '^([A-Za-z]):[\\/](.*)$') {
+        throw "Podman's WSL machine cannot access this Windows path: $fullPath"
+    }
+    return "/mnt/$($Matches[1].ToLowerInvariant())/$($Matches[2].Replace('\', '/'))"
+}
+
+function Quote-PosixArgument([string]$value) {
+    $quote = [string][char]39
+    return $quote + $value.Replace($quote, $quote + '"' + $quote + '"' + $quote) + $quote
+}
+
 if (-not (Test-Path -LiteralPath $configFile -PathType Leaf)) {
     $templateFile = Join-Path $projectDir 'suitecontainer.config.example.json'
     if (-not (Test-Path -LiteralPath $templateFile -PathType Leaf)) {
@@ -72,7 +85,7 @@ if ($null -eq $config.vms -or $config.vms -isnot [array] -or $config.vms.Count -
 }
 foreach ($vm in $config.vms) {
     if ($vm.account -isnot [string] -or $vm.account -notmatch '^[A-Za-z0-9_-]+$' -or
-        $vm.url -isnot [string] -or $vm.url -notmatch '^(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+\.netsuite\.com$') {
+        $vm.url -isnot [string] -or $vm.url -notmatch '^(?:[A-Za-z0-9-]+\.)+netsuite\.com$') {
         throw 'The VM account or domain is invalid. Update suitecontainer.config.json and run start-windows.cmd again.'
     }
 }
@@ -114,7 +127,39 @@ if (Test-Path -LiteralPath $npmrcFile -PathType Leaf) {
 }
 
 Write-Host 'Preparing the SuiteCloud container...'
-& podman build @buildSecrets -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
+$wslMachine = $null
+if ($buildSecrets.Count -gt 0) {
+    $machineJson = (& podman machine list --format json) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'Could not check the Podman machine.' }
+    $machines = if ($machineJson.Trim()) { @(ConvertFrom-Json -InputObject $machineJson) } else { @() }
+    $wslMachine = $machines | Where-Object { $_.Default -and $_.Running -and $_.VMType -eq 'wsl' } | Select-Object -First 1
+}
+if ($wslMachine) {
+    # The Windows remote client currently builds secret temp-file paths with mixed separators.
+    # Build inside the WSL machine, where the same host files are mounted under /mnt/<drive>.
+    $remoteSecrets = @('--secret', "id=npmrc,src=$(ConvertTo-PodmanMachinePath $npmrcFile)")
+    $tokenFile = $null
+    try {
+        if ($env:NSX_NPM_TOKEN) {
+            $tokenFile = Join-Path $env:TEMP ("suitecontainer-npm-token-$([guid]::NewGuid().ToString('N'))")
+            [IO.File]::WriteAllText($tokenFile, $env:NSX_NPM_TOKEN, [Text.UTF8Encoding]::new($false))
+            $remoteSecrets += @('--secret', "id=npm-token,src=$(ConvertTo-PodmanMachinePath $tokenFile)")
+        }
+        $remoteArgs = @('podman', 'build') + $remoteSecrets + @(
+            '-f', (ConvertTo-PodmanMachinePath (Join-Path $PSScriptRoot 'Containerfile')),
+            '--build-arg', 'SUITECLOUD_CLI_ACCEPT_LICENSE=true', '-t', 'suitecloud-workspace',
+            (ConvertTo-PodmanMachinePath $PSScriptRoot)
+        )
+        $remoteCommand = ($remoteArgs | ForEach-Object { Quote-PosixArgument $_ }) -join ' '
+        & podman machine ssh $wslMachine.Name -- $remoteCommand
+    } finally {
+        if ($tokenFile -and (Test-Path -LiteralPath $tokenFile)) {
+            Remove-Item -LiteralPath $tokenFile -Force
+        }
+    }
+} else {
+    & podman build @buildSecrets -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
+}
 if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 
 & podman run --rm --cgroups=disabled `

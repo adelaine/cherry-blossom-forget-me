@@ -19,8 +19,9 @@ case "$(uname -m)" in
   *) echo 'This Mac processor is not supported by the Podman installer.' >&2; exit 1 ;;
 esac
 
-package_file="$(mktemp -t podman-installer.XXXXXX)"
-trap 'rm -f "$package_file"' EXIT
+package_dir="$(mktemp -d -t podman-installer.XXXXXX)"
+package_file="$package_dir/podman-installer-macos-${package_arch}.pkg"
+trap 'rm -f "$package_file"; rmdir "$package_dir"' EXIT
 package_url="https://github.com/podman-container-tools/podman/releases/latest/download/podman-installer-macos-${package_arch}.pkg"
 
 echo 'Downloading the official Podman installer...'

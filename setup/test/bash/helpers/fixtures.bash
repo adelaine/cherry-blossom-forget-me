@@ -63,7 +63,7 @@ make_isolated_path() {
   # Keep only required utilities so host Podman and Homebrew cannot leak in.
   fixture_path="$fixture_bin"
   rm -f "$fixture_bin/podman"
-  for utility in bash dirname mktemp rm cat touch chmod mkdir cp; do
+  for utility in bash dirname mktemp rm rmdir cat touch chmod mkdir cp; do
     printf '#!/bin/bash\nexec %q "$@"\n' "$(command -v "$utility")" > "$fixture_bin/$utility"
     chmod +x "$fixture_bin/$utility"
   done

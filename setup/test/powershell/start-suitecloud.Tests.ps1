@@ -36,6 +36,7 @@ Describe 'Windows SuiteCloud launcher' {
         $global:LauncherTest_calls = [Collections.Generic.List[object]]::new()
         $global:LauncherTest_imageExit = 0
         $global:LauncherTest_buildExit = 0
+        $global:LauncherTest_machineJson = ''
         $global:LauncherTest_prepareExit = 0
         $global:LauncherTest_pathsExit = 0
         $global:LauncherTest_deployExit = 0
@@ -48,6 +49,8 @@ Describe 'Windows SuiteCloud launcher' {
             $global:LASTEXITCODE = 0
             if ($Arguments[0] -eq 'image') { $global:LASTEXITCODE = $global:LauncherTest_imageExit }
             elseif ($Arguments[0] -eq 'build') { $global:LASTEXITCODE = $global:LauncherTest_buildExit }
+            elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'list') { $global:LauncherTest_machineJson }
+            elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'ssh') { $global:LASTEXITCODE = $global:LauncherTest_buildExit }
             elseif ($Arguments -contains '--prepare-certificates') { $global:LASTEXITCODE = $global:LauncherTest_prepareExit }
             elseif ($Arguments -contains '--certificate-paths') {
                 $global:LASTEXITCODE = $global:LauncherTest_pathsExit
@@ -160,6 +163,31 @@ Describe 'Windows SuiteCloud launcher' {
         $build = @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' })[0]
         $build | Should -Contain 'SUITECLOUD_CLI_ACCEPT_LICENSE=true'
         Should -Invoke Read-Host -Times 0 -Exactly
+    }
+    It 'builds with secrets inside the WSL machine without exposing the token' {
+        $previousNpmrc = $env:SUITECONTAINER_NPMRC
+        $previousToken = $env:NSX_NPM_TOKEN
+        $previousTemp = $env:TEMP
+        try {
+            $env:SUITECONTAINER_NPMRC = Join-Path $global:LauncherTest_root 'npm config/.npmrc'
+            New-Item -ItemType Directory -Path (Split-Path -Parent $env:SUITECONTAINER_NPMRC) | Out-Null
+            Set-Content -LiteralPath $env:SUITECONTAINER_NPMRC -Value 'registry=https://registry.example.test/'
+            $env:NSX_NPM_TOKEN = 'test-token'
+            $env:TEMP = $global:LauncherTest_root
+            $global:LauncherTest_machineJson = '[{"Name":"fixture-machine","Default":true,"Running":true,"VMType":"wsl"}]'
+            Invoke-TestLauncher
+            $ssh = @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'machine' -and $_[1] -eq 'ssh' })[0]
+            $ssh | Should -Contain 'fixture-machine'
+            $ssh[-1] | Should -Match 'id=npmrc,src=/mnt/[a-z]/'
+            $ssh[-1] | Should -Match 'id=npm-token,src=/mnt/[a-z]/'
+            $ssh[-1] | Should -Not -Match 'test-token|\\'
+            @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' }).Count | Should -Be 0
+            @(Get-ChildItem -LiteralPath $global:LauncherTest_root -Filter 'suitecontainer-npm-token-*').Count | Should -Be 0
+        } finally {
+            $env:SUITECONTAINER_NPMRC = $previousNpmrc
+            $env:NSX_NPM_TOKEN = $previousToken
+            $env:TEMP = $previousTemp
+        }
     }
     It 'reports a failed build' {
         $global:LauncherTest_buildExit = 1

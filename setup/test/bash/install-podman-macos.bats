@@ -50,7 +50,10 @@ setup() { setup_fixture; }
   run_launcher setup/install-podman-macos.sh
   [ "$status" -eq 0 ]
   [ "$(cat "$TEST_COMMAND_LOG")" = $'uname\ncurl\npkgutil\nsudo' ]
-  [ ! -e "$(cat "$fixture_root/package-path")" ]
+  package_file="$(cat "$fixture_root/package-path")"
+  [[ "$package_file" == *.pkg ]]
+  [ ! -e "$package_file" ]
+  [ ! -e "$(dirname "$package_file")" ]
 }
 
 @test "failed signature verification stops installation and cleans the download" {
