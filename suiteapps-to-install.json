@@ -16,12 +16,11 @@
     ],
     "runbox": {
         "url": "YOUR-RUNBOX-HERE.vm.eng.netsuite.com",
-        "account": "000071",
-        "dry-run": false
+        "account": "000071"
     },
     "certificates": {
-        "id": "",
-        "public": ".ssh/public.pem",
-        "private": ".ssh/private.pem"
+        "id": "ID FROM NetSuite OAuth 2.0 Client Credentials Setup",
+        "public": "/Users/YOUR-CERTIFICATE/public.pem",
+        "private": "/Users/YOUR-CERTIFICATE/public.pem"
     }
 }
