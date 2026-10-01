@@ -20,8 +20,8 @@
         "dry-run": false
     },
     "certificates": {
-        "id": "ID_FROM_NETSUITE_CREDENTIALS_SETUP",
-        "public": "",
-        "private": ""
+        "id": "",
+        "public": ".ssh/public.pem",
+        "private": ".ssh/private.pem"
     }
 }

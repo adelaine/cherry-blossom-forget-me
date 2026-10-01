@@ -49,10 +49,17 @@ if [[ "$validation_output" == 'There are no SuiteApps to install in suiteapps-to
 fi
 
 mkdir -p -m 700 "$project_dir/.ssh"
+certificate_status=0
 podman run --rm \
   --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json" \
   --mount "type=bind,src=$project_dir/.ssh,dst=/config/.ssh" \
-  suitecloud-workspace --prepare-certificates
+  suitecloud-workspace --prepare-certificates || certificate_status=$?
+if [[ "$certificate_status" -eq 10 ]]; then
+  exit 0
+fi
+if [[ "$certificate_status" -ne 0 ]]; then
+  exit "$certificate_status"
+fi
 
 certificate_paths="$(podman run --rm \
   --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \

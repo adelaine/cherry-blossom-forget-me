@@ -9,7 +9,7 @@ import {
 } from "./step-certificates.js";
 import { prepareToken, removeToken } from "./step-token.js";
 
-export function main(args: string[] = process.argv.slice(2)): void {
+export function main(args: string[] = process.argv.slice(2)): number {
     const validateOnly = args[0] === "--validate";
     const certificatePathsOnly = args[0] === "--certificate-paths";
     const deploy = args[0] === "--deploy";
@@ -23,13 +23,13 @@ export function main(args: string[] = process.argv.slice(2)): void {
         console.log(
             "There are no SuiteApps to install in suiteapps-to-install.json.",
         );
-        return;
+        return 0;
     }
     if (validateOnly) {
         const label =
             config.suiteapps.length === 1 ? "SuiteApp is" : "SuiteApps are";
         console.log(`${config.suiteapps.length} ${label} listed and valid.`);
-        return;
+        return 0;
     }
     if (prepareCertificatesOnly) {
         const generated = prepareCertificates(config);
@@ -40,13 +40,15 @@ export function main(args: string[] = process.argv.slice(2)): void {
             console.log(
                 "Upload .ssh/public.pem in NetSuite OAuth 2.0 Client Credentials Setup for SuiteCloud Development Integration, then set certificates.id in suiteapps-to-install.json to the assigned certificate ID and run the start script again.",
             );
+            // The launchers treat this status as a successful stop for registration.
+            return 10;
         }
-        return;
+        return 0;
     }
     if (certificatePathsOnly) {
         console.log(config.certificates!.public);
         console.log(config.certificates!.private);
-        return;
+        return 0;
     }
 
     const privateKeyPath = deploy ? verifyCertificates() : null;
@@ -62,6 +64,7 @@ export function main(args: string[] = process.argv.slice(2)): void {
     } finally {
         removeToken();
     }
+    return 0;
 }
 
 if (
@@ -69,7 +72,7 @@ if (
     import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
     try {
-        main();
+        process.exitCode = main();
     } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;

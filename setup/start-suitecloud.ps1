@@ -84,6 +84,7 @@ New-Item -ItemType Directory -Force -Path $certificatesDir | Out-Null
     --mount "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json" `
     --mount "type=bind,src=$certificatesDir,dst=/config/.ssh" `
     suitecloud-workspace --prepare-certificates
+if ($LASTEXITCODE -eq 10) { return }
 if ($LASTEXITCODE -ne 0) { throw 'Certificate preparation failed.' }
 
 $certificatePaths = @(& podman run --rm --cgroups=disabled `
