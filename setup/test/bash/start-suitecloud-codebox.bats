@@ -56,12 +56,35 @@ setup() { setup_fixture; }
   assert_not_called '<build>'
 }
 
-@test "codebox reports unavailable Podman before building" {
+@test "codebox reports an unsupported package manager before building" {
   make_isolated_path
   run_launcher setup/start-suitecloud-codebox.sh
   [ "$status" -ne 0 ]
-  [[ "$output" == *'Podman is not available'* ]]
+  [[ "$output" == *'this codebox needs dnf or yum'* ]]
   [ ! -s "$TEST_COMMAND_LOG" ]
+}
+
+@test "codebox automatically installs missing Podman and continues setup" {
+  cp "$fixture_bin/podman" "$fixture_root/podman-fixture"
+  make_isolated_path
+  fake_command id 'echo 0'
+  fake_command dnf '[[ "$*" == "install -y podman" ]] || exit 2; cp "$TEST_FIXTURE_ROOT/podman-fixture" "$(dirname "$0")/podman"'
+  TEST_PREPARE_STATUS=10
+  run_launcher setup/start-suitecloud-codebox.sh
+  [ "$status" -eq 0 ]
+  assert_called dnf
+  assert_called --prepare-certificates
+}
+
+@test "codebox stops before building when package installation fails" {
+  make_isolated_path
+  fake_command id 'echo 0'
+  fake_command dnf 'echo "Repository unavailable" >&2; exit 7'
+  run_launcher setup/start-suitecloud-codebox.sh
+  [ "$status" -eq 7 ]
+  [[ "$output" == *'Repository unavailable'* ]]
+  [[ "$output" == *'Podman installation failed'* ]]
+  assert_not_called '<build>'
 }
 
 @test "codebox declines the license before building" {

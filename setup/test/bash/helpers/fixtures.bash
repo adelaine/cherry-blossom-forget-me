@@ -4,7 +4,7 @@ setup_fixture() {
   fixture_bin="$BATS_TEST_TMPDIR/bin"
   fixture_nems="$BATS_TEST_TMPDIR/nems"
   mkdir -p "$fixture_root/setup" "$fixture_root/credentials" "$fixture_bin" "$fixture_nems"
-  for script in start-suitecloud.sh start-suitecloud-codebox.sh install-podman-macos.sh gitlab-askpass.sh prepare-config.sh; do
+  for script in start-suitecloud.sh start-suitecloud-codebox.sh install-podman-macos.sh install-podman-codebox.sh gitlab-askpass.sh prepare-config.sh; do
     sed 's/\r$//' "$source_root/$script" > "$fixture_root/setup/$script"
   done
   for script in start-macos.sh start-codebox; do
@@ -60,7 +60,7 @@ make_isolated_path() {
   # Keep only required utilities so host Podman and Homebrew cannot leak in.
   fixture_path="$fixture_bin"
   rm -f "$fixture_bin/podman"
-  for utility in bash dirname mktemp rm cat touch chmod mkdir; do
+  for utility in bash dirname mktemp rm cat touch chmod mkdir cp; do
     printf '#!/bin/bash\nexec %q "$@"\n' "$(command -v "$utility")" > "$fixture_bin/$utility"
     chmod +x "$fixture_bin/$utility"
   done

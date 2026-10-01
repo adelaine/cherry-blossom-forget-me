@@ -16,8 +16,7 @@ if [[ "$config_status" -ne 0 ]]; then
   exit "$config_status"
 fi
 if ! command -v podman >/dev/null 2>&1; then
-  echo 'Podman is not available on this codebox.' >&2
-  exit 1
+  bash "$setup_dir/install-podman-codebox.sh"
 fi
 if ! podman info >/dev/null 2>&1; then
   echo 'Podman is not ready on this codebox.' >&2
