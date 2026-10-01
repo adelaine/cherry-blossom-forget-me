@@ -10,7 +10,7 @@ import { mountChanges, startWebServer } from "../src/web-server.ts";
 import { runInNewContext } from "node:vm";
 import { credentialPath, type MountRecord } from "../src/web-mounts.ts";
 import type { Auth } from "../src/step-auth.ts";
-import { ansiToHtml, ansiStyles } from "../src/ansi.ts";
+import { ansiToHtml, ansiStyles, applyAnsiColors } from "../src/ansi.ts";
 import { deploymentPage } from "../src/web-page.ts";
 import { replaceCertificates } from "../src/step-certificates.ts";
 
@@ -33,11 +33,51 @@ test("ANSI log rendering handles selective resets and incomplete snapshots", () 
     assert.equal(ansiToHtml('start\x1b[31mred\x1b[mend'), 'start<span class="ansi-fg-1">red</span>end');
 });
 
-test("ANSI log rendering discards unsupported controls and extended colors", () => {
+test("ANSI log rendering discards unsupported controls", () => {
     assert.equal(ansiToHtml('\x1b[2Jtext\x1b]8;;https://example.com\x1b\\link\x1b]8;;\x07'), 'textlink');
     assert.equal(ansiToHtml('text\x1b]unfinished title'), 'text');
-    assert.equal(ansiToHtml('\x1b[38;5;31mindexed\x1b[48;2;0;31;1mRGB'), 'indexedRGB');
     assert.equal(ansiToHtml('\x1b[38;2;0;0;0;1;32mgreen'), '<span class="ansi-bold ansi-fg-2">green</span>');
+});
+
+test("ANSI extended colors cover all 256 palette entries and exact RGB", () => {
+    for (let index = 0; index < 256; index++) {
+        const output = ansiToHtml(`\x1b[38;5;${index};48;5;${index}mcolor`);
+        if (index < 16) assert.equal(output, `<span class="ansi-fg-${index} ansi-bg-${index}">color</span>`);
+        else {
+            const levels = [0, 95, 135, 175, 215, 255];
+            const offset = index - 16;
+            const channels = index >= 232 ? Array(3).fill(8 + (index - 232) * 10) : [levels[Math.floor(offset / 36)], levels[Math.floor(offset / 6) % 6], levels[offset % 6]];
+            const hex = '#' + channels.map(channel => channel.toString(16).padStart(2, '0')).join('');
+            assert.equal(output, `<span data-ansi-fg="${hex}" data-ansi-bg="${hex}">color</span>`);
+        }
+    }
+    assert.equal(ansiToHtml('\x1b[1;38;2;12;34;56;48;2;255;0;128mRGB\x1b[39;49;22m plain'), '<span class="ansi-bold" data-ansi-fg="#0c2238" data-ansi-bg="#ff0080">RGB</span> plain');
+});
+
+test("ANSI extended colors accept colon forms and reject malformed values safely", () => {
+    for (const code of ['38:2:12:34:56', '38:2::12:34:56', '38:2:0:12:34:56', '38;2;12;34;56']) {
+        assert.equal(ansiToHtml(`\x1b[${code}m<text>`), '<span data-ansi-fg="#0c2238">&lt;text&gt;</span>');
+    }
+    assert.equal(ansiToHtml('\x1b[38:5:196;48:2::0:1:2mtext'), '<span data-ansi-fg="#ff0000" data-ansi-bg="#000102">text</span>');
+    for (const code of ['38;5;256', '38;5;', '38;2;256;0;0', '38;2;1;2', '38;2;;1;2', '38:2:1:12:34:56', '38:5:999', '58;2;0;255;0']) {
+        assert.equal(ansiToHtml(`\x1b[${code}mtext`), 'text');
+    }
+    assert.equal(ansiToHtml('\x1b[31mred\x1b[38;5;999mstill red'), '<span class="ansi-fg-1">red</span><span class="ansi-fg-1">still red</span>');
+    assert.equal(ansiToHtml('text\x1b[38;2;12;'), 'text');
+});
+
+test("ANSI RGB rendering assigns only validated CSS properties", () => {
+    const spans = [
+        { dataset: { ansiFg: '#0c2238', ansiBg: '#ff0080' }, style: {} as Record<string, string> },
+        { dataset: { ansiFg: 'url(evil)', ansiBg: '#fff; color:red' }, style: {} as Record<string, string> },
+    ];
+    const root = { querySelectorAll: () => spans } as unknown as HTMLElement;
+    applyAnsiColors(root);
+    assert.deepEqual(spans[0]!.style, { color: '#0c2238', backgroundColor: '#ff0080' });
+    assert.deepEqual(spans[1]!.style, {});
+    const browserApply = new Function(`${deploymentPage.script.split('const $ =')[0]} return applyAnsiColors;`)();
+    browserApply(root);
+    assert.ok(deploymentPage.script.includes('applyAnsiColors(log)'));
 });
 
 test("ANSI converter is self-contained in the served browser script", () => {
@@ -76,7 +116,7 @@ test("failed regeneration preserves the active pair and credentials", () => {
 test("Current VM preserves accounts and other runboxes, synchronizes JSON edits, and saves with credentials", async () => {
     const elements = new Map<string, any>();
     const element = (id: string) => {
-        if (!elements.has(id)) elements.set(id, { value: "", addEventListener(event: string, handler: Function) { this[event] = handler; } });
+        if (!elements.has(id)) elements.set(id, { value: "", querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
         return elements.get(id);
     };
     const config = { suiteapps: [], vms: [{ account: "000072", url: "old.vm.eng.netsuite.com" }, { account: "000073", url: "second.vm.eng.netsuite.com" }] };

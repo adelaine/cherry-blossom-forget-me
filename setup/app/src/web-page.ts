@@ -1,4 +1,4 @@
-import { ansiToHtml, ansiStyles } from "./ansi.ts";
+import { ansiToHtml, ansiStyles, applyAnsiColors } from "./ansi.ts";
 
 export const deploymentPage = {
     html: `<!doctype html>
@@ -17,6 +17,7 @@ export const deploymentPage = {
 </main></body></html>`,
 style: `${ansiStyles}:root{font-family:system-ui,sans-serif;color:#203040;background:#f3f5f8}body{margin:0}main{max-width:960px;margin:32px auto;padding:0 24px 48px}h1{font-size:30px}h2{font-size:21px}section{background:white;border:1px solid #dde3eb;border-radius:12px;padding:24px;margin:20px 0}p{line-height:1.6}label{display:block;font-weight:600;margin:16px 0 6px}input,textarea{box-sizing:border-box;width:100%;padding:12px;border:1px solid #a8b4c2;border-radius:6px;font:inherit}textarea,pre{font-family:ui-monospace,monospace;font-size:14px}button{padding:11px 18px;margin:14px 10px 0 0;border:1px solid #496a91;border-radius:6px;background:#fff;color:#203040;font:inherit;cursor:pointer}#deploy{background:#235f9f;color:white}button:disabled{opacity:.45;cursor:default}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:440px;overflow:auto;background:#142333;color:#e8eef7;padding:18px;border-radius:6px;min-height:70px}[hidden]{display:none!important}#validation,#cert-message{color:#70421a}summary{cursor:pointer;padding-top:12px}a{color:#235f9f}`,
     script: `const ansiToHtml = ${ansiToHtml.toString()};
+const applyAnsiColors = ${applyAnsiColors.toString()};
 const $ = id => document.getElementById(id);
 const fragment = new URLSearchParams(location.hash.slice(1));
 const session = fragment.get('session') || sessionStorage.getItem('suitecloud-session') || '';
@@ -46,6 +47,7 @@ function render(next) {
   $('run-state').textContent = ({idle:'No deployment started.',running:'Deployment in progress…',succeeded:'Deployment completed.',failed:'Deployment failed. Review the message below, correct settings or credentials, and retry.'})[next.run.state];
   const log = $('log'); const bottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
   log.innerHTML = ansiToHtml(next.run.log);
+  applyAnsiColors(log);
   if (bottom) log.scrollTop = log.scrollHeight;
   try { const vm = JSON.parse($('config').value).vms?.[0]?.url; $('vm').value = vm || ''; const safe = typeof vm === 'string' && /^(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+$/.test(vm) && vm.endsWith('.netsuite.com'); $('runbox-link').hidden = !safe; if (safe) $('runbox-link').href = 'https://' + vm; } catch { $('runbox-link').hidden = true; }
 }
