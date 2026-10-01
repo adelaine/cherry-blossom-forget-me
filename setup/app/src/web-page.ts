@@ -31,6 +31,7 @@ async function api(path, data) {
   return result;
 }
 function render(next) {
+  if (stopped) return;
   state = next;
   if (!editing) $('config').value = next.config;
   const busy = next.run.state === 'running';
@@ -74,6 +75,15 @@ action('credentials', async () => { const data = Object.fromEntries(['public','p
 action('generate', async () => { if ((state.certificates.hasExisting || credentialEditing) && !confirm('Generate new certificates? Old certificates will not be preserved. Certificate paths will be replaced and the certificate ID cleared. Register the new public certificate on your runbox and enter its new certificate ID.')) return; const next = await api('generate',{replace:true}); for (const key of ['public','private','id']) $(key).value = next.certificates[key] || ''; credentialEditing = !!$('token').value.trim(); render(next); $('cert-details').open = true; $('credential-message').textContent = 'New certificates generated. Register the public certificate on your runbox and enter its new certificate ID.'; }, 'credential-message');
 action('deploy', async () => { render(await api('deploy',{config:$('config').value})); editing = false; });
 action('download', async () => { const response = await fetch('/api/certificate',{headers:{'X-Session-Token':session}}); if (!response.ok) throw new Error((await response.json()).error); const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href = url; a.download = 'public.pem'; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000); }, 'credential-message');
-action('stop', async () => { await api('stop',{}); stopped = true; $('run-state').textContent = 'App stopped. You can close this page.'; for (const button of document.querySelectorAll('button')) button.disabled = true; });
+action('stop', async () => {
+  await api('stop',{});
+  stopped = true;
+  $('run-state').textContent = 'App stopped. This page will close in 5 seconds.';
+  for (const button of document.querySelectorAll('button')) button.disabled = true;
+  setTimeout(() => {
+    try { window.close(); } catch { /* The browser may refuse script-driven closure. */ }
+    if (!window.closed) $('run-state').textContent = 'App stopped. Your browser kept this page open. You can close this tab.';
+  }, 5000);
+});
 refresh(); setInterval(refresh, 2000);`,
 };
