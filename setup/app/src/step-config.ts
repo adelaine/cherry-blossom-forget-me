@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { readAuth } from "./step-auth.ts";
 
-export type SuiteApp = { url: string; directory: string; branch?: string };
+export type SuiteApp = { url?: string; directory: string; branch?: string; localPath?: string };
+export type Vm = { account: string; url: string };
 export type Config = {
     suiteapps: SuiteApp[];
     certificates?: { public: string; private: string; id: string };
-    runbox?: { account: string; url: string };
+    vms: Vm[];
 };
 
 function invalidConfig(message: string): never {
@@ -76,9 +77,21 @@ export function validateConfig(
         invalidConfig('The file needs a "suiteapps" list.');
     }
     const config = value as Config;
+    if (config.suiteapps.length > 0) {
+        if (!Array.isArray(config.vms) || config.vms.length === 0)
+            invalidConfig('The file needs a nonempty "vms" list.');
+        for (const [index, vm] of config.vms.entries()) {
+            if (!vm || typeof vm !== "object" || Array.isArray(vm) ||
+                typeof vm.account !== "string" || !/^[A-Za-z0-9_-]+$/.test(vm.account) ||
+                typeof vm.url !== "string" ||
+                !/^(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+$/.test(vm.url) ||
+                !vm.url.endsWith(".netsuite.com")) {
+                invalidConfig(`VM ${index + 1} needs an account ID and a NetSuite domain.`);
+            }
+        }
+    }
     if (requireDeploymentSettings) {
         const certs = config.certificates;
-        const runbox = config.runbox;
         if (
             !certs ||
             !(["public", "private"] as const).every(
@@ -97,18 +110,6 @@ export function validateConfig(
                 "credentials/auth.json needs the NetSuite certificate ID.",
             );
         }
-        if (
-            !runbox ||
-            typeof runbox.account !== "string" ||
-            !/^[A-Za-z0-9_-]+$/.test(runbox.account) ||
-            typeof runbox.url !== "string" ||
-            !/^(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+$/.test(runbox.url) ||
-            !runbox.url.endsWith(".netsuite.com")
-        ) {
-            invalidConfig(
-                'The "runbox" section needs an account ID and a NetSuite domain.',
-            );
-        }
     }
 
     const seen = new Set<string>();
@@ -117,10 +118,10 @@ export function validateConfig(
             !repo ||
             typeof repo !== "object" ||
             Array.isArray(repo) ||
-            !gitlabHttpsUrl(repo.url)
+            (!repo.localPath && !gitlabHttpsUrl(repo.url))
         ) {
             invalidConfig(
-                `SuiteApp ${index + 1} needs a GitLab HTTPS or SSH URL from gitlab.eng.netsuite.com.`,
+                `SuiteApp ${index + 1} needs a localPath or a GitLab HTTPS or SSH URL from gitlab.eng.netsuite.com.`,
             );
         }
         if (
@@ -137,6 +138,16 @@ export function validateConfig(
             invalidConfig(
                 `SuiteApp ${index + 1} has an invalid "branch" name.`,
             );
+        }
+        if (repo.localPath !== undefined && (typeof repo.localPath !== "string" ||
+            /[,\r\n\t]/.test(repo.localPath) || (repo.localPath.length > 0 && !repo.localPath.trim()))) {
+            invalidConfig(`SuiteApp ${index + 1} has an invalid "localPath".`);
+        }
+        if (repo.localPath && repo.branch !== undefined) {
+            invalidConfig(`SuiteApp ${index + 1} cannot set both "localPath" and "branch".`);
+        }
+        if (repo.url !== undefined && !gitlabHttpsUrl(repo.url)) {
+            invalidConfig(`SuiteApp ${index + 1} has an invalid GitLab URL.`);
         }
         seen.add(repo.directory.toLowerCase());
     }

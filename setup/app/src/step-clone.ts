@@ -18,6 +18,10 @@ export function run(command: string, args: string[]): void {
 
 export function cloneRepos(repos: SuiteApp[]): void {
     for (const repo of repos) {
+        if (repo.localPath) {
+            console.log(`Using local checkout: ${repo.directory}`);
+            continue;
+        }
         const destination = join("/workspace", repo.directory);
         const cloneUrl = gitlabHttpsUrl(repo.url)!;
         if (existsSync(join(destination, ".git"))) {

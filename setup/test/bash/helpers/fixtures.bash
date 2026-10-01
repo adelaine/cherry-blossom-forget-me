@@ -11,7 +11,7 @@ setup_fixture() {
     sed 's/\r$//' "$source_root/../$script" > "$fixture_root/$script"
   done
   sed 's/\r$//' "$source_root/../suitecontainer.config.example.json" > "$fixture_root/suitecontainer.config.example.json"
-  printf '%s\n' '{"runbox":{"account":"123456_SB1","url":"example.netsuite.com"},"suiteapps":[{"url":"https://gitlab.eng.netsuite.com/test/app.git","directory":"app"}]}' > "$fixture_root/suitecontainer.config.json"
+  printf '%s\n' '{"vms":[{"account":"123456_SB1","url":"example.netsuite.com"}],"suiteapps":[{"url":"https://gitlab.eng.netsuite.com/test/app.git","directory":"app"}]}' > "$fixture_root/suitecontainer.config.json"
   cp "$source_root/../credentials/auth.example.json" "$fixture_root/credentials/auth.example.json"
   printf '%s\n' '{"gitlab-token":"","suitecloud-certificates":{"id":"test","public":"credentials/public.pem","private":"credentials/private.pem"}}' > "$fixture_root/credentials/auth.json"
   touch "$fixture_root/credentials/public.pem" "$fixture_root/credentials/private.pem"
@@ -21,6 +21,7 @@ setup_fixture() {
   export TEST_PREPARE_STATUS=0 TEST_BUILD_STATUS=0 TEST_DEPLOY_STATUS=0 TEST_VALIDATE_STATUS=0 TEST_PATHS_STATUS=0
   export TEST_IMAGE_STATUS=0 TEST_INFO_STATUS=0 TEST_MACHINE_LIST=existing
   export TEST_VALIDATION_OUTPUT='Configuration is valid.'
+  export TEST_LOCAL_PATHS_OUTPUT=''
   : > "$TEST_COMMAND_LOG"
   cat > "$fixture_bin/podman" <<'SH'
 #!/usr/bin/env bash
@@ -40,6 +41,7 @@ case "$1" in
         --certificate-paths)
           if [[ "$TEST_PATHS_STATUS" != 0 ]]; then echo 'Missing certificate ID or invalid certificate configuration' >&2; exit "$TEST_PATHS_STATUS"; fi
           printf '%s\n' 'credentials/public.pem' 'credentials/private.pem'; exit 0 ;;
+        --local-paths) printf '%s' "$TEST_LOCAL_PATHS_OUTPUT"; exit 0 ;;
         --deploy) exit "$TEST_DEPLOY_STATUS" ;;
       esac
     done ;;

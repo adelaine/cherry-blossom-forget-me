@@ -14,10 +14,19 @@ export function main(args: string[] = process.argv.slice(2)): number {
     const certificatePathsOnly = args[0] === "--certificate-paths";
     const deploy = args[0] === "--deploy";
     const prepareCertificatesOnly = args[0] === "--prepare-certificates";
+    const localPathsOnly = args[0] === "--local-paths";
     const configPath = validateOnly
         ? args[1]
         : "/config/suitecontainer.config.json";
     const config = readConfig(configPath ?? "", certificatePathsOnly || deploy);
+
+    if (localPathsOnly) {
+        for (const repo of config.suiteapps) {
+            if (repo.localPath)
+                console.log(`${repo.directory}\t${repo.localPath}`);
+        }
+        return 0;
+    }
 
     if (config.suiteapps.length === 0 && !certificatePathsOnly) {
         console.log(
@@ -53,7 +62,7 @@ export function main(args: string[] = process.argv.slice(2)): number {
 
     const privateKeyPath = deploy ? verifyCertificates() : null;
     try {
-        prepareToken();
+        if (config.suiteapps.some((repo) => !repo.localPath)) prepareToken();
         cloneRepos(config.suiteapps);
         if (deploy) {
             deployRepos(config, privateKeyPath!);

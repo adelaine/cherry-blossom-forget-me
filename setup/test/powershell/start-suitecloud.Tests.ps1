@@ -24,7 +24,7 @@ Describe 'Windows SuiteCloud launcher' {
         $global:LauncherTest_configPath = Join-Path $global:LauncherTest_root 'suitecontainer.config.json'
         $global:LauncherTest_config = @{
             suiteapps = @(@{ url = 'https://gitlab.eng.netsuite.com/team/example.git'; directory = 'example' })
-            runbox = @{ account = '123456_SB1'; url = 'example.netsuite.com' }
+            vms = @(@{ account = '123456_SB1'; url = 'example.netsuite.com' })
             certificates = @{ public = 'credentials/public.pem'; private = 'credentials/private.pem'; id = 'certificate-id' }
         }
         $certDir = New-Item -ItemType Directory -Path (Join-Path $global:LauncherTest_root 'credentials')
@@ -60,7 +60,7 @@ Describe 'Windows SuiteCloud launcher' {
 
     It 'copies the template and stops before installing Podman on first use' {
         Remove-Item -LiteralPath $global:LauncherTest_configPath
-        $template = '{"suiteapps":[],"runbox":{"account":"","url":""},"certificates":{"public":"","private":"","id":""}}'
+        $template = '{"suiteapps":[],"vms":[{"account":"","url":""}],"certificates":{"public":"","private":"","id":""}}'
         Set-Content -LiteralPath (Join-Path $global:LauncherTest_root 'suitecontainer.config.example.json') -Value $template
         Invoke-TestLauncher
         (Get-Content -LiteralPath $global:LauncherTest_configPath -Raw).Trim() | Should -Be $template
@@ -81,6 +81,15 @@ Describe 'Windows SuiteCloud launcher' {
         Get-Content -LiteralPath $authFile -Raw | Should -Be $before
         $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
         $deploy | Should -Contain "type=bind,src=$authFile,dst=/config/credentials/auth.json,ro=true"
+    }
+    It 'mounts an existing local checkout' {
+        $checkout = New-Item -ItemType Directory -Path (Join-Path $global:LauncherTest_root 'local app')
+        New-Item -ItemType Directory -Path (Join-Path $checkout.FullName '.git') | Out-Null
+        $global:LauncherTest_config.suiteapps[0].localPath = 'local app'
+        Save-TestConfig
+        Invoke-TestLauncher
+        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
+        $deploy | Should -Contain "type=bind,src=$($checkout.FullName),dst=/workspace/example"
     }
     It 'stops successfully for an empty SuiteApp list' {
         $global:LauncherTest_config.suiteapps = @()
@@ -115,9 +124,9 @@ Describe 'Windows SuiteCloud launcher' {
         { Invoke-TestLauncher } | Should -Throw '*invalid URL or directory*'
     }
     It 'rejects an invalid account' {
-        $global:LauncherTest_config.runbox.account = 'invalid account'
+        $global:LauncherTest_config.vms[0].account = 'invalid account'
         Save-TestConfig
-        { Invoke-TestLauncher } | Should -Throw '*runbox*invalid*'
+        { Invoke-TestLauncher } | Should -Throw '*VM*invalid*'
     }
     It 'rejects partial certificate configuration' {
         $global:LauncherTest_config.certificates.private = ''

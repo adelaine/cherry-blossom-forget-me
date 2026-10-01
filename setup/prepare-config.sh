@@ -26,6 +26,6 @@ if [[ ! -f "$template_file" ]]; then
 fi
 cp -- "$template_file" "$config_file"
 echo 'Created suitecontainer.config.json from the template.'
-echo 'Add your SuiteApps and runbox account and domain, then run the start script again. Credentials belong in credentials/auth.json.'
+echo 'Add your SuiteApps and VMs, then run the start script again. Credentials belong in credentials/auth.json.'
 # The launchers map this status to a successful first-run stop.
 exit 10

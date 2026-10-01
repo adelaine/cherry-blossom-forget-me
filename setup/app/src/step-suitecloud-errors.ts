@@ -22,7 +22,7 @@ export function authenticationError(
     ];
     if (tlsFailure) {
         lines.push(
-            "1. Check runbox.url in suitecontainer.config.json. Use the actual runbox hostname, without https:// or a path.",
+            "1. Check the VM url in suitecontainer.config.json. Use the actual runbox hostname, without https:// or a path.",
             `2. Connect to the required VPN and check that https://${domain} opens in your browser. The Podman container must also be able to reach it.`,
             trustFailure
                 ? "3. Java could not validate the server certificate. Check the server certificate chain and install the required company CA certificates in the container's Java trust store."
@@ -31,7 +31,7 @@ export function authenticationError(
         );
     } else {
         lines.push(
-            "1. Check runbox.account and runbox.url in suitecontainer.config.json.",
+            "1. Check the VM account and url in suitecontainer.config.json.",
             "2. Check suitecloud-certificates.id in credentials/auth.json against the certificate uploaded to the target account.",
             "3. Confirm that the uploaded public certificate matches your private key and that its NetSuite mapping uses SuiteCloud Development Integration with an enabled entity and appropriate role.",
         );

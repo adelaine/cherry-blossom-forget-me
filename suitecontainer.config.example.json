@@ -1,7 +1,16 @@
 {
-    "suiteapps": [],
-    "runbox": {
-        "account": "",
-        "url": ""
-    }
+    "suiteapps": [
+        {
+            "url": "",
+            "directory": "",
+            "localPath": ""
+        }
+
+    ],
+    "vms": [
+        {
+            "account": "",
+            "url": ""
+        }
+    ]
 }

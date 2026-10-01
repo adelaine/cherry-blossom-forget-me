@@ -27,6 +27,7 @@ import {
 } from "../src/step-certificates.ts";
 import type { Config } from "../src/step-config.ts";
 import { authenticationError } from "../src/step-suitecloud-errors.ts";
+import { cloneRepos } from "../src/step-clone.ts";
 
 test("explains fatal TLS alerts without blaming the authentication certificate", () => {
     const message = authenticationError(
@@ -37,7 +38,7 @@ test("explains fatal TLS alerts without blaming the authentication certificate",
     assert.match(message, /Received fatal alert: internal_error/);
     assert.match(message, /absi-nsn/);
     assert.match(message, /runbox.vm.eng.netsuite.com/);
-    assert.match(message, /runbox.url/);
+    assert.match(message, /VM url/);
     assert.match(message, /VPN/);
     assert.match(message, /does not identify the cause/);
     assert.match(message, /does not establish.*certificate ID is wrong/);
@@ -69,6 +70,7 @@ const suiteapp = {
     directory: "project",
     branch: "release/1.0",
 };
+const vms = [{ account: "12345", url: "runbox.netsuite.com" }];
 
 test("loads credentials separately and uses the configured GitLab token", () => {
     withCertificateFixture((directory) => {
@@ -78,7 +80,7 @@ test("loads credentials separately and uses the configured GitLab token", () => 
             configPath,
             JSON.stringify({
                 suiteapps: [suiteapp],
-                runbox: { account: "12345", url: "runbox.netsuite.com" },
+                vms: [{ account: "12345", url: "runbox.netsuite.com" }],
             }),
         );
         writeFileSync(
@@ -304,6 +306,7 @@ test(
                             certificates:
                                 savedConfig["suitecloud-certificates"],
                             suiteapps: [suiteapp],
+                            vms,
                         },
                         true,
                     ),
@@ -311,6 +314,7 @@ test(
             );
             const retry: Config = {
                 suiteapps: [suiteapp],
+                vms,
                 certificates: { id: "registered_id", public: "", private: "" },
             };
             assert.equal(
@@ -338,18 +342,50 @@ test("accepts safe branch names", () => {
 });
 
 test("validates SuiteApps and prevents duplicate directories", () => {
-    assert.equal(validateConfig({ suiteapps: [suiteapp] }).suiteapps.length, 1);
+    assert.equal(
+        validateConfig({ suiteapps: [suiteapp], vms }).suiteapps.length,
+        1,
+    );
     assert.throws(
         () =>
             validateConfig({
                 suiteapps: [suiteapp, { ...suiteapp, directory: "PROJECT" }],
+                vms,
             }),
         /unique "directory"/,
     );
     assert.throws(
         () =>
-            validateConfig({ suiteapps: [{ ...suiteapp, branch: "../main" }] }),
+            validateConfig({
+                suiteapps: [{ ...suiteapp, branch: "../main" }],
+                vms,
+            }),
         /invalid "branch"/,
+    );
+});
+
+test("accepts a local checkout without a URL and skips Git", () => {
+    const local = {
+        directory: "local-project",
+        localPath: "/already-checked-out",
+    };
+    assert.equal(
+        validateConfig({ suiteapps: [local], vms }).suiteapps[0].localPath,
+        local.localPath,
+    );
+    assert.doesNotThrow(() => cloneRepos([local]));
+    assert.throws(
+        () =>
+            validateConfig({ suiteapps: [{ ...local, branch: "main" }], vms }),
+        /cannot set both/,
+    );
+});
+
+test("requires a VM list and validates each target", () => {
+    assert.throws(() => validateConfig({ suiteapps: [suiteapp] }), /"vms" list/);
+    assert.throws(
+        () => validateConfig({ suiteapps: [suiteapp], vms: [...vms, { account: "bad account", url: "second.netsuite.com" }] }),
+        /VM 2/,
     );
 });
 
@@ -361,9 +397,22 @@ test("requires deployment settings when requested", () => {
             private: "/certs/private.pem",
             id: "cert_1",
         },
-        runbox: { account: "12345", url: "runbox.netsuite.com" },
+        vms: [{ account: "12345", url: "runbox.netsuite.com" }],
     };
-    assert.equal(validateConfig(config, true).runbox?.account, "12345");
+    assert.equal(validateConfig(config, true).vms[0].account, "12345");
+    assert.equal(
+        validateConfig(
+            {
+                ...config,
+                vms: [
+                    ...config.vms,
+                    { account: "67890", url: "second.netsuite.com" },
+                ],
+            },
+            true,
+        ).vms.length,
+        2,
+    );
     assert.throws(
         () =>
             validateConfig(
@@ -377,7 +426,7 @@ test("requires deployment settings when requested", () => {
             validateConfig(
                 {
                     ...config,
-                    runbox: { ...config.runbox, url: "other.example.com" },
+                    vms: [{ ...config.vms[0], url: "other.example.com" }],
                 },
                 true,
             ),

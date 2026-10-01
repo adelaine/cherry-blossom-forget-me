@@ -66,6 +66,14 @@ setup() { setup_fixture; }
   assert_called --deploy
 }
 
+@test "macOS mounts an existing local checkout" {
+  mkdir -p "$fixture_root/local app/.git"
+  TEST_LOCAL_PATHS_OUTPUT=$'app\tlocal app'
+  run_launcher setup/start-suitecloud.sh
+  [ "$status" -eq 0 ]
+  assert_called "<type=bind,src=$fixture_root/local app,dst=/workspace/app>"
+}
+
 @test "macOS skips deployment for an empty SuiteApp list" {
   TEST_VALIDATION_OUTPUT='There are no SuiteApps to install in suitecontainer.config.json.'
   run_launcher setup/start-suitecloud.sh
