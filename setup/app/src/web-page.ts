@@ -49,7 +49,7 @@ function render(next) {
   log.innerHTML = ansiToHtml(next.run.log);
   applyAnsiColors(log);
   if (bottom) log.scrollTop = log.scrollHeight;
-  try { const vm = JSON.parse($('config').value).vms?.[0]?.url; $('vm').value = vm || ''; const safe = typeof vm === 'string' && /^(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+$/.test(vm) && vm.endsWith('.netsuite.com'); $('runbox-link').hidden = !safe; if (safe) $('runbox-link').href = 'https://' + vm; } catch { $('runbox-link').hidden = true; }
+  try { const vm = JSON.parse($('config').value).vms?.[0]?.url; $('vm').value = vm || ''; const safe = typeof vm === 'string' && /^(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+$/.test(vm) && vm.endsWith('.netsuite.com'); $('runbox-link').hidden = !safe; if (safe) $('runbox-link').href = 'https://' + vm + '/devhome'; } catch { $('runbox-link').hidden = true; }
 }
 async function refresh() { if (stopped) return; try { const next = editing ? await api('check', {config:$('config').value}) : await api('state'); render(next); } catch (error) { $('validation').textContent = error.message; $('deploy').disabled = true; } }
 function action(id, fn, messageId = 'validation') { $(id).addEventListener('click', async () => { $(id).disabled = true; try { await fn(); } catch(error) { $(messageId).textContent = error.message; } finally { if (!stopped) await refresh(); } }); }
