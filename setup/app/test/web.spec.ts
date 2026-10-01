@@ -153,6 +153,53 @@ test("Current VM preserves accounts and other runboxes, synchronizes JSON edits,
     assert.match(element("credential-message").textContent, /Fix the configuration JSON/);
 });
 
+test("Stop app closes after five seconds only on success and explains blocked closure", async () => {
+    for (const success of [true, false]) {
+        const elements = new Map<string, any>();
+        const element = (id: string) => {
+            if (!elements.has(id)) elements.set(id, { value: "", querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
+            return elements.get(id);
+        };
+        const timers: { callback: () => void; delay: number }[] = [];
+        let closes = 0;
+        let requests = 0;
+        const state = { config: '{"vms":[]}', certificates: {}, run: { state: "idle", log: "" }, ready: false };
+        const context = {
+            document: { getElementById: element, querySelectorAll: () => [element("stop"), element("deploy")] },
+            location: { hash: "", pathname: "/" }, URLSearchParams,
+            sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
+            setInterval() {}, clearTimeout() {},
+            setTimeout(callback: () => void, delay: number) { timers.push({ callback, delay }); },
+            window: { closed: false, close() { closes++; } },
+            fetch: async (path: string) => { requests++; return { ok: path !== "/api/stop" || success, json: async () => path === "/api/stop" ? { error: "Deployment is running." } : state }; },
+        };
+        runInNewContext(deploymentPage.script, context);
+        await new Promise(resolve => setImmediate(resolve));
+        await element("stop").click();
+        assert.equal(closes, 0);
+        if (success) {
+            assert.equal(timers.length, 1);
+            assert.equal(timers[0]!.delay, 5000);
+            assert.match(element("run-state").textContent, /close in 5 seconds/);
+            assert.equal(element("stop").disabled, true);
+            const stoppedRequests = requests;
+            await runInNewContext("refresh()", context);
+            runInNewContext("render({run:{state:'idle'}})", context);
+            assert.equal(requests, stoppedRequests);
+            assert.match(element("run-state").textContent, /close in 5 seconds/);
+            timers[0]!.callback();
+            assert.equal(closes, 1);
+            assert.match(element("run-state").textContent, /browser kept this page open/);
+        } else {
+            assert.equal(timers.length, 0);
+            assert.equal(element("stop").disabled, false);
+            const activeRequests = requests;
+            await runInNewContext("refresh()", context);
+            assert.equal(requests, activeRequests + 1);
+        }
+    }
+});
+
 test("certificate generation is explicit, deployment uses snapshots, and a failed run can be retried", async t => {
     if (spawnSync("openssl", ["version"], { stdio: "ignore" }).status !== 0) { t.skip("OpenSSL is unavailable"); return; }
     const root = mkdtempSync(join(tmpdir(), "suitecontainer-lifecycle-"));
