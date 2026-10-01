@@ -33,12 +33,20 @@ if ! podman image exists suitecloud-workspace; then
 fi
 podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"
 
+mkdir -p -m 700 "$project_dir/.ssh"
+podman run --rm \
+  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json" \
+  --mount "type=bind,src=$project_dir/.ssh,dst=/config/.ssh" \
+  suitecloud-workspace --prepare-certificates
+
 certificate_paths="$(podman run --rm \
   --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \
   --entrypoint node suitecloud-workspace \
   /opt/suitecontainer/install.js --certificate-paths)"
 public_certificate="${certificate_paths%%$'\n'*}"
 private_certificate="${certificate_paths#*$'\n'}"
+[[ "$public_certificate" == /* ]] || public_certificate="$project_dir/$public_certificate"
+[[ "$private_certificate" == /* ]] || private_certificate="$project_dir/$private_certificate"
 if [[ ! -f "$public_certificate" || ! -f "$private_certificate" ]]; then
   echo 'Certificate files were not found. Update their paths in suiteapps-to-install.json.' >&2
   exit 1

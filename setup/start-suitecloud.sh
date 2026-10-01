@@ -34,11 +34,43 @@ if ! podman image exists suitecloud-workspace; then
   fi
 fi
 
-podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"
+echo 'Preparing the SuiteCloud container...'
+if ! podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"; then
+  echo 'The container build failed.' >&2
+  exit 1
+fi
+
+validation_output="$(podman run --rm \
+  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \
+  suitecloud-workspace --validate /config/suiteapps-to-install.json)"
+echo "$validation_output"
+if [[ "$validation_output" == 'There are no SuiteApps to install in suiteapps-to-install.json.' ]]; then
+  exit 0
+fi
+
+mkdir -p -m 700 "$project_dir/.ssh"
+podman run --rm \
+  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json" \
+  --mount "type=bind,src=$project_dir/.ssh,dst=/config/.ssh" \
+  suitecloud-workspace --prepare-certificates
+
+certificate_paths="$(podman run --rm \
+  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \
+  suitecloud-workspace --certificate-paths)"
+public_certificate="${certificate_paths%%$'\n'*}"
+private_certificate="${certificate_paths#*$'\n'}"
+[[ "$public_certificate" == /* ]] || public_certificate="$project_dir/$public_certificate"
+[[ "$private_certificate" == /* ]] || private_certificate="$project_dir/$private_certificate"
+if [[ ! -f "$public_certificate" || ! -f "$private_certificate" ]]; then
+  echo 'Certificate files were not found. Update their paths in suiteapps-to-install.json and run start-macos.sh again.' >&2
+  exit 1
+fi
 
 mounts=(
   --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json"
   --mount "type=bind,src=$repos_dir,dst=/workspace"
+  --mount "type=bind,src=$public_certificate,dst=/config/certs/public.pem,ro=true"
+  --mount "type=bind,src=$private_certificate,dst=/config/certs/private.pem,ro=true"
 )
 
 for name in .nems.env config.toml; do
@@ -48,4 +80,7 @@ for name in .nems.env config.toml; do
   fi
 done
 
-podman run --rm -it "${mounts[@]}" suitecloud-workspace
+if ! podman run --rm -it --cgroups=disabled "${mounts[@]}" suitecloud-workspace --deploy; then
+  echo 'The container stopped with an error.' >&2
+  exit 1
+fi

@@ -1,27 +1,27 @@
 {
-  "suiteapps": [
-    {
-      "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/absi-nsn.git",
-      "directory": "absi-nsn"
+    "suiteapps": [
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/absi-nsn.git",
+            "directory": "absi-nsn"
+        },
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bsp-nsn.git",
+            "directory": "bsp-nsn"
+        },
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bank-feeds-nsn.git",
+            "directory": "bank-feeds-nsn",
+            "branch": "develop"
+        }
+    ],
+    "runbox": {
+        "url": "YOUR-RUNBOX-HERE.vm.eng.netsuite.com",
+        "account": "000071",
+        "dry-run": false
     },
-    {
-      "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bsp-nsn.git",
-      "directory": "bsp-nsn"
-    },
-    {
-      "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bank-feeds-nsn.git",
-      "directory": "bank-feeds-nsn",
-      "branch": "develop"
+    "certificates": {
+        "id": "ID_FROM_NETSUITE_CREDENTIALS_SETUP",
+        "public": "",
+        "private": ""
     }
-  ],
-  "runbox" : {
-    "url": "lazarorodrigf587-runbox-ml-dusa1-001.vm.eng.netsuite.com",
-    "account": "11733971",
-    "dry-run": false
-  },
-  "certificates" : {
-    "id": "",
-    "public": "",
-    "private": ""
-  }
 }

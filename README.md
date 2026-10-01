@@ -1,8 +1,53 @@
 # SuiteCloud setup
 
-1. Run the file for your computer:
-   - **Windows:** Double-click `start-windows.cmd`.
-   - **macOS:** Open Terminal in this folder and run `bash start-macos.sh`.
-   - **Oracle/NetSuite codebox:** Run `bash start-codebox`.
+Run the file for your computer:
 
-The Windows and macOS scripts install Podman if needed. The codebox script uses the Podman already installed there. Follow any system prompts, then run the same file again if asked to restart. The setup reads the `suiteapps` list in `suiteapps-to-install.json`; edit that file to change the SuiteApps. If the list is empty, the setup says there are no SuiteApps to install. If an entry is invalid, it asks you to update the file and stops. The first build asks you to accept the Oracle terms. If your GitLab token is not in `~/.codex/.nems.env` or `~/.codex/config.toml`, it asks for the token. Your SuiteApps appear in the `repos` folder.
+### Windows
+
+- Double-click `start-windows.cmd`.
+
+### macOS
+
+- Open Terminal in this folder and run `bash start-macos.sh`.
+
+### Codebox
+
+- Run `bash start-codebox`.
+
+<br>
+<br>
+
+-----
+
+### Overview
+
+This script automatically validates for requirements of suiteapp deployment via suitecloud cli and will guide the user on manual steps if needed.
+
+#### Settings:
+- `suiteapps-to-install.json` contains the list of suiteapps to be installed and the list of credentials required for suiteapp deployment.
+
+#### Gitlab token
+- Read from `.codex/config.toml` or `.nems.env` if the user already has them set.
+- Asks the user to input the token if not found.
+
+#### Certificates
+- Reads from `suiteapps-to-install.json` if the user already has them.
+- Generates new certificates if none are found. These new certificates will need to be set up on the target runbox.
+
+#### Podman:
+- For Windows and macOS, Podman will be installed if needed.
+- For codebox, Podman is already installed by default.
+
+### Installer steps
+
+Explanation TBD
+
+### Container Cleanup
+
+No routine container cleanup is needed. The launchers use --rm, which removes each container after it exits.
+The credentials have different lifetimes:
+- Certificates in root .ssh/: Persist on the host and are reused. They aren’t deleted each run.
+- Temporary GitLab token file: Deleted in the install flow’s finally block.
+- SuiteCloud authentication data stored inside the container: Disappears with the container.
+- SuiteCloud encryption passkey: Generated fresh for each deployment run.
+The built image and build cache remain on disk, but generated certificates are excluded from the image.

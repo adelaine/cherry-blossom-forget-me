@@ -16,6 +16,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Local environment and secrets
+/.ssh/
 .env
 .env.*
 !.env.example

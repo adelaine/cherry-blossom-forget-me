@@ -1,41 +1,14 @@
 import { spawnSync } from "node:child_process";
-import {
-    createHash,
-    createPrivateKey,
-    createPublicKey,
-    randomBytes,
-    X509Certificate,
-} from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "./step-config.js";
 
-export function verifyCertificates(): string {
-    const publicPath = "/config/certs/public.pem";
-    const privatePath = "/config/certs/private.pem";
-    if (!existsSync(publicPath) || !existsSync(privatePath)) {
-        throw new Error(
-            "Certificate files were not mounted. Check their paths in suiteapps-to-install.json.",
-        );
-    }
-    try {
-        const publicKey = new X509Certificate(
-            readFileSync(publicPath),
-        ).publicKey.export({ type: "spki", format: "der" });
-        const privateKey = createPublicKey(
-            createPrivateKey(readFileSync(privatePath)),
-        ).export({ type: "spki", format: "der" });
-        if (!publicKey.equals(privateKey)) throw new Error("mismatch");
-    } catch {
-        throw new Error(
-            "The public and private certificate files do not match or cannot be read.",
-        );
-    }
-    return privatePath;
-}
-
 function suitecloudEnv(passkey: string, deploying = false): NodeJS.ProcessEnv {
-    const env = { ...process.env, SUITECLOUD_CI_PASSKEY: passkey };
+    const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        SUITECLOUD_CI_PASSKEY: passkey,
+    };
     delete env.SUITECLOUD_FALLBACK_PASSKEY;
     if (deploying) env.SUITECLOUD_CI = "1";
     else delete env.SUITECLOUD_CI;

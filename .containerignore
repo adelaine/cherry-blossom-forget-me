@@ -1,4 +1,5 @@
 .git/
+.ssh/
 repos/
 app/node_modules/
 app/dist/

@@ -9,9 +9,9 @@ FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24
 
 USER root
 RUN if command -v dnf >/dev/null 2>&1; then \
-      dnf install -y git ca-certificates java-21-openjdk-devel && dnf clean all; \
+      dnf install -y git openssl ca-certificates java-21-openjdk-devel && dnf clean all; \
     else \
-      microdnf install -y git ca-certificates java-21-openjdk-devel && microdnf clean all; \
+      microdnf install -y git openssl ca-certificates java-21-openjdk-devel && microdnf clean all; \
     fi
 
 # Set to true only after accepting the Oracle Free Use Terms and Conditions.

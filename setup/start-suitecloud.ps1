@@ -49,16 +49,17 @@ for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
 }
 
 if ($config.runbox.account -isnot [string] -or $config.runbox.account -notmatch '^[A-Za-z0-9_-]+$' -or
-    $config.runbox.url -isnot [string] -or $config.runbox.url -notmatch '^[A-Za-z0-9.-]+\.netsuite\.com$' -or
-    $config.certificates.id -isnot [string] -or $config.certificates.id -notmatch '^[A-Za-z0-9_-]+$') {
-    throw 'The runbox account, domain, or certificate ID is invalid. Update suiteapps-to-install.json and run start-windows.cmd again.'
+    $config.runbox.url -isnot [string] -or $config.runbox.url -notmatch '^[A-Za-z0-9.-]+\.netsuite\.com$') {
+    throw 'The runbox account or domain is invalid. Update suiteapps-to-install.json and run start-windows.cmd again.'
 }
 $publicCertificate = $config.certificates.public
 $privateCertificate = $config.certificates.private
-if ($publicCertificate -isnot [string] -or $privateCertificate -isnot [string] -or
-    -not (Test-Path -LiteralPath $publicCertificate -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $privateCertificate -PathType Leaf)) {
-    throw 'The certificate files were not found. Update their paths in suiteapps-to-install.json and run start-windows.cmd again.'
+$generateCertificates = [string]::IsNullOrWhiteSpace($publicCertificate) -and [string]::IsNullOrWhiteSpace($privateCertificate)
+if (-not $generateCertificates) {
+    if ($publicCertificate -isnot [string] -or $privateCertificate -isnot [string] -or
+        [string]::IsNullOrWhiteSpace($publicCertificate) -or [string]::IsNullOrWhiteSpace($privateCertificate)) {
+        throw 'Specify both public and private certificate paths, or leave both empty to generate certificates.'
+    }
 }
 
 & (Join-Path $PSScriptRoot 'install-podman-windows.ps1')
@@ -76,6 +77,27 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host 'Preparing the SuiteCloud container...'
 & podman build -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $projectDir
 if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
+
+$certificatesDir = Join-Path $projectDir '.ssh'
+New-Item -ItemType Directory -Force -Path $certificatesDir | Out-Null
+& podman run --rm --cgroups=disabled `
+    --mount "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json" `
+    --mount "type=bind,src=$certificatesDir,dst=/config/.ssh" `
+    suitecloud-workspace --prepare-certificates
+if ($LASTEXITCODE -ne 0) { throw 'Certificate preparation failed.' }
+
+$certificatePaths = @(& podman run --rm --cgroups=disabled `
+    --mount "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json,ro=true" `
+    suitecloud-workspace --certificate-paths)
+if ($LASTEXITCODE -ne 0 -or $certificatePaths.Count -ne 2) { throw 'The certificate configuration is invalid.' }
+$publicCertificate = $certificatePaths[0]
+$privateCertificate = $certificatePaths[1]
+if (-not [IO.Path]::IsPathRooted($publicCertificate)) { $publicCertificate = Join-Path $projectDir $publicCertificate }
+if (-not [IO.Path]::IsPathRooted($privateCertificate)) { $privateCertificate = Join-Path $projectDir $privateCertificate }
+if (-not (Test-Path -LiteralPath $publicCertificate -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $privateCertificate -PathType Leaf)) {
+    throw 'The certificate files were not found. Update their paths in suiteapps-to-install.json and run start-windows.cmd again.'
+}
 
 $mounts = @(
     '--mount', "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json",
