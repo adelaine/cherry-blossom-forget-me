@@ -22,9 +22,10 @@ function runSuitecloud(
     passkey: string,
     deploying = false,
     domain = "",
+    spawn: typeof spawnSync = spawnSync,
 ): void {
     const authenticating = args[0] === "account:setup:ci";
-    const result = spawnSync("suitecloud", args, {
+    const result = spawn("suitecloud", args, {
         cwd,
         stdio: authenticating ? ["inherit", "pipe", "pipe"] : "inherit",
         encoding: "utf8",
@@ -50,12 +51,24 @@ function runSuitecloud(
     }
 }
 
-export function deployRepos(config: Config, privateKeyPath: string): void {
+export function deployRepos(
+    config: Config,
+    privateKeyPath: string,
+    options: { workspaceRoot?: string; spawn?: typeof spawnSync } = {},
+): void {
     const certificates = config.certificates!;
     const passkey = randomBytes(32).toString("hex");
+    const workspaceRoot = options.workspaceRoot ?? "/workspace";
+    const spawn = options.spawn ?? spawnSync;
+    const runCommand = (
+        args: string[],
+        cwd: string,
+        deploying = false,
+        domain = "",
+    ) => runSuitecloud(args, cwd, passkey, deploying, domain, spawn);
 
     for (const repo of config.suiteapps) {
-        const destination = join("/workspace", repo.directory);
+        const destination = join(workspaceRoot, repo.directory);
         if (
             !existsSync(join(destination, "manifest.xml")) ||
             !existsSync(join(destination, "deploy.xml"))
@@ -77,9 +90,9 @@ export function deployRepos(config: Config, privateKeyPath: string): void {
         const authId = `suitecontainer_${vm.account}_${createHash("sha256").update(vm.url).digest("hex").slice(0, 8)}`;
         let authenticationReady = false;
         for (const repo of config.suiteapps) {
-            const destination = join("/workspace", repo.directory);
+            const destination = join(workspaceRoot, repo.directory);
             if (!authenticationReady) {
-                const existing = spawnSync(
+                const existing = spawn(
                     "suitecloud",
                     ["account:manageauth", "--info", authId],
                     {
@@ -90,15 +103,14 @@ export function deployRepos(config: Config, privateKeyPath: string): void {
                 );
                 if (existing.error) throw existing.error;
                 if (existing.status === 0) {
-                    runSuitecloud(
+                    runCommand(
                         ["account:setup:ci", "--select", authId],
                         destination,
-                        passkey,
                         false,
                         vm.url,
                     );
                 } else {
-                    runSuitecloud(
+                    runCommand(
                         [
                             "account:setup:ci",
                             "--account",
@@ -113,30 +125,23 @@ export function deployRepos(config: Config, privateKeyPath: string): void {
                             vm.url,
                         ],
                         destination,
-                        passkey,
                         false,
                         vm.url,
                     );
                 }
                 authenticationReady = true;
             } else {
-                runSuitecloud(
+                runCommand(
                     ["account:setup:ci", "--select", authId],
                     destination,
-                    passkey,
                     false,
                     vm.url,
                 );
             }
             console.log(`Checking ${repo.directory} against ${vm.url}...`);
-            runSuitecloud(
-                ["project:deploy", "--dryrun"],
-                destination,
-                passkey,
-                true,
-            );
+            runCommand(["project:deploy", "--dryrun"], destination, true);
             console.log(`Deploying ${repo.directory} to ${vm.url}...`);
-            runSuitecloud(["project:deploy"], destination, passkey, true);
+            runCommand(["project:deploy"], destination, true);
         }
     }
     console.log("All SuiteApps were deployed.");

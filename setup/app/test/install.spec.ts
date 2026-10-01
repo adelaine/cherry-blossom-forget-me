@@ -28,6 +28,7 @@ import {
 import type { Config } from "../src/step-config.ts";
 import { authenticationError } from "../src/step-suitecloud-errors.ts";
 import { cloneRepos } from "../src/step-clone.ts";
+import { deployRepos } from "../src/step-deploy.ts";
 
 test("explains fatal TLS alerts without blaming the authentication certificate", () => {
     const message = authenticationError(
@@ -369,23 +370,12 @@ test("accepts a local checkout without a URL and skips Git", () => {
         directory: "local-project",
         localPath: "/already-checked-out",
     };
-    assert.equal(
-        validateConfig({ suiteapps: [local], vms }).suiteapps[0].localPath,
-        local.localPath,
-    );
+    assert.doesNotThrow(() => validateConfig({ suiteapps: [local], vms }));
     assert.doesNotThrow(() => cloneRepos([local]));
     assert.throws(
         () =>
             validateConfig({ suiteapps: [{ ...local, branch: "main" }], vms }),
         /cannot set both/,
-    );
-});
-
-test("requires a VM list and validates each target", () => {
-    assert.throws(() => validateConfig({ suiteapps: [suiteapp] }), /"vms" list/);
-    assert.throws(
-        () => validateConfig({ suiteapps: [suiteapp], vms: [...vms, { account: "bad account", url: "second.netsuite.com" }] }),
-        /VM 2/,
     );
 });
 
@@ -397,22 +387,26 @@ test("requires deployment settings when requested", () => {
             private: "/certs/private.pem",
             id: "cert_1",
         },
-        vms: [{ account: "12345", url: "runbox.netsuite.com" }],
+        vms: [...vms, { account: "67890", url: "second.netsuite.com" }],
     };
-    assert.equal(validateConfig(config, true).vms[0].account, "12345");
-    assert.equal(
-        validateConfig(
-            {
-                ...config,
-                vms: [
-                    ...config.vms,
-                    { account: "67890", url: "second.netsuite.com" },
-                ],
-            },
-            true,
-        ).vms.length,
-        2,
-    );
+    assert.doesNotThrow(() => validateConfig(config, true));
+    for (const [vms, expected] of [
+        [undefined, /"vms" list/],
+        [[], /"vms" list/],
+        [
+            [
+                ...config.vms,
+                { account: "bad account", url: "third.netsuite.com" },
+            ],
+            /VM 3/,
+        ],
+        [
+            [config.vms[0], { ...config.vms[1], url: "other.example.com" }],
+            /VM 2.*NetSuite domain/,
+        ],
+    ] as const) {
+        assert.throws(() => validateConfig({ ...config, vms }, true), expected);
+    }
     assert.throws(
         () =>
             validateConfig(
@@ -421,17 +415,77 @@ test("requires deployment settings when requested", () => {
             ),
         /certificate ID/,
     );
-    assert.throws(
-        () =>
-            validateConfig(
-                {
-                    ...config,
-                    vms: [{ ...config.vms[0], url: "other.example.com" }],
-                },
-                true,
+});
+
+test("deploys each SuiteApp in order for each VM", (t) => {
+    const root = mkdtempSync(join(tmpdir(), "suitecontainer-deploy-test-"));
+    const suiteapps = [
+        { directory: "first", localPath: "local-first" },
+        { directory: "second", localPath: "local-second" },
+    ];
+    const targets = [...vms, { account: "67890", url: "second.netsuite.com" }];
+    const events: string[] = [];
+    const domainsByAuthId = new Map<string, string>();
+    let activeDomain = "";
+    t.mock.method(console, "log", () => {});
+    try {
+        for (const repo of suiteapps) {
+            const path = join(root, repo.directory);
+            mkdirSync(path);
+            writeFileSync(join(path, "manifest.xml"), "<manifest/>");
+            writeFileSync(join(path, "deploy.xml"), "<deploy/>");
+        }
+        const spawn = ((
+            command: string,
+            args: string[],
+            options: { cwd: string },
+        ) => {
+            assert.equal(command, "suitecloud");
+            if (args[0] === "account:manageauth")
+                return { status: 1, stdout: "", stderr: "" };
+            const app = basename(options.cwd);
+            if (args[0] === "account:setup:ci") {
+                if (args.includes("--domain")) {
+                    activeDomain = args[args.indexOf("--domain") + 1];
+                    domainsByAuthId.set(
+                        args[args.indexOf("--authid") + 1],
+                        activeDomain,
+                    );
+                } else {
+                    activeDomain = domainsByAuthId.get(
+                        args[args.indexOf("--select") + 1],
+                    )!;
+                }
+                events.push(`${activeDomain}:${app}:auth`);
+            } else {
+                events.push(
+                    `${activeDomain}:${app}:${args.includes("--dryrun") ? "dryrun" : "deploy"}`,
+                );
+            }
+            return { status: 0, stdout: "", stderr: "" };
+        }) as unknown as typeof import("node:child_process").spawnSync;
+        deployRepos(
+            {
+                suiteapps,
+                vms: targets,
+                certificates: { public: "", private: "", id: "cert_1" },
+            },
+            "/private.pem",
+            { workspaceRoot: root, spawn },
+        );
+        assert.deepEqual(
+            events,
+            targets.flatMap((vm) =>
+                suiteapps.flatMap((repo) =>
+                    ["auth", "dryrun", "deploy"].map(
+                        (step) => `${vm.url}:${repo.directory}:${step}`,
+                    ),
+                ),
             ),
-        /NetSuite domain/,
-    );
+        );
+    } finally {
+        rmSync(root, { recursive: true, force: true });
+    }
 });
 
 test("reads a GitLab token from the supported config formats", () => {
