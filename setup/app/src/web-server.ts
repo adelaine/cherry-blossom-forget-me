@@ -7,18 +7,13 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { readAuth, type Auth } from "./step-auth.ts";
 import { validateConfig, type Config } from "./step-config.ts";
-import { prepareCertificates, verifyCertificates } from "./step-certificates.ts";
+import { replaceCertificates, verifyCertificates } from "./step-certificates.ts";
 import { credentialPath, hostPath, type MountRecord } from "./web-mounts.ts";
 import { deploymentPage } from "./web-page.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
-export function generateAllowed(auth: Auth, mounted: boolean): boolean {
-    const certificates = auth["suitecloud-certificates"];
-    return !mounted && certificates?.public === "" && certificates?.private === "";
-}
-
-export function mountChanges(config: Config, auth: Auth, record: MountRecord): boolean {
+export function mountChanges(config: Config, auth: Auth, record: MountRecord, allowUnusedExternal = false): boolean {
     const local = Object.fromEntries(config.suiteapps.filter(repo => repo.localPath).map(repo => [repo.directory, hostPath(record, repo.localPath!)]));
     const names = new Set([...Object.keys(local), ...Object.keys(record.local)]);
     if ([...names].some(name => local[name] !== record.local[name])) return true;
@@ -28,7 +23,7 @@ export function mountChanges(config: Config, auth: Auth, record: MountRecord): b
         if (typeof path === "string" && record.certificates[hostPath(record, path)]) usedExternal.add(hostPath(record, path));
         return typeof path === "string" && !!path.trim() && !credentialPath(record, path);
     });
-    return missing || Object.keys(record.certificates).some(path => !usedExternal.has(path));
+    return missing || (!allowUnusedExternal && Object.keys(record.certificates).some(path => !usedExternal.has(path)));
 }
 
 function message(error: unknown): string {
@@ -56,6 +51,7 @@ export function startWebServer(options: {
     let worker: ChildProcess | undefined;
     let snapshot: string | undefined;
     let stopping = false;
+    let generatedCertificates = false;
     const secrets = new Set([passkey, session]);
     const busy = () => run.state === "running";
     const redact = (text: string) => {
@@ -74,7 +70,7 @@ export function startWebServer(options: {
         let publicPath: string | null = null;
         let privatePath: string | null = null;
         if (certs?.public || certs?.private) {
-            if (!certs.public || !certs.private) error = "Set both certificate paths. Restore the matching pair; replacements will not be generated.";
+            if (!certs.public || !certs.private) error = "Set both certificate paths, or generate a new pair and register it on your runbox.";
             else {
                 publicPath = mountedCredentialPath(certs.public);
                 privatePath = mountedCredentialPath(certs.private);
@@ -85,14 +81,14 @@ export function startWebServer(options: {
         else error = certs
             ? "Generate certificates, register the public certificate on your runbox, and enter the assigned certificate ID."
             : "Save credentials with both certificate paths empty, then generate certificates and register the public certificate on your runbox.";
-        return { canGenerate: generateAllowed(auth, mounted), error, publicPath, privatePath };
+        return { hasExisting: mounted || !!certs?.public || !!certs?.private, error, publicPath, privatePath };
     };
     const readiness = (text: string) => {
         try {
             const config = validateConfig(JSON.parse(text));
             const auth = readAuth(authPath);
             if (config.suiteapps.length === 0) throw new Error("Add at least one SuiteApp before deploying.");
-            if (mountChanges(config, auth, record)) throw new Error("Relaunch required: local repositories or certificate paths need different mounts.");
+            if (mountChanges(config, auth, record, generatedCertificates)) throw new Error("Relaunch required: local repositories or certificate paths need different mounts.");
             const cert = certificateState(auth);
             if (cert.error) throw new Error(cert.error);
             config.certificates = auth["suitecloud-certificates"];
@@ -110,7 +106,7 @@ export function startWebServer(options: {
         let relaunch = false;
         try {
             const value = JSON.parse(text);
-            if (Array.isArray(value.suiteapps)) relaunch = mountChanges(value, auth, record);
+            if (Array.isArray(value.suiteapps)) relaunch = mountChanges(value, auth, record, generatedCertificates);
         } catch { /* validation explains this */ }
         return {
             config: text, ready: ready.ready && !busy(), error: credentialError || ready.error,
@@ -118,7 +114,7 @@ export function startWebServer(options: {
             certificates: {
                 public: /[\r\n]/.test(auth["suitecloud-certificates"]?.public ?? "") ? "" : auth["suitecloud-certificates"]?.public ?? "",
                 private: /[\r\n]/.test(auth["suitecloud-certificates"]?.private ?? "") ? "" : auth["suitecloud-certificates"]?.private ?? "",
-                id: auth["suitecloud-certificates"]?.id ?? "", canGenerate: cert.canGenerate && !busy(),
+                id: auth["suitecloud-certificates"]?.id ?? "", canGenerate: !busy(), hasExisting: cert.hasExisting,
                 error: cert.error, canDownload: !!cert.publicPath && existsSync(cert.publicPath) && !cert.error },
             relaunch, run: { ...run, log: redact(run.log) },
         };
@@ -215,6 +211,13 @@ export function startWebServer(options: {
                 reply(res, 202, status()); return;
             }
             if (url.pathname === "/api/credentials") {
+                let settings: string | undefined;
+                if (input.config !== undefined) {
+                    if (typeof input.config !== "string") throw new Error("Configuration must be JSON text.");
+                    const value = JSON.parse(input.config);
+                    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
+                    settings = input.config;
+                }
                 const auth = readAuth(authPath);
                 if (input.token !== undefined) {
                     if (typeof input.token !== "string" || /[\r\n\0]/.test(input.token)) throw new Error("Enter a valid GitLab token.");
@@ -228,15 +231,16 @@ export function startWebServer(options: {
                     }
                 }
                 auth["suitecloud-certificates"] = cert;
+                if (settings !== undefined) writeFileSync(configPath, settings);
                 writeFileSync(authPath, JSON.stringify(auth, null, 4) + "\n", { mode: 0o600 });
                 chmodSync(authPath, 0o600);
                 reply(res, 200, status()); return;
             }
             if (url.pathname === "/api/generate") {
                 const auth = readAuth(authPath);
-                if (!certificateState(auth).canGenerate) throw new Error("Generation requires no mounted certificates and both certificate paths to be empty.");
-                const config = { suiteapps: [], vms: [], certificates: auth["suitecloud-certificates"] };
-                prepareCertificates(config, credentials, authPath);
+                if (certificateState(auth).hasExisting && input.replace !== true) throw new Error("Confirm replacement: old certificates will not be preserved.");
+                replaceCertificates(credentials, authPath);
+                generatedCertificates = true;
                 reply(res, 200, status()); return;
             }
             if (url.pathname === "/api/stop") {

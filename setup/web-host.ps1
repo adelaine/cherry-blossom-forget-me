@@ -5,8 +5,17 @@ function Invoke-SuiteContainerQuiet {
 }
 
 function Confirm-SuiteContainerOwner {
-    $owner = (& podman inspect --format '{{index .Config.Labels "suitecontainer.project"}}' $script:containerName) -join ''
-    if ($LASTEXITCODE -ne 0 -or $owner -ne $projectDir) { throw 'Another container has this app name. It will not be reused or removed.' }
+    # JSON avoids embedded template quotes lost by Windows PowerShell 5.1.
+    $inspection = (Invoke-SuiteContainerQuiet inspect --format json $script:containerName) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the existing app. Check the Podman connection and retry. It will not be reused or removed.' }
+    try {
+        $containers = @(ConvertFrom-Json -InputObject $inspection -ErrorAction Stop)
+        if ($containers.Count -ne 1 -or -not $containers[0].Config) { throw 'Unexpected container information.' }
+        $owner = $containers[0].Config.Labels.'suitecontainer.project'
+    } catch {
+        throw 'Could not read ownership information for the existing app. It will not be reused or removed.'
+    }
+    if ($owner -ne $projectDir) { throw 'Another container has this app name. It will not be reused or removed.' }
 }
 
 function Open-SuiteContainerPage {

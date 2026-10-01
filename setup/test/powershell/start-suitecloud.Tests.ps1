@@ -46,6 +46,10 @@ Describe 'Windows SuiteCloud launcher' {
         $global:LauncherTest_deployExit = 0
         $global:LauncherTest_paths = @('credentials/public.pem', 'credentials/private.pem')
         $global:LauncherTest_running = 'false'
+        $global:LauncherTest_owner = $global:LauncherTest_root
+        $global:LauncherTest_inspectExit = 0
+        $global:LauncherTest_inspectJson = $null
+        $global:LauncherTest_existsExit = 1
         Mock Write-Host {}
         Mock Read-Host { 'yes' }
         Mock Start-Process {}
@@ -59,11 +63,15 @@ Describe 'Windows SuiteCloud launcher' {
             elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'list') { $global:LauncherTest_machineJson }
             elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'ssh') { $global:LASTEXITCODE = $global:LauncherTest_buildExit }
             elseif ($Arguments[0] -eq 'inspect') {
-                if ($Arguments[2] -like '*suitecontainer.project*') { $global:LauncherTest_root } else { $global:LauncherTest_running }
+                if ($Arguments[2] -eq 'json') {
+                    $global:LASTEXITCODE = $global:LauncherTest_inspectExit
+                    if ($null -ne $global:LauncherTest_inspectJson) { $global:LauncherTest_inspectJson }
+                    else { ConvertTo-Json -InputObject @(@{ Config = @{ Labels = @{ 'suitecontainer.project' = $global:LauncherTest_owner } } }) -Depth 5 }
+                } else { $global:LauncherTest_running }
             }
             elseif ($Arguments[0] -eq 'port') { '127.0.0.1:49123' }
             elseif ($Arguments[0] -eq 'exec') { '/#session=fixture-session' }
-            elseif ($Arguments[0] -eq 'container') { $global:LASTEXITCODE = 1 }
+            elseif ($Arguments[0] -eq 'container') { $global:LASTEXITCODE = $global:LauncherTest_existsExit }
             elseif ($Arguments -contains '--web-paths') { $global:LASTEXITCODE = $global:LauncherTest_prepareExit }
             elseif ($Arguments -contains '--web-mounts') {
                 $global:LASTEXITCODE = $global:LauncherTest_pathsExit
@@ -162,6 +170,39 @@ Describe 'Windows SuiteCloud launcher' {
         @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' }).Count | Should -Be 0
         @($global:LauncherTest_calls | Where-Object { $_ -contains '--serve' }).Count | Should -Be 0
         Should -Invoke Start-Process -Times 1 -Exactly
+    }
+    It 'replaces a stopped app only after verifying its JSON ownership label' {
+        $global:LauncherTest_existsExit = 0
+        Invoke-TestLauncher
+        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'inspect' -and $_[2] -eq 'json' }).Count | Should -Be 1
+        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'rm' }).Count | Should -Be 1
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--serve' }).Count | Should -Be 1
+    }
+    It 'does not reuse a running app owned by another checkout' {
+        $global:LauncherTest_running = 'true'
+        $global:LauncherTest_owner = 'C:\another checkout'
+        { Invoke-TestLauncher } | Should -Throw '*Another container has this app name*'
+        Should -Invoke Start-Process -Times 0 -Exactly
+        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'rm' -or $_ -contains '--serve' }).Count | Should -Be 0
+    }
+    It 'does not remove a stopped app without an ownership label' {
+        $global:LauncherTest_existsExit = 0
+        $global:LauncherTest_inspectJson = '[{"Config":{"Labels":{}}}]'
+        { Invoke-TestLauncher } | Should -Throw '*Another container has this app name*'
+        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'rm' -or $_ -contains '--serve' }).Count | Should -Be 0
+    }
+    It 'reports inspection failures separately and leaves the existing app untouched' {
+        $global:LauncherTest_running = 'true'
+        $global:LauncherTest_inspectExit = 125
+        { Invoke-TestLauncher } | Should -Throw '*Could not inspect the existing app*'
+        Should -Invoke Start-Process -Times 0 -Exactly
+        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'rm' -or $_ -contains '--serve' }).Count | Should -Be 0
+    }
+    It 'rejects malformed inspection output without removing the stopped app' {
+        $global:LauncherTest_existsExit = 0
+        $global:LauncherTest_inspectJson = 'invalid JSON'
+        { Invoke-TestLauncher } | Should -Throw '*Could not read ownership information*'
+        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'rm' -or $_ -contains '--serve' }).Count | Should -Be 0
     }
     AfterAll {
         Remove-Variable installerCalls -Scope Global -ErrorAction SilentlyContinue

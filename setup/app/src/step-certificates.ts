@@ -8,13 +8,34 @@ import {
     chmodSync,
     existsSync,
     mkdirSync,
+    mkdtempSync,
     readFileSync,
     rmSync,
+    renameSync,
     writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "./step-config.ts";
 import { readAuth } from "./step-auth.ts";
+
+// Generate and verify before replacing the active pair. No old-pair backups remain.
+export function replaceCertificates(directory: string, authPath: string): void {
+    const auth = readAuth(authPath);
+    const staging = mkdtempSync(join(directory, ".certificates-"));
+    try {
+        const stagedAuth = join(staging, "auth.json");
+        writeFileSync(stagedAuth, JSON.stringify({ ...auth, "suitecloud-certificates": { public: "", private: "", id: "" } }), { mode: 0o600 });
+        const config: Config = { suiteapps: [], vms: [], certificates: { public: "", private: "", id: "" } };
+        prepareCertificates(config, staging, stagedAuth);
+        renameSync(join(staging, "private.pem"), join(directory, "private.pem"));
+        renameSync(join(staging, "public.pem"), join(directory, "public.pem"));
+        auth["suitecloud-certificates"] = config.certificates;
+        writeFileSync(authPath, JSON.stringify(auth, null, 4) + "\n", { mode: 0o600 });
+        chmodSync(authPath, 0o600);
+    } finally {
+        rmSync(staging, { recursive: true, force: true });
+    }
+}
 
 export function verifyCertificates(
     publicPath = "/config/certs/public.pem",

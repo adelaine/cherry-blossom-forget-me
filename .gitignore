@@ -59,6 +59,7 @@ temp/
 .cache/
 
 # Local AI agent state
+.ai-docs/
 .claude/settings.local.json
 .claude/worktrees/
 .codex/auth.json

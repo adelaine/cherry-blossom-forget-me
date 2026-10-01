@@ -6,20 +6,111 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateAllowed, mountChanges, startWebServer } from "../src/web-server.ts";
+import { mountChanges, startWebServer } from "../src/web-server.ts";
+import { runInNewContext } from "node:vm";
 import { credentialPath, type MountRecord } from "../src/web-mounts.ts";
 import type { Auth } from "../src/step-auth.ts";
+import { ansiToHtml, ansiStyles } from "../src/ansi.ts";
+import { deploymentPage } from "../src/web-page.ts";
+import { replaceCertificates } from "../src/step-certificates.ts";
+
+test("ANSI log rendering escapes HTML and uses fixed CSS classes", () => {
+    assert.equal(ansiToHtml('<script>&"\'</script>'), "&lt;script&gt;&amp;&quot;&#39;&lt;/script&gt;");
+    assert.equal(ansiToHtml('\x1b[1;31m<img src=x onerror=alert(1)>\x1b[0m plain'), '<span class="ansi-bold ansi-fg-1">&lt;img src=x onerror=alert(1)&gt;</span> plain');
+    for (let index = 0; index < 16; index++) {
+        const fg = index < 8 ? 30 + index : 90 + index - 8;
+        const bg = index < 8 ? 40 + index : 100 + index - 8;
+        assert.equal(ansiToHtml(`\x1b[${fg};${bg}mcolor`), `<span class="ansi-fg-${index} ansi-bg-${index}">color</span>`);
+        assert.ok(ansiStyles.includes(`.ansi-fg-${index}{`));
+        assert.ok(ansiStyles.includes(`.ansi-bg-${index}{`));
+    }
+});
+
+test("ANSI log rendering handles selective resets and incomplete snapshots", () => {
+    assert.equal(ansiToHtml('\x1b[1;31;44mA\x1b[22;39mB\x1b[49mC'), '<span class="ansi-bold ansi-fg-1 ansi-bg-4">A</span><span class="ansi-bg-4">B</span>C');
+    assert.equal(ansiToHtml('start\x1b[3'), 'start');
+    assert.equal(ansiToHtml('start\x1b[31mred\x1b['), 'start<span class="ansi-fg-1">red</span>');
+    assert.equal(ansiToHtml('start\x1b[31mred\x1b[mend'), 'start<span class="ansi-fg-1">red</span>end');
+});
+
+test("ANSI log rendering discards unsupported controls and extended colors", () => {
+    assert.equal(ansiToHtml('\x1b[2Jtext\x1b]8;;https://example.com\x1b\\link\x1b]8;;\x07'), 'textlink');
+    assert.equal(ansiToHtml('text\x1b]unfinished title'), 'text');
+    assert.equal(ansiToHtml('\x1b[38;5;31mindexed\x1b[48;2;0;31;1mRGB'), 'indexedRGB');
+    assert.equal(ansiToHtml('\x1b[38;2;0;0;0;1;32mgreen'), '<span class="ansi-bold ansi-fg-2">green</span>');
+});
+
+test("ANSI converter is self-contained in the served browser script", () => {
+    const browserConverter = new Function(`${deploymentPage.script.split('const $ =')[0]} return ansiToHtml;`)();
+    assert.equal(browserConverter('\x1b[31m<red>'), ansiToHtml('\x1b[31m<red>'));
+    assert.ok(deploymentPage.script.includes('log.innerHTML = ansiToHtml(next.run.log)'));
+    assert.ok(deploymentPage.style.includes(ansiStyles));
+    new Function(deploymentPage.script);
+});
 
 const require = createRequire(import.meta.url);
 const { tokenIn, run: importToken } = require("../../bootstrap-token.cjs");
 const record: MountRecord = { hostRoot: "/project", platform: "linux", local: {}, certificates: {} };
 const emptyAuth: Auth = { "gitlab-token": "", "suitecloud-certificates": { public: "", private: "", id: "" } };
 
-test("generation requires two explicitly empty paths and no mounted certificates", () => {
-    assert.equal(generateAllowed(emptyAuth, false), true);
-    assert.equal(generateAllowed(emptyAuth, true), false);
-    assert.equal(generateAllowed({}, false), false);
-    assert.equal(generateAllowed({ "suitecloud-certificates": { public: "credentials/public.pem", private: "", id: "" } }, false), false);
+test("failed regeneration preserves the active pair and credentials", () => {
+    const root = mkdtempSync(join(tmpdir(), "suitecontainer-replacement-"));
+    const authPath = join(root, "auth.json");
+    const auth = { ...emptyAuth, "suitecloud-certificates": { public: "credentials/public.pem", private: "credentials/private.pem", id: "existing-id" } };
+    writeFileSync(authPath, JSON.stringify(auth));
+    writeFileSync(join(root, "public.pem"), "old public");
+    writeFileSync(join(root, "private.pem"), "old private");
+    const originalPath = process.env.PATH;
+    try {
+        process.env.PATH = root;
+        assert.throws(() => replaceCertificates(root, authPath));
+        assert.equal(readFileSync(join(root, "public.pem"), "utf8"), "old public");
+        assert.equal(readFileSync(join(root, "private.pem"), "utf8"), "old private");
+        assert.deepEqual(JSON.parse(readFileSync(authPath, "utf8")), auth);
+    } finally {
+        process.env.PATH = originalPath;
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test("Current VM preserves accounts and other runboxes, synchronizes JSON edits, and saves with credentials", async () => {
+    const elements = new Map<string, any>();
+    const element = (id: string) => {
+        if (!elements.has(id)) elements.set(id, { value: "", addEventListener(event: string, handler: Function) { this[event] = handler; } });
+        return elements.get(id);
+    };
+    const config = { suiteapps: [], vms: [{ account: "000072", url: "old.vm.eng.netsuite.com" }, { account: "000073", url: "second.vm.eng.netsuite.com" }] };
+    let saved: any;
+    const next = { config: JSON.stringify(config), certificates: {}, run: { state: "idle", log: "" }, ready: false };
+    const context = {
+        document: { getElementById: element }, location: { hash: "", pathname: "/" }, URLSearchParams,
+        sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
+        setInterval() {}, setTimeout() {}, clearTimeout() {},
+        fetch: async (path: string, options: any) => {
+            if (path === "/api/credentials") { saved = JSON.parse(options.body); next.config = saved.config; }
+            return { ok: true, json: async () => next };
+        },
+    };
+    runInNewContext(deploymentPage.script, context);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(element("vm").value, config.vms[0].url);
+    element("vm").value = "new.vm.eng.netsuite.com";
+    element("vm").input();
+    const edited = JSON.parse(element("config").value);
+    assert.equal(edited.vms[0].url, "new.vm.eng.netsuite.com");
+    assert.equal(edited.vms[0].account, "000072");
+    assert.deepEqual(edited.vms[1], config.vms[1]);
+    await element("credentials").click();
+    assert.deepEqual(JSON.parse(saved.config), edited);
+    edited.vms[0].url = "json.vm.eng.netsuite.com";
+    element("config").value = JSON.stringify(edited);
+    element("config").input();
+    runInNewContext("render(state)", context);
+    assert.equal(element("vm").value, edited.vms[0].url);
+    element("config").value = "invalid JSON";
+    element("vm").input();
+    assert.equal(element("config").value, "invalid JSON");
+    assert.match(element("credential-message").textContent, /Fix the configuration JSON/);
 });
 
 test("certificate generation is explicit, deployment uses snapshots, and a failed run can be retried", async t => {
@@ -30,7 +121,11 @@ test("certificate generation is explicit, deployment uses snapshots, and a faile
     const configFile = join(root, "suitecontainer.config.json");
     writeFileSync(configFile, JSON.stringify(config));
     writeFileSync(join(root, "credentials/auth.json"), JSON.stringify(emptyAuth));
-    writeFileSync(join(root, "credentials/web-mounts.json"), JSON.stringify(record));
+    const outsidePublic = join(root, "external-public.pem");
+    const outsidePrivate = join(root, "external-private.pem");
+    writeFileSync(outsidePublic, "external public");
+    writeFileSync(outsidePrivate, "external private");
+    writeFileSync(join(root, "credentials/web-mounts.json"), JSON.stringify({ ...record, certificates: { "/outside/public.pem": outsidePublic, "/outside/private.pem": outsidePrivate } }));
     const sessionFile = join(root, "session");
     const workerScript = join(root, "worker.cjs");
     writeFileSync(workerScript, `const fs = require('node:fs'); setTimeout(() => { console.log(JSON.parse(fs.readFileSync(process.env.SUITECONTAINER_CONFIG, 'utf8')).vms[0].account); console.log(JSON.parse(fs.readFileSync(process.env.SUITECONTAINER_AUTH, 'utf8'))['gitlab-token']); console.log(process.env.SUITECONTAINER_DEPLOY_PASSKEY); process.exit(1); }, 2000);`);
@@ -45,11 +140,24 @@ test("certificate generation is explicit, deployment uses snapshots, and a faile
         const post = (path: string, value = {}) => fetch(origin + "/api/" + path, { method: "POST", headers, body: JSON.stringify(value) });
         const state = async () => (await fetch(origin + "/api/state", { headers })).json();
         assert.equal((await state()).certificates.canGenerate, true);
-        assert.equal((await post("generate")).status, 200);
-        assert.equal((await state()).certificates.canGenerate, false);
+        assert.equal((await post("generate")).status, 400);
+        assert.equal((await post("generate", { replace: true })).status, 200);
+        assert.equal((await state()).relaunch, false);
+        assert.equal(readFileSync(outsidePublic, "utf8"), "external public");
+        assert.equal(readFileSync(outsidePrivate, "utf8"), "external private");
+        assert.equal((await state()).certificates.canGenerate, true);
         assert.equal((await state()).ready, false);
         assert.equal((await fetch(origin + "/api/certificate", { headers })).status, 200);
         assert.equal((await post("credentials", { id: "certificate-id", token: "worker-secret" })).status, 200);
+        assert.equal((await state()).ready, true);
+        const oldPublic = readFileSync(join(root, "credentials/public.pem"), "utf8");
+        assert.equal((await post("generate")).status, 400);
+        assert.equal(readFileSync(join(root, "credentials/public.pem"), "utf8"), oldPublic);
+        assert.equal((await post("generate", { replace: true })).status, 200);
+        assert.notEqual(readFileSync(join(root, "credentials/public.pem"), "utf8"), oldPublic);
+        assert.equal((await state()).certificates.id, "");
+        assert.equal((await state()).ready, false);
+        assert.equal((await post("credentials", { id: "replacement-id" })).status, 200);
         assert.equal((await state()).ready, true);
         assert.equal((await post("deploy", { config: JSON.stringify(config) })).status, 202);
         for (const path of ["deploy", "credentials", "settings", "generate", "stop"]) assert.equal((await post(path, { config: JSON.stringify(config) })).status, 409);
@@ -86,6 +194,8 @@ test("local mount edits and removed external certificate mounts require relaunch
     assert.equal(mountChanges(config, auth, mounted), false);
     assert.equal(mountChanges({ ...config, suiteapps: [] }, auth, mounted), true);
     assert.equal(mountChanges(config, emptyAuth, mounted), true);
+    assert.equal(mountChanges(config, emptyAuth, mounted, true), false);
+    assert.equal(mountChanges({ ...config, suiteapps: [] }, emptyAuth, mounted, true), true);
     assert.equal(mountChanges({ ...config, suiteapps: [{ directory: "app", localPath: "../different" }] }, auth, mounted), true);
     assert.equal(credentialPath(record, "credentials/../outside.pem"), null);
     const windows: MountRecord = { hostRoot: "C:\\Project", platform: "win32", local: {}, certificates: {} };
@@ -139,13 +249,18 @@ test("unfinished settings reach the page; requests require session and same-orig
         assert.equal(saved.status, 200);
         assert.equal(JSON.parse(readFileSync(join(root, "suitecontainer.config.json"), "utf8")).vms[0].url, "");
         assert.equal((await fetch(origin + "/api/deploy", { method: "POST", headers, body: JSON.stringify({ config: JSON.stringify(config) }) })).status, 400);
-        const credentialResponse = await fetch(origin + "/api/credentials", { method: "POST", headers, body: JSON.stringify({ token: "hidden-secret" }) });
+        const completedConfig = { ...config, vms: [{ ...config.vms[0], url: "current.vm.eng.netsuite.com" }] };
+        const credentialResponse = await fetch(origin + "/api/credentials", { method: "POST", headers, body: JSON.stringify({ token: "hidden-secret", config: JSON.stringify(completedConfig) }) });
         assert.equal(credentialResponse.status, 200);
         assert.ok(!(await credentialResponse.text()).includes("hidden-secret"));
         assert.equal(JSON.parse(readFileSync(join(root, "credentials/auth.json"), "utf8"))["gitlab-token"], "hidden-secret");
+        assert.deepEqual(JSON.parse(readFileSync(join(root, "suitecontainer.config.json"), "utf8")), completedConfig);
+        assert.equal((await fetch(origin + "/api/credentials", { method: "POST", headers, body: JSON.stringify({ token: "should-not-save", config: "invalid JSON" }) })).status, 400);
+        assert.equal(JSON.parse(readFileSync(join(root, "credentials/auth.json"), "utf8"))["gitlab-token"], "hidden-secret");
         writeFileSync(join(root, "credentials/private.pem"), "existing file");
         const partial = await (await fetch(origin + "/api/state", { headers })).json();
-        assert.equal(partial.certificates.canGenerate, false);
+        assert.equal(partial.certificates.canGenerate, true);
+        assert.equal(partial.certificates.hasExisting, true);
         assert.equal((await fetch(origin + "/api/generate", { method: "POST", headers, body: '{}' })).status, 400);
         assert.equal(readFileSync(join(root, "credentials/private.pem"), "utf8"), "existing file");
     } finally {
