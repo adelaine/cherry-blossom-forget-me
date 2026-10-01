@@ -25,7 +25,7 @@ setup() { setup_fixture; }
   run_launcher setup/start-suitecloud-codebox.sh
   [ "$status" -eq 0 ]
   assert_called "<type=bind,src=$fixture_root/repos,dst=/workspace>"
-  assert_called "<build> <-f> <$fixture_root/setup/Containerfile> <--build-arg> <SUITECLOUD_CLI_ACCEPT_LICENSE=true> <-t> <suitecloud-workspace> <$fixture_root/setup>"
+  assert_called "<build> <-f> <$fixture_root/setup/Containerfile> <--build-arg> <SUITECLOUD_CLI_ACCEPT_LICENSE=true> <--build-arg> <SUITECLOUD_PROXY> <-t> <suitecloud-workspace> <$fixture_root/setup>"
   assert_called "<type=bind,src=$fixture_nems/.nems.env,dst=/config/.nems.env,ro=true>"
   assert_called "<type=bind,src=$fixture_nems/config.toml,dst=/config/config.toml,ro=true>"
   assert_called --deploy
@@ -87,11 +87,12 @@ setup() { setup_fixture; }
   assert_not_called '<build>'
 }
 
-@test "codebox declines the license before building" {
+@test "codebox automatically accepts the license for a new image" {
   TEST_IMAGE_STATUS=1
   run_launcher setup/start-suitecloud-codebox.sh no
-  [ "$status" -ne 0 ]
-  assert_not_called '<build>'
+  [ "$status" -eq 0 ]
+  assert_called '<SUITECLOUD_CLI_ACCEPT_LICENSE=true>'
+  [[ "$output" != *'Do you accept these terms?'* ]]
 }
 
 @test "codebox stops on failed builds and failed deployments" {
@@ -120,4 +121,19 @@ setup() { setup_fixture; }
   run_launcher setup/start-suitecloud-codebox.sh
   [ "$status" -ne 0 ]
   assert_not_called --deploy
+}
+
+@test "codebox passes npm configuration as a build secret" {
+  mkdir -p "$(dirname "$SUITECONTAINER_NPMRC")"
+  printf '%s\n' 'registry=https://registry.example.test/' '//registry.example.test/:_authToken=test-secret' > "$SUITECONTAINER_NPMRC"
+  run_launcher setup/start-suitecloud-codebox.sh
+  [ "$status" -eq 0 ]
+  assert_called "<--secret> <id=npmrc,src=$SUITECONTAINER_NPMRC>"
+  assert_not_called test-secret
+}
+
+@test "codebox builds without a secret when npm configuration is absent" {
+  run_launcher setup/start-suitecloud-codebox.sh
+  [ "$status" -eq 0 ]
+  assert_not_called '<--secret>'
 }

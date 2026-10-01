@@ -153,11 +153,13 @@ Describe 'Windows SuiteCloud launcher' {
         $deploy | Should -Contain '--rm'
         $deploy | Should -Contain "type=bind,src=$($global:LauncherTest_configPath),dst=/config/suitecontainer.config.json"
     }
-    It 'stops when the license is declined' {
+    It 'automatically accepts the license for a new image' {
         $global:LauncherTest_imageExit = 1
-        Mock Read-Host { 'no' }
-        { Invoke-TestLauncher } | Should -Throw '*Build cancelled*'
-        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' }).Count | Should -Be 0
+        Mock Read-Host { throw 'Unexpected acceptance prompt' }
+        { Invoke-TestLauncher } | Should -Not -Throw
+        $build = @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' })[0]
+        $build | Should -Contain 'SUITECLOUD_CLI_ACCEPT_LICENSE=true'
+        Should -Invoke Read-Host -Times 0 -Exactly
     }
     It 'reports a failed build' {
         $global:LauncherTest_buildExit = 1
