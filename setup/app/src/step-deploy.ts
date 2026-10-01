@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Config } from "./step-config.ts";
+import { authenticationError } from "./step-suitecloud-errors.ts";
 
 function suitecloudEnv(passkey: string, deploying = false): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
@@ -20,15 +21,33 @@ function runSuitecloud(
     cwd: string,
     passkey: string,
     deploying = false,
+    domain = "",
 ): void {
+    const authenticating = args[0] === "account:setup:ci";
     const result = spawnSync("suitecloud", args, {
         cwd,
-        stdio: "inherit",
+        stdio: authenticating ? ["inherit", "pipe", "pipe"] : "inherit",
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
         env: suitecloudEnv(passkey, deploying),
     });
     if (result.error) throw result.error;
-    if (result.status !== 0)
+    if (result.status !== 0) {
+        if (authenticating) {
+            throw new Error(
+                authenticationError(
+                    [result.stdout, result.stderr].filter(Boolean).join("\n"),
+                    basename(cwd),
+                    domain,
+                ),
+            );
+        }
         throw new Error(`SuiteCloud ${args[0]} failed in ${cwd}.`);
+    }
+    if (authenticating) {
+        if (result.stdout) process.stdout.write(result.stdout);
+        if (result.stderr) process.stderr.write(result.stderr);
+    }
 }
 
 export function deployRepos(config: Config, privateKeyPath: string): void {
@@ -75,6 +94,8 @@ export function deployRepos(config: Config, privateKeyPath: string): void {
                     ["account:setup:ci", "--select", authId],
                     destination,
                     passkey,
+                    false,
+                    runbox.url,
                 );
             } else {
                 runSuitecloud(
@@ -93,6 +114,8 @@ export function deployRepos(config: Config, privateKeyPath: string): void {
                     ],
                     destination,
                     passkey,
+                    false,
+                    runbox.url,
                 );
             }
             authenticationReady = true;
@@ -101,6 +124,8 @@ export function deployRepos(config: Config, privateKeyPath: string): void {
                 ["account:setup:ci", "--select", authId],
                 destination,
                 passkey,
+                false,
+                runbox.url,
             );
         }
         console.log(`Checking ${repo.directory} against ${runbox.url}...`);

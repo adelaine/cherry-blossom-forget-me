@@ -26,6 +26,43 @@ import {
     verifyCertificates,
 } from "../src/step-certificates.ts";
 import type { Config } from "../src/step-config.ts";
+import { authenticationError } from "../src/step-suitecloud-errors.ts";
+
+test("explains fatal TLS alerts without blaming the authentication certificate", () => {
+    const message = authenticationError(
+        "(internal_error) Received fatal alert: internal_error",
+        "absi-nsn",
+        "runbox.vm.eng.netsuite.com",
+    );
+    assert.match(message, /Received fatal alert: internal_error/);
+    assert.match(message, /absi-nsn/);
+    assert.match(message, /runbox.vm.eng.netsuite.com/);
+    assert.match(message, /runbox.url/);
+    assert.match(message, /VPN/);
+    assert.match(message, /does not identify the cause/);
+    assert.match(message, /does not establish.*certificate ID is wrong/);
+});
+
+test("explains Java trust errors and preserves unknown authentication errors", () => {
+    const trust = authenticationError(
+        "PKIX path building failed: unable to find valid certification path",
+        "project",
+        "runbox.netsuite.com",
+    );
+    assert.match(trust, /Java trust store/);
+    const unknown = authenticationError(
+        "Invalid certificate ID",
+        "project",
+        "runbox.netsuite.com",
+    );
+    assert.match(unknown, /Invalid certificate ID/);
+    assert.match(unknown, /suitecloud-certificates.id/);
+    assert.doesNotMatch(unknown, /fatal TLS alert/);
+    assert.match(
+        authenticationError("", "project", "runbox.netsuite.com"),
+        /without an error message/,
+    );
+});
 
 const suiteapp = {
     url: "git@gitlab.eng.netsuite.com:team/project.git",
