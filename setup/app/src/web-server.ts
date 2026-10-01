@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, chmodSync, copyFileSync, constants } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,9 @@ import { validateConfig, type Config } from "./step-config.ts";
 import { replaceCertificates, verifyCertificates } from "./step-certificates.ts";
 import { credentialPath, hostPath, type MountRecord } from "./web-mounts.ts";
 import { deploymentPage } from "./web-page.ts";
+import { startSql, validateSqlRequest } from "./sql-runner.ts";
+import { SQL_DEFAULTS, SQL_PASSWORD_HINT, SQL_PASSWORD_SALT } from "./sql-settings.ts";
+import { decryptSqlPassword } from "./sql-password-crypto.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
@@ -34,11 +37,24 @@ function message(error: unknown): string {
 export function startWebServer(options: {
     configDirectory?: string; port?: number; host?: string; workerScript?: string;
     sessionFile?: string; onStop?: () => void; signalHandlers?: boolean;
+    sqlCommand?: string; sqlArgs?: string[]; sqlTimeoutMs?: number;
 } = {}): Server {
     const configDirectory = options.configDirectory ?? "/config";
     const configPath = join(configDirectory, "suitecontainer.config.json");
     const credentials = join(configDirectory, "credentials");
     const authPath = join(credentials, "auth.json");
+    const sqlDefaultPath = join(credentials, ".sql-default");
+    const sqlUserPath = join(credentials, ".sql-user");
+    const prepareSqlUser = () => {
+        if (existsSync(sqlUserPath) || !existsSync(sqlDefaultPath)) return;
+        try {
+            copyFileSync(sqlDefaultPath, sqlUserPath, constants.COPYFILE_EXCL);
+            chmodSync(sqlUserPath, 0o600);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw new Error("Cannot create credentials/.sql-user. Check the credentials folder permissions or enter the SQL password manually.");
+        }
+    };
+    try { prepareSqlUser(); } catch (error) { console.warn(message(error)); }
     const mountedCredentialPath = (path: string) => {
         const runtime = credentialPath(record, path);
         return runtime?.startsWith("/config/credentials/")
@@ -48,12 +64,18 @@ export function startWebServer(options: {
     const passkey = randomBytes(32).toString("hex");
     const record: MountRecord = JSON.parse(readFileSync(join(credentials, "web-mounts.json"), "utf8"));
     let run: Run = { state: "idle", log: "" };
+    let sqlRun: { state: Run["state"]; output: string; host?: string; database?: string } = { state: "idle", output: "" };
+    let sqlWorker: ChildProcess | undefined;
+    let sqlPreparing = false;
     let worker: ChildProcess | undefined;
     let snapshot: string | undefined;
     let stopping = false;
     let generatedCertificates = false;
     const secrets = new Set([passkey, session]);
-    const busy = () => run.state === "running";
+    const busy = () => sqlPreparing || run.state === "running" || sqlRun.state === "running";
+    const busyMessage = () => sqlPreparing ? "SQL credentials are being unlocked. Wait before making changes." : sqlRun.state === "running"
+        ? "SQL is running. Wait for its results before making changes."
+        : "Deployment is running. Wait for its results before making changes.";
     const redact = (text: string) => {
         // Remove known credentials and PEM private-key blocks from browser progress.
         let token = "";
@@ -103,6 +125,14 @@ export function startWebServer(options: {
         try { auth = readAuth(authPath); } catch (error) { credentialError = message(error); }
         const cert = certificateState(auth);
         const ready = readiness(text);
+        let sqlDefaults = { ...SQL_DEFAULTS };
+        try {
+            const database = JSON.parse(text)?.vms?.[0]?.database;
+            sqlDefaults = {
+                user: typeof database?.user === "string" ? database.user : SQL_DEFAULTS.user,
+                service: typeof database?.service === "string" ? database.service : SQL_DEFAULTS.service,
+            };
+        } catch { /* Configuration validation explains malformed JSON. */ }
         let relaunch = false;
         try {
             const value = JSON.parse(text);
@@ -117,6 +147,8 @@ export function startWebServer(options: {
                 id: auth["suitecloud-certificates"]?.id ?? "", canGenerate: !busy(), hasExisting: cert.hasExisting,
                 error: cert.error, canDownload: !!cert.publicPath && existsSync(cert.publicPath) && !cert.error },
             relaunch, run: { ...run, log: redact(run.log) },
+            sql: { ...sqlRun, output: redact(sqlRun.output), defaults: sqlDefaults, passwordHint: SQL_PASSWORD_HINT,
+                hasDefaultPassword: existsSync(sqlUserPath) || existsSync(sqlDefaultPath), preparing: sqlPreparing },
         };
     };
     const reply = (res: ServerResponse, code: number, value: unknown) => {
@@ -166,7 +198,7 @@ export function startWebServer(options: {
             }
             if (req.method !== "POST") { reply(res, 404, { error: "Page not found." }); return; }
             if (stopping) { reply(res, 409, { error: "The app is stopping. Relaunch to continue." }); return; }
-            if (busy() && url.pathname !== "/api/check") { reply(res, 409, { error: "Deployment is running. Wait for its results before making changes." }); return; }
+            if (busy() && url.pathname !== "/api/check") { reply(res, 409, { error: busyMessage() }); return; }
             const input = await body(req);
             // Recheck after the asynchronous body read to prevent simultaneous clicks starting two workers.
             if (stopping) { reply(res, 409, { error: "The app is stopping." }); return; }
@@ -174,7 +206,42 @@ export function startWebServer(options: {
                 if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
                 reply(res, 200, status(input.config)); return;
             }
-            if (busy()) { reply(res, 409, { error: "Deployment is already running." }); return; }
+            if (busy()) { reply(res, 409, { error: busyMessage() }); return; }
+            if (url.pathname === "/api/sql") {
+                if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
+                // SQL needs a configured target, not SuiteCloud certificates or a GitLab token.
+                // Use the visible configuration without saving it as a side effect of execution.
+                const config = JSON.parse(input.config);
+                if ((input.password !== undefined && typeof input.password !== "string") || (input.unlock !== undefined && typeof input.unlock !== "string")) throw new Error("Enter a SQL password or the password hint.");
+                const manual = typeof input.password === "string" && !!input.password;
+                const unlock = typeof input.unlock === "string" && !!input.unlock;
+                if (manual && unlock) throw new Error("Use only one option: the SQL password or the password hint.");
+                if (!manual && !unlock) throw new Error("Enter a SQL password or the password hint for the default password.");
+                const request = validateSqlRequest({ ...input, host: config?.vms?.[0]?.url, password: manual ? input.password : "pending-unlock" }, config);
+                if (unlock) {
+                    sqlPreparing = true;
+                    let decrypted: Buffer | undefined;
+                    try {
+                        let encrypted: string;
+                        prepareSqlUser();
+                        try { encrypted = readFileSync(sqlUserPath, "utf8").trim(); }
+                        catch { throw new Error("Cannot read credentials/.sql-user. Enter the SQL password manually or restore the encrypted user file."); }
+                        decrypted = await decryptSqlPassword(encrypted, input.unlock as string, SQL_PASSWORD_SALT);
+                        if (stopping) throw new Error("The app is stopping. Relaunch to continue.");
+                        request.password = decrypted.toString("utf8");
+                        validateSqlRequest(request, config);
+                    } finally { decrypted?.fill(0); sqlPreparing = false; }
+                }
+                secrets.add(request.password);
+                const execution = startSql(request, { command: options.sqlCommand, args: options.sqlArgs, timeoutMs: options.sqlTimeoutMs });
+                sqlWorker = execution.child;
+                sqlRun = { state: "running", output: "", host: request.host, database: request.database };
+                void execution.result.then(result => {
+                    sqlRun = { ...sqlRun, ...result };
+                    sqlWorker = undefined;
+                });
+                reply(res, 202, status(input.config)); return;
+            }
             if (url.pathname === "/api/settings" || url.pathname === "/api/deploy") {
                 if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
                 const value = JSON.parse(input.config);
@@ -253,6 +320,7 @@ export function startWebServer(options: {
         } catch (error) { reply(res, 400, { error: redact(message(error)) }); }
     });
     server.requestTimeout = 15_000;
+    server.once("close", () => sqlWorker?.kill("SIGKILL"));
     server.on("error", error => { console.error(message(error)); process.exitCode = 1; });
     server.listen(options.port ?? 8080, options.host ?? "0.0.0.0", () => {
         writeFileSync(options.sessionFile ?? "/tmp/suitecontainer-web-url", `/#session=${session}`, { mode: 0o600 });
@@ -260,6 +328,7 @@ export function startWebServer(options: {
     });
     const shutdown = () => {
         stopping = true;
+        sqlWorker?.kill("SIGKILL");
         if (worker?.pid) { try { process.kill(-worker.pid, "SIGTERM"); } catch { worker.kill("SIGTERM"); } }
         server.close();
         const timer = setTimeout(() => process.exit(0), 3000);

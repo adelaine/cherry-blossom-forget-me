@@ -19,6 +19,7 @@ pnpm-debug.log*
 /suitecontainer.config.json
 /credentials/*
 !/credentials/auth.example.json
+!/credentials/.sql-default
 .env
 .env.*
 !.env.example

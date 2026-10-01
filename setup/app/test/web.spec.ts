@@ -13,6 +13,8 @@ import type { Auth } from "../src/step-auth.ts";
 import { ansiToHtml, ansiStyles, applyAnsiColors } from "../src/ansi.ts";
 import { deploymentPage } from "../src/web-page.ts";
 import { replaceCertificates } from "../src/step-certificates.ts";
+import { startSql, validateSqlRequest } from "../src/sql-runner.ts";
+import { SQL_DEFAULTS, SQL_PASSWORD_HINT } from "../src/sql-settings.ts";
 
 test("ANSI log rendering escapes HTML and uses fixed CSS classes", () => {
     assert.equal(ansiToHtml('<script>&"\'</script>'), "&lt;script&gt;&amp;&quot;&#39;&lt;/script&gt;");
@@ -116,14 +118,14 @@ test("failed regeneration preserves the active pair and credentials", () => {
 test("Current VM preserves accounts and other runboxes, synchronizes JSON edits, and saves with credentials", async () => {
     const elements = new Map<string, any>();
     const element = (id: string) => {
-        if (!elements.has(id)) elements.set(id, { value: "", querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
+        if (!elements.has(id)) elements.set(id, { value: "", replaceChildren() {}, querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
         return elements.get(id);
     };
     const config = { suiteapps: [], vms: [{ account: "000072", url: "old.vm.eng.netsuite.com" }, { account: "000073", url: "second.vm.eng.netsuite.com" }] };
     let saved: any;
     const next = { config: JSON.stringify(config), certificates: {}, run: { state: "idle", log: "" }, ready: false };
     const context = {
-        document: { getElementById: element }, location: { hash: "", pathname: "/" }, URLSearchParams,
+        document: { getElementById: element, createElement: () => ({}) }, location: { hash: "", pathname: "/" }, URLSearchParams,
         sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
         setInterval() {}, setTimeout() {}, clearTimeout() {},
         fetch: async (path: string, options: any) => {
@@ -157,7 +159,7 @@ test("Stop app closes after five seconds only on success and explains blocked cl
     for (const success of [true, false]) {
         const elements = new Map<string, any>();
         const element = (id: string) => {
-            if (!elements.has(id)) elements.set(id, { value: "", querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
+            if (!elements.has(id)) elements.set(id, { value: "", replaceChildren() {}, querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
             return elements.get(id);
         };
         const timers: { callback: () => void; delay: number }[] = [];
@@ -355,4 +357,203 @@ test("unfinished settings reach the page; requests require session and same-orig
         await new Promise<void>(resolve => server.close(() => resolve()));
         rmSync(root, { recursive: true, force: true });
     }
+});
+
+const sqlConfig = { suiteapps: [], vms: [{ account: "000071", url: "first.vm.eng.netsuite.com" }, { account: "000072", url: "second.vm.eng.netsuite.com" }] };
+const sqlInput = { host: sqlConfig.vms[1].url, account: "TEST_ACCOUNT", database: "test.service", password: "test/$& secret", sql: "select 'hello' from dual;" };
+
+function sqlStub(root: string): string {
+    const script = join(root, "sqlplus.cjs");
+    writeFileSync(script, `
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => input += chunk);
+process.stdin.on('end', () => {
+    const mode = process.argv[2];
+    const marker = input.match(/^prompt (SUITECONTAINER_SQL_[a-f0-9]+)$/m)?.[1];
+    if (mode === 'hang') { setInterval(() => {}, 1000); return; }
+    if (mode === 'missing-end') return;
+    if (mode === 'sql-error') { console.log('ORA-00942: table or view does not exist'); process.exitCode = 1; return; }
+    if (mode === 'command-error') { console.log('SP2-0734: unknown command'); console.log(marker); return; }
+    if (mode === 'large-error') { console.log('SP2-0734: unknown command'); console.log('x'.repeat(600000)); console.log(marker); return; }
+    setTimeout(() => {
+        console.log(JSON.stringify(process.argv.slice(3)));
+        process.stdout.write(input.slice(0, input.indexOf(' secret')));
+        setTimeout(() => { console.log(input.slice(input.indexOf(' secret'))); console.log('hello'); console.log(marker); }, 20);
+    }, mode === 'delay' ? 300 : 0);
+});
+`);
+    return script;
+}
+
+test("SQL validates configured targets and connection fields without SuiteCloud credentials", () => {
+    assert.deepEqual(validateSqlRequest(sqlInput, sqlConfig), sqlInput);
+    for (const override of [
+        { host: "other.vm.eng.netsuite.com" }, { host: "localhost" }, { account: 'user\nHOST command' },
+        { database: 'db"/bad' }, { password: 'bad"password' }, { password: "line\nbreak" },
+        { password: "" }, { sql: "" }, { sql: "select 1 from dual" }, { sql: "x".repeat(65537) },
+    ]) assert.throws(() => validateSqlRequest({ ...sqlInput, ...override }, sqlConfig));
+    assert.throws(() => validateSqlRequest(sqlInput, { vms: [] }));
+    assert.throws(() => validateSqlRequest(sqlInput, null));
+});
+
+test("SQL worker keeps credentials off arguments, redacts split output, and rolls back on exit", async () => {
+    const root = mkdtempSync(join(tmpdir(), "suitecontainer-sql-"));
+    try {
+        const worker = startSql(sqlInput, { command: process.execPath, args: [sqlStub(root), "success"] });
+        const result = await worker.result;
+        assert.equal(result.state, "succeeded");
+        assert.match(result.output, /\["-L","-S","-R","3","\/nolog"\]/);
+        assert.match(result.output, /second.vm.eng.netsuite.com:1521\/test.service/);
+        assert.match(result.output, /set autocommit off/);
+        assert.match(result.output, /whenever sqlerror exit failure rollback/);
+        assert.match(result.output, /exit success rollback/);
+        assert.match(result.output, /\[redacted\]/);
+        assert.ok(!result.output.includes(sqlInput.password));
+        assert.ok(!result.output.includes("SUITECONTAINER_SQL_"));
+        assert.ok(!worker.child.spawnargs.join(" ").includes(sqlInput.password));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("SQL worker reports Oracle errors, SQL*Plus errors, incomplete input, timeout, and missing executable", async () => {
+    const root = mkdtempSync(join(tmpdir(), "suitecontainer-sql-errors-"));
+    try {
+        const stub = sqlStub(root);
+        for (const [mode, expected] of [
+            ["sql-error", /ORA-00942/], ["command-error", /SP2-0734/],
+            ["missing-end", /did not finish/], ["hang", /timed out/], ["large-error", /Earlier output omitted/],
+        ] as const) {
+            const result = await startSql(sqlInput, { command: process.execPath, args: [stub, mode], timeoutMs: mode === "hang" ? 150 : 5000 }).result;
+            assert.equal(result.state, "failed", mode);
+            assert.match(result.output, expected);
+            assert.ok(result.output.length < 530000);
+        }
+        const missing = await startSql(sqlInput, { command: join(root, "missing-sqlplus") }).result;
+        assert.equal(missing.state, "failed");
+        assert.match(missing.output, /Rebuild the container/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("SQL endpoint requires authorization, preserves settings, blocks concurrent actions, and permits retry", async () => {
+    const root = mkdtempSync(join(tmpdir(), "suitecontainer-sql-web-"));
+    mkdirSync(join(root, "credentials"));
+    const configFile = join(root, "suitecontainer.config.json");
+    const authFile = join(root, "credentials/auth.json");
+    writeFileSync(configFile, JSON.stringify(sqlConfig));
+    writeFileSync(authFile, JSON.stringify(emptyAuth));
+    writeFileSync(join(root, "credentials/web-mounts.json"), JSON.stringify(record));
+    const sessionFile = join(root, "session");
+    const server = startWebServer({ configDirectory: root, port: 0, host: "127.0.0.1", sessionFile,
+        sqlCommand: process.execPath, sqlArgs: [sqlStub(root), "delay"], onStop() {}, signalHandlers: false });
+    try {
+        await once(server, "listening");
+        const address = server.address();
+        assert.ok(address && typeof address !== "string");
+        const origin = `http://127.0.0.1:${address.port}`;
+        const token = readFileSync(sessionFile, "utf8").split("session=")[1];
+        const headers = { "X-Session-Token": token, "Content-Type": "application/json", Origin: origin };
+        const request = { ...sqlInput, config: JSON.stringify(sqlConfig) };
+        const post = (path: string, value: unknown = request) => fetch(origin + "/api/" + path, { method: "POST", headers, body: JSON.stringify(value) });
+        assert.equal((await fetch(origin + "/api/sql", { method: "POST", body: JSON.stringify(request) })).status, 403);
+        assert.equal((await fetch(origin + "/api/sql", { method: "POST", headers: { ...headers, Origin: "https://other.example" }, body: JSON.stringify(request) })).status, 403);
+        assert.equal((await post("sql", { ...request, config: JSON.stringify({ ...sqlConfig, vms: [{ ...sqlConfig.vms[0], url: "" }, sqlConfig.vms[1]] }) })).status, 400);
+        const first = await post("sql");
+        assert.equal(first.status, 202);
+        const running = await first.json();
+        assert.equal(running.sql.state, "running");
+        assert.equal(running.sql.host, sqlConfig.vms[0].url);
+        assert.deepEqual(running.sql.defaults, SQL_DEFAULTS);
+        assert.equal(running.sql.passwordHint, SQL_PASSWORD_HINT);
+        assert.ok(!JSON.stringify(running).includes(sqlInput.password));
+        for (const path of ["sql", "deploy", "credentials", "settings", "generate", "stop"]) assert.equal((await post(path)).status, 409);
+        assert.equal((await post("check", { config: JSON.stringify(sqlConfig) })).status, 200);
+        let finished: any;
+        for (let attempt = 0; attempt < 60; attempt++) {
+            finished = await (await fetch(origin + "/api/state", { headers })).json();
+            if (finished.sql.state !== "running") break;
+            await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        assert.equal(finished.sql.state, "succeeded");
+        assert.match(finished.sql.output, /hello/);
+        assert.ok(!JSON.stringify(finished).includes(sqlInput.password));
+        assert.equal(readFileSync(configFile, "utf8"), JSON.stringify(sqlConfig));
+        assert.equal(readFileSync(authFile, "utf8"), JSON.stringify(emptyAuth));
+        assert.equal((await post("sql")).status, 202);
+    } finally {
+        server.closeAllConnections();
+        await new Promise<void>(resolve => server.close(() => resolve()));
+        // The server close hook terminates any last SQL worker; wait for its close event.
+        await new Promise(resolve => setTimeout(resolve, 100));
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test("SQL browser fields preserve edits, use Current VM, render output as text, and retain request errors", async () => {
+    const elements = new Map<string, any>();
+    const element = (id: string) => {
+        if (!elements.has(id)) elements.set(id, { value: "", children: [], replaceChildren(...children: any[]) { this.children = children; },
+            querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
+        return elements.get(id);
+    };
+    const idle = { config: JSON.stringify(sqlConfig), certificates: {}, run: { state: "idle", log: "" }, ready: false,
+        sql: { state: "idle", output: "", defaults: { user: "TEST_ACCOUNT", service: "test.service" }, passwordHint: '<a riddle & hint>' } };
+    let response: any = idle, sent: any, reject = false;
+    const context = {
+        document: { getElementById: element, createElement: () => ({}) }, location: { hash: "", pathname: "/" }, URLSearchParams,
+        sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
+        setInterval() {}, setTimeout() {}, clearTimeout() {},
+        fetch: async (path: string, options: any) => {
+            if (path === "/api/sql") {
+                sent = JSON.parse(options.body);
+                if (reject) return { ok: false, json: async () => ({ error: "Connection input is invalid." }) };
+                response = { ...idle, sql: { ...idle.sql, state: "running", host: JSON.parse(sent.config).vms[0].url, database: sent.database } };
+            }
+            return { ok: true, json: async () => response };
+        },
+    };
+    runInNewContext(deploymentPage.script, context);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(element("sql-account").value, "TEST_ACCOUNT");
+    assert.equal(element("sql-password").value, "");
+    assert.equal(element("sql-password-hint").textContent, '<a riddle & hint>');
+    element("sql-account").value = "OTHER_ACCOUNT";
+    element("sql-account").input();
+    element("sql-password").value = sqlInput.password;
+    element("sql-statement").value = sqlInput.sql;
+    element("sql-statement").input();
+    assert.equal(element("sql-run").disabled, false);
+    await runInNewContext("refresh()", context);
+    assert.equal(element("sql-account").value, "OTHER_ACCOUNT");
+    await element("sql-run").click();
+    assert.equal(sent.host, undefined);
+    assert.equal(JSON.parse(sent.config).vms[0].url, sqlConfig.vms[0].url);
+    assert.equal(sent.account, "OTHER_ACCOUNT");
+    assert.equal(sent.password, sqlInput.password);
+    assert.equal(element("sql-run").disabled, true);
+    assert.equal(element("sql-password").disabled, true);
+    assert.equal(element("stop").disabled, true);
+    response = { ...idle, sql: { ...response.sql, state: "succeeded", output: '<script>query data</script>' } };
+    await runInNewContext("refresh()", context);
+    assert.equal(element("sql-output").textContent, '<script>query data</script>');
+    assert.equal(element("sql-output").innerHTML, undefined);
+    assert.equal(element("sql-run").disabled, false);
+    assert.equal(element("sql-password").value, sqlInput.password);
+    const changed = { ...sqlConfig, vms: [{ ...sqlConfig.vms[0], url: "" }, sqlConfig.vms[1]] };
+    element("config").value = JSON.stringify(changed);
+    element("config").input();
+    await runInNewContext("refresh()", context);
+    assert.equal(element("sql-run").disabled, true);
+    element("vm").value = "changed.vm.eng.netsuite.com";
+    element("vm").input();
+    await runInNewContext("refresh()", context);
+    assert.equal(element("sql-run").disabled, false);
+    reject = true;
+    await element("sql-run").click();
+    assert.equal(JSON.parse(sent.config).vms[0].url, "changed.vm.eng.netsuite.com");
+    await runInNewContext("refresh()", context);
+    assert.match(element("sql-message").textContent, /Connection input is invalid/);
+    assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') > deploymentPage.html.indexOf('Configuration JSON'));
+    assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') < deploymentPage.html.indexOf('<h2>Deployment</h2>'));
+    assert.match(deploymentPage.html, /<details id="sql-details"><summary><h2>SQL<\/h2><\/summary>/);
+    assert.ok(!deploymentPage.html.includes('id="sql-target"'));
 });

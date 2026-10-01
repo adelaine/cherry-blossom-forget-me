@@ -21,7 +21,11 @@
     "vms": [
         {
             "url": "",
-            "account": "000071"
+            "account": "000071",
+            "database": {
+                "service" : "singletonpdb",
+                "user": "shared"
+            }
         }
     ]
 }

@@ -4,7 +4,7 @@
     "type": "module",
     "scripts": {
         "build": "tsc -p tsconfig.json",
-        "test": "node --experimental-strip-types --test test/install.spec.ts test/web.spec.ts"
+        "test": "node --experimental-strip-types --test test/install.spec.ts test/web.spec.ts test/sql-password-crypto.spec.ts test/sql-unlock.spec.ts"
     },
     "devDependencies": {
         "@types/node": "^24.19.0",
