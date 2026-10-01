@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { readAuth } from "./step-auth.ts";
 
 const tokenPath = "/tmp/suitecloud-gitlab-token";
 const nemsFiles = ["/config/.nems.env", "/config/config.toml"];
@@ -74,10 +75,16 @@ function promptForToken(): string {
     return result.stdout;
 }
 
-export function prepareToken(): void {
-    const token = nemsFiles.map(readToken).find(Boolean) || promptForToken();
+export function prepareToken(
+    authPath = "/config/credentials/auth.json",
+    destination = tokenPath,
+): void {
+    const token =
+        readAuth(authPath)["gitlab-token"]?.trim() ||
+        nemsFiles.map(readToken).find(Boolean) ||
+        promptForToken();
     if (!token) throw new Error("A GitLab token is required.");
-    writeFileSync(tokenPath, token, { mode: 0o600 });
+    writeFileSync(destination, token, { mode: 0o600 });
 }
 
 export function removeToken(): void {

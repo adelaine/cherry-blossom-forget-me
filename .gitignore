@@ -16,7 +16,9 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Local environment and secrets
-/.ssh/
+/suitecontainer.config.json
+/credentials/*
+!/credentials/auth.example.json
 .env
 .env.*
 !.env.example

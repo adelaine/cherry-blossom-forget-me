@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { gitlabHttpsUrl, type SuiteApp } from "./step-config.js";
+import { gitlabHttpsUrl, type SuiteApp } from "./step-config.ts";
 
 export function run(command: string, args: string[]): void {
     const result = spawnSync(command, args, {

@@ -18,7 +18,9 @@ import {
     validBranch,
     validateConfig,
 } from "../src/step-config.ts";
-import { readToken } from "../src/step-token.ts";
+import { prepareToken, readToken } from "../src/step-token.ts";
+import { readAuth } from "../src/step-auth.ts";
+import { readConfig } from "../src/step-config.ts";
 import {
     prepareCertificates,
     verifyCertificates,
@@ -30,6 +32,62 @@ const suiteapp = {
     directory: "project",
     branch: "release/1.0",
 };
+
+test("loads credentials separately and uses the configured GitLab token", () => {
+    withCertificateFixture((directory) => {
+        const authPath = join(directory, "auth.json");
+        const configPath = join(directory, "settings.json");
+        writeFileSync(
+            configPath,
+            JSON.stringify({
+                suiteapps: [suiteapp],
+                runbox: { account: "12345", url: "runbox.netsuite.com" },
+            }),
+        );
+        writeFileSync(
+            authPath,
+            JSON.stringify({
+                "gitlab-token": "configured-token",
+                "suitecloud-certificates": {
+                    public: "credentials/public.pem",
+                    private: "credentials/private.pem",
+                    id: "cert_1",
+                },
+            }),
+        );
+        assert.equal(
+            readConfig(configPath, true, authPath).certificates?.id,
+            "cert_1",
+        );
+        const tokenPath = join(directory, "token");
+        prepareToken(authPath, tokenPath);
+        assert.equal(readFileSync(tokenPath, "utf8"), "configured-token");
+        assert.equal(
+            JSON.parse(readFileSync(configPath, "utf8")).certificates,
+            undefined,
+        );
+    });
+});
+
+test("rejects malformed authentication settings", () => {
+    withCertificateFixture((directory) => {
+        const authPath = join(directory, "auth.json");
+        for (const contents of [
+            "{",
+            "null",
+            "[]",
+            '{"gitlab-token":123}',
+            '{"suitecloud-certificates":{"public":123,"private":"","id":""}}',
+        ]) {
+            writeFileSync(authPath, contents);
+            assert.throws(() => readAuth(authPath), /auth.json/);
+        }
+        assert.throws(
+            () => readAuth(join(directory, "missing.json")),
+            /auth.json/,
+        );
+    });
+});
 
 test("normalizes approved GitLab URLs and rejects other hosts", () => {
     assert.equal(
@@ -57,6 +115,10 @@ function withCertificateFixture(action: (directory: string) => void): void {
         join(tmpdir(), "suitecontainer-certificates-"),
     );
     try {
+        writeFileSync(
+            join(directory, "auth.json"),
+            JSON.stringify({ "gitlab-token": "fixture-token" }),
+        );
         action(directory);
     } finally {
         assert.ok(
@@ -77,14 +139,17 @@ test("keeps specified certificate paths and rejects a partial configuration", ()
                 private: "private.pem",
             },
         };
-        const sshDirectory = join(directory, ".ssh");
-        const configPath = join(directory, "config.json");
+        const sshDirectory = join(directory, "credentials");
+        const configPath = join(directory, "auth.json");
         assert.equal(
             prepareCertificates(config, sshDirectory, configPath),
             false,
         );
         assert.equal(existsSync(sshDirectory), false);
-        assert.equal(existsSync(configPath), false);
+        assert.equal(
+            JSON.parse(readFileSync(configPath, "utf8"))["gitlab-token"],
+            "fixture-token",
+        );
         config.certificates!.private = "";
         assert.throws(
             () => prepareCertificates(config, sshDirectory, configPath),
@@ -96,7 +161,7 @@ test("keeps specified certificate paths and rejects a partial configuration", ()
 
 test("does not overwrite an incomplete existing certificate pair", () => {
     withCertificateFixture((directory) => {
-        const sshDirectory = join(directory, ".ssh");
+        const sshDirectory = join(directory, "credentials");
         mkdirSync(sshDirectory);
         writeFileSync(
             join(sshDirectory, "private.pem"),
@@ -107,7 +172,7 @@ test("does not overwrite an incomplete existing certificate pair", () => {
                 prepareCertificates(
                     { suiteapps: [suiteapp] },
                     sshDirectory,
-                    join(directory, "config.json"),
+                    join(directory, "auth.json"),
                 ),
             /only one certificate file/,
         );
@@ -121,14 +186,14 @@ test("does not overwrite an incomplete existing certificate pair", () => {
 test("removes partial files when OpenSSL cannot run", () => {
     withCertificateFixture((directory) => {
         const originalPath = process.env.PATH;
-        const sshDirectory = join(directory, ".ssh");
+        const sshDirectory = join(directory, "credentials");
         try {
             process.env.PATH = "";
             assert.throws(() =>
                 prepareCertificates(
                     { suiteapps: [suiteapp] },
                     sshDirectory,
-                    join(directory, "config.json"),
+                    join(directory, "auth.json"),
                 ),
             );
         } finally {
@@ -137,7 +202,12 @@ test("removes partial files when OpenSSL cannot run", () => {
         }
         assert.equal(existsSync(join(sshDirectory, "public.pem")), false);
         assert.equal(existsSync(join(sshDirectory, "private.pem")), false);
-        assert.equal(existsSync(join(directory, "config.json")), false);
+        assert.equal(
+            JSON.parse(readFileSync(join(directory, "auth.json"), "utf8"))[
+                "gitlab-token"
+            ],
+            "fixture-token",
+        );
     });
 });
 
@@ -151,8 +221,8 @@ test(
     },
     () => {
         withCertificateFixture((directory) => {
-            const sshDirectory = join(directory, ".ssh");
-            const configPath = join(directory, "config.json");
+            const sshDirectory = join(directory, "credentials");
+            const configPath = join(directory, "auth.json");
             const config: Config = {
                 suiteapps: [suiteapp],
                 certificates: { id: "old_id", public: "", private: "" },
@@ -183,14 +253,23 @@ test(
             if (process.platform !== "win32")
                 assert.equal(statSync(privatePath).mode & 0o777, 0o600);
             const savedConfig = JSON.parse(readFileSync(configPath, "utf8"));
-            assert.deepEqual(savedConfig.certificates, {
+            assert.deepEqual(savedConfig["suitecloud-certificates"], {
                 id: "",
-                public: ".ssh/public.pem",
-                private: ".ssh/private.pem",
+                public: "credentials/public.pem",
+                private: "credentials/private.pem",
             });
-            assert.deepEqual(savedConfig.suiteapps, [suiteapp]);
+            assert.equal(savedConfig.suiteapps, undefined);
+            assert.equal(savedConfig["gitlab-token"], "fixture-token");
             assert.throws(
-                () => validateConfig(savedConfig, true),
+                () =>
+                    validateConfig(
+                        {
+                            certificates:
+                                savedConfig["suitecloud-certificates"],
+                            suiteapps: [suiteapp],
+                        },
+                        true,
+                    ),
                 /certificate ID/,
             );
             const retry: Config = {

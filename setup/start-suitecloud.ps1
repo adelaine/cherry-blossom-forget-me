@@ -1,24 +1,33 @@
 $ErrorActionPreference = 'Stop'
 
 $projectDir = Split-Path -Parent $PSScriptRoot
-$configFile = Join-Path $projectDir 'suiteapps-to-install.json'
+$configFile = Join-Path $projectDir 'suitecontainer.config.json'
+$credentialsDir = Join-Path $projectDir 'credentials'
+$authFile = Join-Path $credentialsDir 'auth.json'
 $reposDir = Join-Path $projectDir 'repos'
-$nemsDir = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex'
+$nemsDir = if ($env:SUITECONTAINER_NEMS_DIR) { $env:SUITECONTAINER_NEMS_DIR } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
 
 if (-not (Test-Path -LiteralPath $configFile -PathType Leaf)) {
-    throw 'Missing suiteapps-to-install.json. Update the JSON file and run start-windows.cmd again.'
+    $templateFile = Join-Path $projectDir 'suitecontainer.config.example.json'
+    if (-not (Test-Path -LiteralPath $templateFile -PathType Leaf)) {
+        throw 'Missing suitecontainer.config.example.json. Restore the template and run start-windows.cmd again.'
+    }
+    Copy-Item -LiteralPath $templateFile -Destination $configFile
+    Write-Host 'Created suitecontainer.config.json from the template.'
+    Write-Host 'Add your SuiteApps and runbox account and domain, then run start-windows.cmd again. Credentials belong in credentials/auth.json.'
+    return
 }
 
 try {
     $config = Get-Content -LiteralPath $configFile -Raw | ConvertFrom-Json -ErrorAction Stop
 } catch {
-    throw 'suiteapps-to-install.json is not valid JSON. Update the file and run start-windows.cmd again.'
+    throw 'suitecontainer.config.json is not valid JSON. Update the file and run start-windows.cmd again.'
 }
 if ($null -eq $config.suiteapps -or $config.suiteapps -isnot [array]) {
-    throw 'suiteapps-to-install.json needs a "suiteapps" list. Update the file and run start-windows.cmd again.'
+    throw 'suitecontainer.config.json needs a "suiteapps" list. Update the file and run start-windows.cmd again.'
 }
 if ($config.suiteapps.Count -eq 0) {
-    Write-Host 'There are no SuiteApps to install in suiteapps-to-install.json.'
+    Write-Host 'There are no SuiteApps to install in suitecontainer.config.json.'
     return
 }
 
@@ -36,13 +45,13 @@ for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
         $directory -notin @('.', '..') -and
         -not $seenDirectories.ContainsKey($directory.ToLowerInvariant())
     if (-not $validUrl -or -not $validDirectory) {
-        throw "SuiteApp $($index + 1) has an invalid URL or directory. Update suiteapps-to-install.json and run start-windows.cmd again."
+        throw "SuiteApp $($index + 1) has an invalid URL or directory. Update suitecontainer.config.json and run start-windows.cmd again."
     }
     if ($null -ne $suiteapp.branch) {
         $branch = $suiteapp.branch
         $invalidPart = $branch -is [string] -and @($branch.Split('/') | Where-Object { $_.StartsWith('.') -or $_.EndsWith('.') -or $_.EndsWith('.lock') }).Count -gt 0
         if ($branch -isnot [string] -or $branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $branch.Contains('..') -or $branch.Contains('//') -or $invalidPart) {
-            throw "SuiteApp $($index + 1) has an invalid branch. Update suiteapps-to-install.json and run start-windows.cmd again."
+            throw "SuiteApp $($index + 1) has an invalid branch. Update suitecontainer.config.json and run start-windows.cmd again."
         }
     }
     $seenDirectories[$directory.ToLowerInvariant()] = $true
@@ -50,10 +59,20 @@ for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
 
 if ($config.runbox.account -isnot [string] -or $config.runbox.account -notmatch '^[A-Za-z0-9_-]+$' -or
     $config.runbox.url -isnot [string] -or $config.runbox.url -notmatch '^[A-Za-z0-9.-]+\.netsuite\.com$') {
-    throw 'The runbox account or domain is invalid. Update suiteapps-to-install.json and run start-windows.cmd again.'
+    throw 'The runbox account or domain is invalid. Update suitecontainer.config.json and run start-windows.cmd again.'
 }
-$publicCertificate = $config.certificates.public
-$privateCertificate = $config.certificates.private
+New-Item -ItemType Directory -Force -Path $credentialsDir | Out-Null
+if (-not (Test-Path -LiteralPath $authFile -PathType Leaf)) {
+    $authTemplate = Join-Path $credentialsDir 'auth.example.json'
+    if (-not (Test-Path -LiteralPath $authTemplate -PathType Leaf)) { throw 'Missing credentials/auth.example.json. Restore the template and run the start script again.' }
+    Copy-Item -LiteralPath $authTemplate -Destination $authFile
+    Write-Host 'Created credentials/auth.json. Set gitlab-token there; supply certificate paths or leave both empty to generate them.'
+}
+try {
+    $auth = Get-Content -LiteralPath $authFile -Raw | ConvertFrom-Json -ErrorAction Stop
+} catch { throw 'credentials/auth.json is not valid JSON. Update the file and run the start script again.' }
+$publicCertificate = $auth.'suitecloud-certificates'.public
+$privateCertificate = $auth.'suitecloud-certificates'.private
 $generateCertificates = [string]::IsNullOrWhiteSpace($publicCertificate) -and [string]::IsNullOrWhiteSpace($privateCertificate)
 if (-not $generateCertificates) {
     if ($publicCertificate -isnot [string] -or $privateCertificate -isnot [string] -or
@@ -75,20 +94,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host 'Preparing the SuiteCloud container...'
-& podman build -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $projectDir
+& podman build -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 
-$certificatesDir = Join-Path $projectDir '.ssh'
-New-Item -ItemType Directory -Force -Path $certificatesDir | Out-Null
 & podman run --rm --cgroups=disabled `
-    --mount "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json" `
-    --mount "type=bind,src=$certificatesDir,dst=/config/.ssh" `
+    --mount "type=bind,src=$configFile,dst=/config/suitecontainer.config.json" `
+    --mount "type=bind,src=$credentialsDir,dst=/config/credentials" `
     suitecloud-workspace --prepare-certificates
 if ($LASTEXITCODE -eq 10) { return }
 if ($LASTEXITCODE -ne 0) { throw 'Certificate preparation failed.' }
 
 $certificatePaths = @(& podman run --rm --cgroups=disabled `
-    --mount "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json,ro=true" `
+    --mount "type=bind,src=$credentialsDir,dst=/config/credentials,ro=true" `
+    --mount "type=bind,src=$configFile,dst=/config/suitecontainer.config.json,ro=true" `
     suitecloud-workspace --certificate-paths)
 if ($LASTEXITCODE -ne 0 -or $certificatePaths.Count -ne 2) { throw 'The certificate configuration is invalid.' }
 $publicCertificate = $certificatePaths[0]
@@ -97,11 +115,12 @@ if (-not [IO.Path]::IsPathRooted($publicCertificate)) { $publicCertificate = Joi
 if (-not [IO.Path]::IsPathRooted($privateCertificate)) { $privateCertificate = Join-Path $projectDir $privateCertificate }
 if (-not (Test-Path -LiteralPath $publicCertificate -PathType Leaf) -or
     -not (Test-Path -LiteralPath $privateCertificate -PathType Leaf)) {
-    throw 'The certificate files were not found. Update their paths in suiteapps-to-install.json and run start-windows.cmd again.'
+    throw 'The certificate files were not found. Update their paths in credentials/auth.json and run start-windows.cmd again.'
 }
 
 $mounts = @(
-    '--mount', "type=bind,src=$configFile,dst=/config/suiteapps-to-install.json",
+    '--mount', "type=bind,src=$authFile,dst=/config/credentials/auth.json,ro=true",
+    '--mount', "type=bind,src=$configFile,dst=/config/suitecontainer.config.json",
     '--mount', "type=bind,src=$reposDir,dst=/workspace",
     '--mount', "type=bind,src=$publicCertificate,dst=/config/certs/public.pem,ro=true",
     '--mount', "type=bind,src=$privateCertificate,dst=/config/certs/private.pem,ro=true"

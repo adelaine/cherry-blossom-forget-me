@@ -25,7 +25,7 @@ RUN test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \
     && suitecloud --version
 
 COPY --from=build /app/dist/ /opt/suitecontainer/
-COPY setup/gitlab-askpass.sh /usr/local/bin/
+COPY gitlab-askpass.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
     && printf '{"type":"module"}\n' > /opt/suitecontainer/package.json \
     && mkdir -p /workspace /config

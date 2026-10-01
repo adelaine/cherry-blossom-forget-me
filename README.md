@@ -24,14 +24,14 @@ Run the file for your computer:
 This script automatically validates for requirements of suiteapp deployment via suitecloud cli and will guide the user on manual steps if needed.
 
 #### Settings:
-- `suiteapps-to-install.json` contains the list of suiteapps to be installed and the list of credentials required for suiteapp deployment.
+- `suitecontainer.config.json` contains the list of suiteapps to be installed and the list of credentials required for suiteapp deployment.
 
 #### Gitlab token
 - Read from `.codex/config.toml` or `.nems.env` if the user already has them set.
 - Asks the user to input the token if not found.
 
 #### Certificates
-- Reads from `suiteapps-to-install.json` if the user already has them.
+- Reads from `suitecontainer.config.json` if the user already has them.
 - Generates new certificates if none are found. These new certificates will need to be set up on the target runbox.
 
 #### Podman:

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { readAuth } from "./step-auth.ts";
 
 export type SuiteApp = { url: string; directory: string; branch?: string };
 export type Config = {
@@ -9,7 +10,7 @@ export type Config = {
 
 function invalidConfig(message: string): never {
     throw new Error(
-        `${message} Update suiteapps-to-install.json and run the start script again.`,
+        `${message} Update ${message.includes("credentials/auth.json") ? "credentials/auth.json" : "suitecontainer.config.json"} and run the start script again.`,
     );
 }
 
@@ -88,12 +89,12 @@ export function validateConfig(
             )
         ) {
             invalidConfig(
-                'The "certificates" section needs public and private file paths.',
+                "credentials/auth.json needs public and private certificate paths.",
             );
         }
         if (!/^[A-Za-z0-9_-]+$/.test(certs.id || "")) {
             invalidConfig(
-                'The "certificates" section needs the NetSuite certificate ID.',
+                "credentials/auth.json needs the NetSuite certificate ID.",
             );
         }
         if (
@@ -145,6 +146,7 @@ export function validateConfig(
 export function readConfig(
     path: string,
     requireDeploymentSettings = false,
+    authPath = "/config/credentials/auth.json",
 ): Config {
     let value: unknown;
     try {
@@ -152,5 +154,7 @@ export function readConfig(
     } catch {
         invalidConfig("The JSON file could not be read or has a syntax error.");
     }
-    return validateConfig(value, requireDeploymentSettings);
+    const config = validateConfig(value);
+    config.certificates = readAuth(authPath)["suitecloud-certificates"];
+    return validateConfig(config, requireDeploymentSettings);
 }

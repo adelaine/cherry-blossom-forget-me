@@ -13,7 +13,8 @@ import {
     writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { Config } from "./step-config.js";
+import type { Config } from "./step-config.ts";
+import { readAuth } from "./step-auth.ts";
 
 export function verifyCertificates(
     publicPath = "/config/certs/public.pem",
@@ -21,7 +22,7 @@ export function verifyCertificates(
 ): string {
     if (!existsSync(publicPath) || !existsSync(privatePath)) {
         throw new Error(
-            "Certificate files were not mounted. Check their paths in suiteapps-to-install.json.",
+            "Certificate files were not mounted. Check their paths in credentials/auth.json.",
         );
     }
     try {
@@ -42,8 +43,8 @@ export function verifyCertificates(
 
 export function prepareCertificates(
     config: Config,
-    directory = "/config/.ssh",
-    configPath = "/config/suiteapps-to-install.json",
+    directory = "/config/credentials",
+    authPath = "/config/credentials/auth.json",
 ): boolean {
     const certificates = config.certificates;
     const paths = [certificates?.public, certificates?.private];
@@ -57,6 +58,7 @@ export function prepareCertificates(
         );
     }
 
+    const auth = readAuth(authPath);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     const publicPath = join(directory, "public.pem");
     const privatePath = join(directory, "private.pem");
@@ -64,7 +66,7 @@ export function prepareCertificates(
     const privateExists = existsSync(privatePath);
     if (publicExists !== privateExists) {
         throw new Error(
-            "The .ssh folder contains only one certificate file. Restore the matching pair before continuing.",
+            "The credentials folder contains only one certificate file. Restore the matching pair before continuing.",
         );
     }
 
@@ -114,10 +116,13 @@ export function prepareCertificates(
     chmodSync(privatePath, 0o600);
     config.certificates = {
         ...certificates,
-        public: ".ssh/public.pem",
-        private: ".ssh/private.pem",
+        public: "credentials/public.pem",
+        private: "credentials/private.pem",
         id: generated ? "" : (certificates?.id ?? ""),
     };
-    writeFileSync(configPath, JSON.stringify(config, null, 4) + "\n");
+    auth["suitecloud-certificates"] = config.certificates;
+    writeFileSync(authPath, JSON.stringify(auth, null, 4) + "\n", {
+        mode: 0o600,
+    });
     return generated;
 }

@@ -1,13 +1,13 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { cloneRepos, run } from "./step-clone.js";
-import { readConfig } from "./step-config.js";
-import { deployRepos } from "./step-deploy.js";
+import { cloneRepos, run } from "./step-clone.ts";
+import { readConfig } from "./step-config.ts";
+import { deployRepos } from "./step-deploy.ts";
 import {
     prepareCertificates,
     verifyCertificates,
-} from "./step-certificates.js";
-import { prepareToken, removeToken } from "./step-token.js";
+} from "./step-certificates.ts";
+import { prepareToken, removeToken } from "./step-token.ts";
 
 export function main(args: string[] = process.argv.slice(2)): number {
     const validateOnly = args[0] === "--validate";
@@ -16,12 +16,12 @@ export function main(args: string[] = process.argv.slice(2)): number {
     const prepareCertificatesOnly = args[0] === "--prepare-certificates";
     const configPath = validateOnly
         ? args[1]
-        : "/config/suiteapps-to-install.json";
+        : "/config/suitecontainer.config.json";
     const config = readConfig(configPath ?? "", certificatePathsOnly || deploy);
 
     if (config.suiteapps.length === 0 && !certificatePathsOnly) {
         console.log(
-            "There are no SuiteApps to install in suiteapps-to-install.json.",
+            "There are no SuiteApps to install in suitecontainer.config.json.",
         );
         return 0;
     }
@@ -35,10 +35,10 @@ export function main(args: string[] = process.argv.slice(2)): number {
         const generated = prepareCertificates(config);
         if (generated) {
             console.log(
-                "Generated .ssh/public.pem and .ssh/private.pem in the repository root.",
+                "Generated credentials/public.pem and credentials/private.pem in the repository root.",
             );
             console.log(
-                "Upload .ssh/public.pem in NetSuite OAuth 2.0 Client Credentials Setup for SuiteCloud Development Integration, then set certificates.id in suiteapps-to-install.json to the assigned certificate ID and run the start script again.",
+                "Upload credentials/public.pem in NetSuite OAuth 2.0 Client Credentials Setup for SuiteCloud Development Integration, then set suitecloud-certificates.id in credentials/auth.json to the assigned certificate ID and run the start script again.",
             );
             // The launchers treat this status as a successful stop for registration.
             return 10;

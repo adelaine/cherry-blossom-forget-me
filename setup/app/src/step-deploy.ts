@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Config } from "./step-config.js";
+import type { Config } from "./step-config.ts";
 
 function suitecloudEnv(passkey: string, deploying = false): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {

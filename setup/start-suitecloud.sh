@@ -3,15 +3,21 @@ set -euo pipefail
 
 setup_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "$setup_dir/.." && pwd)"
-config_file="$project_dir/suiteapps-to-install.json"
+config_file="$project_dir/suitecontainer.config.json"
 repos_dir="$project_dir/repos"
-nems_dir="$HOME/.codex"
+nems_dir="${SUITECONTAINER_NEMS_DIR:-$HOME/.codex}"
 
-if [[ ! -f "$config_file" ]]; then
-  echo 'Missing suiteapps-to-install.json.' >&2
-  exit 1
+config_status=0
+bash "$setup_dir/prepare-config.sh" "$project_dir" || config_status=$?
+if [[ "$config_status" -eq 10 ]]; then
+  exit 0
 fi
-export PATH="/opt/podman/bin:$PATH"
+if [[ "$config_status" -ne 0 ]]; then
+  exit "$config_status"
+fi
+if ! command -v podman >/dev/null 2>&1; then
+  export PATH="/opt/podman/bin:$PATH"
+fi
 if ! command -v podman >/dev/null 2>&1; then
   bash "$setup_dir/install-podman-macos.sh"
 fi
@@ -35,24 +41,24 @@ if ! podman image exists suitecloud-workspace; then
 fi
 
 echo 'Preparing the SuiteCloud container...'
-if ! podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"; then
+if ! podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"; then
   echo 'The container build failed.' >&2
   exit 1
 fi
 
 validation_output="$(podman run --rm \
-  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \
-  suitecloud-workspace --validate /config/suiteapps-to-install.json)"
+  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials,ro=true" \
+  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json,ro=true" \
+  suitecloud-workspace --validate /config/suitecontainer.config.json)"
 echo "$validation_output"
-if [[ "$validation_output" == 'There are no SuiteApps to install in suiteapps-to-install.json.' ]]; then
+if [[ "$validation_output" == 'There are no SuiteApps to install in suitecontainer.config.json.' ]]; then
   exit 0
 fi
 
-mkdir -p -m 700 "$project_dir/.ssh"
 certificate_status=0
 podman run --rm \
-  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json" \
-  --mount "type=bind,src=$project_dir/.ssh,dst=/config/.ssh" \
+  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json" \
+  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials" \
   suitecloud-workspace --prepare-certificates || certificate_status=$?
 if [[ "$certificate_status" -eq 10 ]]; then
   exit 0
@@ -62,19 +68,21 @@ if [[ "$certificate_status" -ne 0 ]]; then
 fi
 
 certificate_paths="$(podman run --rm \
-  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \
+  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials,ro=true" \
+  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json,ro=true" \
   suitecloud-workspace --certificate-paths)"
 public_certificate="${certificate_paths%%$'\n'*}"
 private_certificate="${certificate_paths#*$'\n'}"
 [[ "$public_certificate" == /* ]] || public_certificate="$project_dir/$public_certificate"
 [[ "$private_certificate" == /* ]] || private_certificate="$project_dir/$private_certificate"
 if [[ ! -f "$public_certificate" || ! -f "$private_certificate" ]]; then
-  echo 'Certificate files were not found. Update their paths in suiteapps-to-install.json and run start-macos.sh again.' >&2
+  echo 'Certificate files were not found. Update their paths in credentials/auth.json and run start-macos.sh again.' >&2
   exit 1
 fi
 
 mounts=(
-  --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json"
+  --mount "type=bind,src=$project_dir/credentials/auth.json,dst=/config/credentials/auth.json,ro=true"
+  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json"
   --mount "type=bind,src=$repos_dir,dst=/workspace"
   --mount "type=bind,src=$public_certificate,dst=/config/certs/public.pem,ro=true"
   --mount "type=bind,src=$private_certificate,dst=/config/certs/private.pem,ro=true"
