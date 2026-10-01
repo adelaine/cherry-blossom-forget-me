@@ -74,7 +74,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host 'Preparing the SuiteCloud container...'
-& podman build --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
+& podman build -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $projectDir
 if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 
 $mounts = @(

@@ -32,8 +32,9 @@ if ! podman image exists suitecloud-workspace; then
     echo 'Build cancelled.' >&2
     exit 1
   fi
-  podman build --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"
 fi
+
+podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"
 
 mounts=(
   --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json"

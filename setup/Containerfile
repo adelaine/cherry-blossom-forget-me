@@ -1,3 +1,10 @@
+FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24 AS build
+
+WORKDIR /app
+COPY app/package.json app/tsconfig.json ./
+COPY app/src ./src
+RUN npm install --ignore-scripts --no-audit --no-fund && npm run build
+
 FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24
 
 USER root
@@ -17,9 +24,11 @@ RUN test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \
     && javac -version \
     && suitecloud --version
 
-COPY clone-repos.mjs gitlab-askpass.sh /usr/local/bin/
+COPY --from=build /app/dist/ /opt/suitecontainer/
+COPY setup/gitlab-askpass.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
+    && printf '{"type":"module"}\n' > /opt/suitecontainer/package.json \
     && mkdir -p /workspace /config
 
 WORKDIR /workspace
-ENTRYPOINT ["node", "/usr/local/bin/clone-repos.mjs"]
+ENTRYPOINT ["node", "/opt/suitecontainer/install.js"]

@@ -31,12 +31,12 @@ if ! podman image exists suitecloud-workspace; then
     exit 1
   fi
 fi
-podman build --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"
+podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"
 
 certificate_paths="$(podman run --rm \
   --mount "type=bind,src=$config_file,dst=/config/suiteapps-to-install.json,ro=true" \
   --entrypoint node suitecloud-workspace \
-  /usr/local/bin/clone-repos.mjs --certificate-paths)"
+  /opt/suitecontainer/install.js --certificate-paths)"
 public_certificate="${certificate_paths%%$'\n'*}"
 private_certificate="${certificate_paths#*$'\n'}"
 if [[ ! -f "$public_certificate" || ! -f "$private_certificate" ]]; then

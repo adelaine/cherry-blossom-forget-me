@@ -1,0 +1,5 @@
+.git/
+repos/
+app/node_modules/
+app/dist/
+app/test/

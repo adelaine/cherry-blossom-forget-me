@@ -1,0 +1,78 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { gitlabHttpsUrl, type SuiteApp } from "./step-config.js";
+
+export function run(command: string, args: string[]): void {
+    const result = spawnSync(command, args, {
+        stdio: "inherit",
+        env: {
+            ...process.env,
+            GIT_ASKPASS: "/usr/local/bin/gitlab-askpass.sh",
+            GIT_TERMINAL_PROMPT: "0",
+        },
+    });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`${command} failed.`);
+}
+
+export function cloneRepos(repos: SuiteApp[]): void {
+    for (const repo of repos) {
+        const destination = join("/workspace", repo.directory);
+        const cloneUrl = gitlabHttpsUrl(repo.url)!;
+        if (existsSync(join(destination, ".git"))) {
+            const remote = spawnSync(
+                "git",
+                ["-C", destination, "remote", "get-url", "origin"],
+                { encoding: "utf8" },
+            );
+            if (
+                remote.status !== 0 ||
+                gitlabHttpsUrl(remote.stdout.trim()) !== cloneUrl
+            ) {
+                throw new Error(
+                    `${repo.directory} already contains a different SuiteApp.`,
+                );
+            }
+            if (repo.branch) {
+                run("git", ["-C", destination, "fetch", "origin"]);
+                run("git", ["-C", destination, "checkout", repo.branch]);
+                run("git", [
+                    "-C",
+                    destination,
+                    "pull",
+                    "--ff-only",
+                    "origin",
+                    repo.branch,
+                ]);
+            }
+            console.log(`Already copied: ${repo.directory}`);
+        } else if (existsSync(destination)) {
+            throw new Error(
+                `${repo.directory} already exists but is not a Git checkout.`,
+            );
+        } else {
+            console.log(`Copying ${repo.directory}...`);
+            try {
+                run("git", [
+                    "clone",
+                    ...(repo.branch ? ["--branch", repo.branch] : []),
+                    cloneUrl,
+                    destination,
+                ]);
+                if (repo.branch)
+                    run("git", [
+                        "-C",
+                        destination,
+                        "symbolic-ref",
+                        "--quiet",
+                        "--short",
+                        "HEAD",
+                    ]);
+            } catch (error) {
+                rmSync(destination, { recursive: true, force: true });
+                throw error;
+            }
+        }
+    }
+}
