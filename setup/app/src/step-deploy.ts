@@ -51,11 +51,8 @@ function runSuitecloud(
 }
 
 export function deployRepos(config: Config, privateKeyPath: string): void {
-    const runbox = config.runbox!;
     const certificates = config.certificates!;
-    const authId = `suitecontainer_${runbox.account}_${createHash("sha256").update(runbox.url).digest("hex").slice(0, 8)}`;
     const passkey = randomBytes(32).toString("hex");
-    let authenticationReady = false;
 
     for (const repo of config.suiteapps) {
         const destination = join("/workspace", repo.directory);
@@ -76,71 +73,71 @@ export function deployRepos(config: Config, privateKeyPath: string): void {
         }
     }
 
-    for (const repo of config.suiteapps) {
-        const destination = join("/workspace", repo.directory);
-        if (!authenticationReady) {
-            const existing = spawnSync(
-                "suitecloud",
-                ["account:manageauth", "--info", authId],
-                {
-                    cwd: destination,
-                    stdio: "ignore",
-                    env: suitecloudEnv(passkey),
-                },
-            );
-            if (existing.error) throw existing.error;
-            if (existing.status === 0) {
+    for (const vm of config.vms) {
+        const authId = `suitecontainer_${vm.account}_${createHash("sha256").update(vm.url).digest("hex").slice(0, 8)}`;
+        let authenticationReady = false;
+        for (const repo of config.suiteapps) {
+            const destination = join("/workspace", repo.directory);
+            if (!authenticationReady) {
+                const existing = spawnSync(
+                    "suitecloud",
+                    ["account:manageauth", "--info", authId],
+                    {
+                        cwd: destination,
+                        stdio: "ignore",
+                        env: suitecloudEnv(passkey),
+                    },
+                );
+                if (existing.error) throw existing.error;
+                if (existing.status === 0) {
+                    runSuitecloud(
+                        ["account:setup:ci", "--select", authId],
+                        destination,
+                        passkey,
+                        false,
+                        vm.url,
+                    );
+                } else {
+                    runSuitecloud(
+                        [
+                            "account:setup:ci",
+                            "--account",
+                            vm.account,
+                            "--authid",
+                            authId,
+                            "--certificateid",
+                            certificates.id,
+                            "--privatekeypath",
+                            privateKeyPath,
+                            "--domain",
+                            vm.url,
+                        ],
+                        destination,
+                        passkey,
+                        false,
+                        vm.url,
+                    );
+                }
+                authenticationReady = true;
+            } else {
                 runSuitecloud(
                     ["account:setup:ci", "--select", authId],
                     destination,
                     passkey,
                     false,
-                    runbox.url,
-                );
-            } else {
-                runSuitecloud(
-                    [
-                        "account:setup:ci",
-                        "--account",
-                        runbox.account,
-                        "--authid",
-                        authId,
-                        "--certificateid",
-                        certificates.id,
-                        "--privatekeypath",
-                        privateKeyPath,
-                        "--domain",
-                        runbox.url,
-                    ],
-                    destination,
-                    passkey,
-                    false,
-                    runbox.url,
+                    vm.url,
                 );
             }
-            authenticationReady = true;
-        } else {
+            console.log(`Checking ${repo.directory} against ${vm.url}...`);
             runSuitecloud(
-                ["account:setup:ci", "--select", authId],
+                ["project:deploy", "--dryrun"],
                 destination,
                 passkey,
-                false,
-                runbox.url,
+                true,
             );
+            console.log(`Deploying ${repo.directory} to ${vm.url}...`);
+            runSuitecloud(["project:deploy"], destination, passkey, true);
         }
-        console.log(`Checking ${repo.directory} against ${runbox.url}...`);
-        runSuitecloud(
-            ["project:deploy", "--dryrun"],
-            destination,
-            passkey,
-            true,
-        );
-    }
-
-    for (const repo of config.suiteapps) {
-        const destination = join("/workspace", repo.directory);
-        console.log(`Deploying ${repo.directory} to ${runbox.url}...`);
-        runSuitecloud(["project:deploy"], destination, passkey, true);
     }
     console.log("All SuiteApps were deployed.");
 }

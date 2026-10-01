@@ -14,7 +14,7 @@ if (-not (Test-Path -LiteralPath $configFile -PathType Leaf)) {
     }
     Copy-Item -LiteralPath $templateFile -Destination $configFile
     Write-Host 'Created suitecontainer.config.json from the template.'
-    Write-Host 'Add your SuiteApps and runbox account and domain, then run start-windows.cmd again. Credentials belong in credentials/auth.json.'
+    Write-Host 'Add your SuiteApps and VMs, then run start-windows.cmd again. Credentials belong in credentials/auth.json.'
     return
 }
 
@@ -36,6 +36,7 @@ for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
     $suiteapp = $config.suiteapps[$index]
     $url = $suiteapp.url
     $directory = $suiteapp.directory
+    $localPath = $suiteapp.localPath
     $validUrl = $url -is [string] -and (
         $url -match '^git@gitlab\.eng\.netsuite\.com:[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$' -or
         $url -match '^https://gitlab\.eng\.netsuite\.com/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+$'
@@ -44,8 +45,17 @@ for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
         $directory -match '^[A-Za-z0-9][A-Za-z0-9._-]*$' -and
         $directory -notin @('.', '..') -and
         -not $seenDirectories.ContainsKey($directory.ToLowerInvariant())
-    if (-not $validUrl -or -not $validDirectory) {
+    if ((-not $validUrl -and [string]::IsNullOrWhiteSpace($localPath)) -or -not $validDirectory) {
         throw "SuiteApp $($index + 1) has an invalid URL or directory. Update suitecontainer.config.json and run start-windows.cmd again."
+    }
+    if ($null -ne $localPath -and ($localPath -isnot [string] -or $localPath -match '[,\r\n\t]')) {
+        throw "SuiteApp $($index + 1) has an invalid localPath. Update suitecontainer.config.json and run start-windows.cmd again."
+    }
+    if ($null -ne $url -and -not $validUrl) {
+        throw "SuiteApp $($index + 1) has an invalid URL. Update suitecontainer.config.json and run start-windows.cmd again."
+    }
+    if (-not [string]::IsNullOrWhiteSpace($localPath) -and $null -ne $suiteapp.branch) {
+        throw "SuiteApp $($index + 1) cannot set both localPath and branch."
     }
     if ($null -ne $suiteapp.branch) {
         $branch = $suiteapp.branch
@@ -57,9 +67,14 @@ for ($index = 0; $index -lt $config.suiteapps.Count; $index++) {
     $seenDirectories[$directory.ToLowerInvariant()] = $true
 }
 
-if ($config.runbox.account -isnot [string] -or $config.runbox.account -notmatch '^[A-Za-z0-9_-]+$' -or
-    $config.runbox.url -isnot [string] -or $config.runbox.url -notmatch '^[A-Za-z0-9.-]+\.netsuite\.com$') {
-    throw 'The runbox account or domain is invalid. Update suitecontainer.config.json and run start-windows.cmd again.'
+if ($null -eq $config.vms -or $config.vms -isnot [array] -or $config.vms.Count -eq 0) {
+    throw 'suitecontainer.config.json needs a nonempty vms list.'
+}
+foreach ($vm in $config.vms) {
+    if ($vm.account -isnot [string] -or $vm.account -notmatch '^[A-Za-z0-9_-]+$' -or
+        $vm.url -isnot [string] -or $vm.url -notmatch '^(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+\.netsuite\.com$') {
+        throw 'The VM account or domain is invalid. Update suitecontainer.config.json and run start-windows.cmd again.'
+    }
 }
 New-Item -ItemType Directory -Force -Path $credentialsDir | Out-Null
 if (-not (Test-Path -LiteralPath $authFile -PathType Leaf)) {
@@ -125,6 +140,18 @@ $mounts = @(
     '--mount', "type=bind,src=$publicCertificate,dst=/config/certs/public.pem,ro=true",
     '--mount', "type=bind,src=$privateCertificate,dst=/config/certs/private.pem,ro=true"
 )
+
+foreach ($suiteapp in $config.suiteapps) {
+    if ([string]::IsNullOrWhiteSpace($suiteapp.localPath)) { continue }
+    $localPath = $suiteapp.localPath
+    if (-not [IO.Path]::IsPathRooted($localPath)) { $localPath = Join-Path $projectDir $localPath }
+    $localPath = [IO.Path]::GetFullPath($localPath)
+    if (-not (Test-Path -LiteralPath $localPath -PathType Container) -or
+        -not (Test-Path -LiteralPath (Join-Path $localPath '.git'))) {
+        throw "SuiteApp $($suiteapp.directory) localPath is not a Git checkout: $localPath"
+    }
+    $mounts += @('--mount', "type=bind,src=$localPath,dst=/workspace/$($suiteapp.directory)")
+}
 
 foreach ($name in @('.nems.env', 'config.toml')) {
     $file = Join-Path $nemsDir $name

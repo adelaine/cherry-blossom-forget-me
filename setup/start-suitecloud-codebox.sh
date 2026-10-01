@@ -79,6 +79,21 @@ mounts=(
   --mount "type=bind,src=$private_certificate,dst=/config/certs/private.pem,ro=true"
 )
 
+local_paths="$(podman run --rm \
+  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials,ro=true" \
+  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json,ro=true" \
+  suitecloud-workspace --local-paths)"
+while IFS=$'\t' read -r directory local_path; do
+  [[ -n "$directory" ]] || continue
+  [[ "$local_path" == /* ]] || local_path="$project_dir/$local_path"
+  if [[ ! -e "$local_path/.git" ]]; then
+    echo "SuiteApp $directory localPath is not a Git checkout: $local_path" >&2
+    exit 1
+  fi
+  local_path="$(cd -- "$local_path" && pwd -P)"
+  mounts+=(--mount "type=bind,src=$local_path,dst=/workspace/$directory")
+done <<< "$local_paths"
+
 for name in .nems.env config.toml; do
   file="$nems_dir/$name"
   if [[ -f "$file" ]]; then
