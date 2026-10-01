@@ -85,16 +85,21 @@ if (-not $generateCertificates) {
 
 New-Item -ItemType Directory -Force -Path $reposDir | Out-Null
 
-& podman image exists suitecloud-workspace
-if ($LASTEXITCODE -ne 0) {
-    Write-Host 'Read the Oracle Free Use Terms and Conditions before building:'
-    Write-Host 'https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_155929845760.html'
-    $answer = Read-Host 'Do you accept these terms? Type yes to continue'
-    if ($answer -ne 'yes') { throw 'Build cancelled.' }
+
+# Make the host npm credentials available only during dependency installation.
+$npmrcFile = if ($env:SUITECONTAINER_NPMRC) { $env:SUITECONTAINER_NPMRC }
+    elseif ($env:NPM_CONFIG_USERCONFIG) { $env:NPM_CONFIG_USERCONFIG }
+    else { Join-Path $HOME '.npmrc' }
+$buildSecrets = @()
+if (Test-Path -LiteralPath $npmrcFile -PathType Leaf) {
+    $buildSecrets = @('--secret', "id=npmrc,src=$npmrcFile")
+    if ($env:NSX_NPM_TOKEN) {
+        $buildSecrets += @('--secret', 'id=npm-token,env=NSX_NPM_TOKEN,type=env')
+    }
 }
 
 Write-Host 'Preparing the SuiteCloud container...'
-& podman build -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
+& podman build @buildSecrets -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 
 & podman run --rm --cgroups=disabled `

@@ -105,11 +105,12 @@ setup() { setup_fixture; }
   assert_not_called --deploy
 }
 
-@test "macOS declines the license before building" {
+@test "macOS automatically accepts the license for a new image" {
   TEST_IMAGE_STATUS=1
   run_launcher setup/start-suitecloud.sh no
-  [ "$status" -ne 0 ]
-  assert_not_called '<build>'
+  [ "$status" -eq 0 ]
+  assert_called '<SUITECLOUD_CLI_ACCEPT_LICENSE=true>'
+  [[ "$output" != *'Do you accept these terms?'* ]]
 }
 
 @test "macOS stops on build and deployment failures" {

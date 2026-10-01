@@ -1,9 +1,11 @@
 FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24 AS build
 
 WORKDIR /app
-COPY app/package.json app/tsconfig.json ./
+COPY app/package.json app/package-lock.json app/tsconfig.json ./
 COPY app/src ./src
-RUN npm install --ignore-scripts --no-audit --no-fund && npm run build
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token \
+    if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
+    && npm ci --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund && npm run build
 
 FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24
 
@@ -14,10 +16,14 @@ RUN if command -v dnf >/dev/null 2>&1; then \
       microdnf install -y git openssl ca-certificates java-21-openjdk-devel && microdnf clean all; \
     fi
 
-# Set to true only after accepting the Oracle Free Use Terms and Conditions.
-ARG SUITECLOUD_CLI_ACCEPT_LICENSE=false
-RUN test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \
-    && SUITECLOUD_CLI_ACCEPT_LICENSE=true npm install -g --allow-scripts=@oracle/suitecloud-cli @oracle/suitecloud-cli \
+# Accept the Oracle Free Use Terms and Conditions for unattended builds.
+ARG SUITECLOUD_CLI_ACCEPT_LICENSE=true
+# Supplied by the CodeBox launcher for the SDK download.
+ARG SUITECLOUD_PROXY
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token \
+    if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
+    && test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \
+    && SUITECLOUD_CLI_ACCEPT_LICENSE=true npm install -g --userconfig=/run/secrets/npmrc --allow-scripts=@oracle/suitecloud-cli @oracle/suitecloud-cli \
     && test -n "$(find "$HOME/.suitecloud-sdk/cli" -maxdepth 1 -name '*.jar' -print -quit)" \
     && node --version \
     && java -version \

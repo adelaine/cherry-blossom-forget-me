@@ -30,18 +30,18 @@ fi
 
 mkdir -p "$repos_dir"
 
-if ! podman image exists suitecloud-workspace; then
-  echo 'Read the Oracle Free Use Terms and Conditions before building:'
-  echo 'https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_155929845760.html'
-  read -r -p 'Do you accept these terms? Type yes to continue: ' answer
-  if [[ "$answer" != yes ]]; then
-    echo 'Build cancelled.' >&2
-    exit 1
-  fi
-fi
 
 echo 'Preparing the SuiteCloud container...'
-if ! podman build -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"; then
+# Make the host npm credentials available only during dependency installation.
+npmrc_file="${SUITECONTAINER_NPMRC:-${NPM_CONFIG_USERCONFIG:-${npm_config_userconfig:-$HOME/.npmrc}}}"
+build_secrets=()
+if [[ -f "$npmrc_file" ]]; then
+  build_secrets+=(--secret "id=npmrc,src=$npmrc_file")
+  if [[ -n "${NSX_NPM_TOKEN:-}" ]]; then
+    build_secrets+=(--secret "id=npm-token,env=NSX_NPM_TOKEN,type=env")
+  fi
+fi
+if ! podman build "${build_secrets[@]}" -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"; then
   echo 'The container build failed.' >&2
   exit 1
 fi

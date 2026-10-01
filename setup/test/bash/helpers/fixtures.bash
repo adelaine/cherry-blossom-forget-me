@@ -15,6 +15,7 @@ setup_fixture() {
   cp "$source_root/../credentials/auth.example.json" "$fixture_root/credentials/auth.example.json"
   printf '%s\n' '{"gitlab-token":"","suitecloud-certificates":{"id":"test","public":"credentials/public.pem","private":"credentials/private.pem"}}' > "$fixture_root/credentials/auth.json"
   touch "$fixture_root/credentials/public.pem" "$fixture_root/credentials/private.pem"
+  export SUITECONTAINER_NPMRC="$BATS_TEST_TMPDIR/npm config/.npmrc"
   export TEST_COMMAND_LOG="$BATS_TEST_TMPDIR/commands"
   export TEST_FIXTURE_ROOT="$fixture_root"
   export TEST_PREPARE_STATUS=0 TEST_BUILD_STATUS=0 TEST_DEPLOY_STATUS=0 TEST_VALIDATE_STATUS=0 TEST_PATHS_STATUS=0
