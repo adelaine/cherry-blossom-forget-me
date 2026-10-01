@@ -17,6 +17,10 @@ Describe 'Windows SuiteCloud launcher' {
         $setup = New-Item -ItemType Directory -Path (Join-Path $global:LauncherTest_root 'setup')
         $global:LauncherTest_launcherPath = Join-Path $setup.FullName 'start-suitecloud.ps1'
         Copy-Item -LiteralPath $launcherSource -Destination $global:LauncherTest_launcherPath
+        foreach ($helper in @('bootstrap-host.ps1','web-host.ps1')) {
+            Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $launcherSource) $helper) -Destination $setup.FullName
+        }
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot '../../../suitecontainer.config.example.json') -Destination $global:LauncherTest_root
         Set-Content -LiteralPath (Join-Path $setup.FullName 'install-podman-windows.ps1') -Value '$global:installerCalls++'
         $global:installerCalls = 0
         $global:LauncherTest_oldNemsDir = $env:SUITECONTAINER_NEMS_DIR
@@ -41,8 +45,11 @@ Describe 'Windows SuiteCloud launcher' {
         $global:LauncherTest_pathsExit = 0
         $global:LauncherTest_deployExit = 0
         $global:LauncherTest_paths = @('credentials/public.pem', 'credentials/private.pem')
+        $global:LauncherTest_running = 'false'
         Mock Write-Host {}
         Mock Read-Host { 'yes' }
+        Mock Start-Process {}
+        Mock Invoke-WebRequest {}
         Mock podman {
             param([Parameter(ValueFromRemainingArguments = $true)][object[]] $Arguments)
             $global:LauncherTest_calls.Add(@($Arguments))
@@ -51,12 +58,18 @@ Describe 'Windows SuiteCloud launcher' {
             elseif ($Arguments[0] -eq 'build') { $global:LASTEXITCODE = $global:LauncherTest_buildExit }
             elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'list') { $global:LauncherTest_machineJson }
             elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'ssh') { $global:LASTEXITCODE = $global:LauncherTest_buildExit }
-            elseif ($Arguments -contains '--prepare-launch') { $global:LASTEXITCODE = $global:LauncherTest_prepareExit }
-            elseif ($Arguments -contains '--launch-mounts') {
+            elseif ($Arguments[0] -eq 'inspect') {
+                if ($Arguments[2] -like '*suitecontainer.project*') { $global:LauncherTest_root } else { $global:LauncherTest_running }
+            }
+            elseif ($Arguments[0] -eq 'port') { '127.0.0.1:49123' }
+            elseif ($Arguments[0] -eq 'exec') { '/#session=fixture-session' }
+            elseif ($Arguments[0] -eq 'container') { $global:LASTEXITCODE = 1 }
+            elseif ($Arguments -contains '--web-paths') { $global:LASTEXITCODE = $global:LauncherTest_prepareExit }
+            elseif ($Arguments -contains '--web-mounts') {
                 $global:LASTEXITCODE = $global:LauncherTest_pathsExit
                 "type=bind,src=$global:LauncherTest_root/repos,dst=/workspace"
             }
-            elseif ($Arguments -contains '--deploy') { $global:LASTEXITCODE = $global:LauncherTest_deployExit }
+            elseif ($Arguments -contains '--serve') { $global:LASTEXITCODE = $global:LauncherTest_deployExit; $global:LauncherTest_running = 'true' }
         }
     }
     AfterEach { $env:SUITECONTAINER_NEMS_DIR = $global:LauncherTest_oldNemsDir }
@@ -64,15 +77,20 @@ Describe 'Windows SuiteCloud launcher' {
     It 'builds and launches with mounts supplied by the application' {
         Invoke-TestLauncher
         $global:installerCalls | Should -Be 1
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--prepare-launch' }).Count | Should -Be 1
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--launch-mounts' }).Count | Should -Be 1
-        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--web-paths' }).Count | Should -Be 1
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--web-mounts' }).Count | Should -Be 1
+        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--serve' })[0]
         $deploy | Should -Contain "type=bind,src=$global:LauncherTest_root/repos,dst=/workspace"
+        $deploy | Should -Contain '127.0.0.1::8080'
+        Should -Invoke Start-Process -Times 1 -Exactly
     }
-    It 'stops successfully when the application requests setup' {
-        $global:LauncherTest_prepareExit = 10
+    It 'creates missing files before installation and continues with blank runbox settings' {
+        Remove-Item -LiteralPath $global:LauncherTest_configPath
+        Remove-Item -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json')
         Invoke-TestLauncher
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--launch-mounts' -or $_ -contains '--deploy' }).Count | Should -Be 0
+        (Get-Content -LiteralPath $global:LauncherTest_configPath -Raw | ConvertFrom-Json).vms[0].url | Should -Be ''
+        Test-Path -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json') | Should -BeTrue
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--serve' }).Count | Should -Be 1
     }
     It 'automatically accepts the license for a new image' {
         $global:LauncherTest_imageExit = 1
@@ -110,31 +128,40 @@ Describe 'Windows SuiteCloud launcher' {
     It 'reports a failed build' {
         $global:LauncherTest_buildExit = 1
         { Invoke-TestLauncher } | Should -Throw '*container build failed*'
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--prepare-launch' }).Count | Should -Be 0
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--web-paths' }).Count | Should -Be 0
     }
     It 'propagates application preparation failures' {
         $global:LauncherTest_prepareExit = 2
-        { Invoke-TestLauncher } | Should -Throw '*Installer preparation failed*'
+        { Invoke-TestLauncher } | Should -Throw '*Could not read container mount settings*'
     }
     It 'propagates application mount failures' {
         $global:LauncherTest_pathsExit = 1
         { Invoke-TestLauncher } | Should -Throw '*Could not prepare container mounts*'
     }
-    It 'reports a failed deployment' {
+    It 'reports a failed page start' {
         $global:LauncherTest_deployExit = 1
-        { Invoke-TestLauncher } | Should -Throw '*container stopped with an error*'
+        { Invoke-TestLauncher } | Should -Throw '*Could not start the deployment page*'
     }
-    It 'mounts optional credentials from the isolated configured directory' {
+    It 'imports the token without mounting Codex configuration into the app' {
         New-Item -ItemType Directory -Path $env:SUITECONTAINER_NEMS_DIR | Out-Null
         foreach ($name in @('.nems.env', 'config.toml')) {
-            Set-Content -LiteralPath (Join-Path $env:SUITECONTAINER_NEMS_DIR $name) -Value 'fixture only'
+            Set-Content -LiteralPath (Join-Path $env:SUITECONTAINER_NEMS_DIR $name) -Value 'GITLAB_TOKEN="fixture-token"'
         }
         Invoke-TestLauncher
-        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
+        $auth = Get-Content -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json') -Raw | ConvertFrom-Json
+        $auth.'gitlab-token' | Should -Be 'fixture-token'
+        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--serve' })[0]
         foreach ($name in @('.nems.env', 'config.toml')) {
             $file = Join-Path $env:SUITECONTAINER_NEMS_DIR $name
-            $deploy | Should -Contain "type=bind,src=$file,dst=/config/$name,ro=true"
+            $deploy | Should -Not -Contain "type=bind,src=$file,dst=/config/$name,ro=true"
         }
+    }
+    It 'opens an existing app without rebuilding' {
+        $global:LauncherTest_running = 'true'
+        Invoke-TestLauncher
+        @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' }).Count | Should -Be 0
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--serve' }).Count | Should -Be 0
+        Should -Invoke Start-Process -Times 1 -Exactly
     }
     AfterAll {
         Remove-Variable installerCalls -Scope Global -ErrorAction SilentlyContinue

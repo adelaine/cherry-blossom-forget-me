@@ -5,17 +5,17 @@ if command -v podman >/dev/null 2>&1; then
   exit 0
 fi
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:/opt/podman/bin:$PATH"
+if command -v podman >/dev/null 2>&1; then exit 0; fi
+if command -v brew >/dev/null 2>&1; then
+  echo 'Installing Podman with Homebrew...'
+  brew install podman
+  exit 0
+fi
+
 case "$(uname -m)" in
   arm64) package_arch=arm64 ;;
-  x86_64)
-    if ! command -v brew >/dev/null 2>&1; then
-      echo 'Intel Macs need Homebrew to install Podman. Install it from https://brew.sh, then run start-macos.sh again.' >&2
-      exit 1
-    fi
-    echo 'Installing Podman with Homebrew...'
-    brew install podman
-    exit 0
-    ;;
+  x86_64) package_arch=amd64 ;;
   *) echo 'This Mac processor is not supported by the Podman installer.' >&2; exit 1 ;;
 esac
 

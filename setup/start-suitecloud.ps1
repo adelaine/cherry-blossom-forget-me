@@ -2,6 +2,12 @@ $ErrorActionPreference = 'Stop'
 
 $projectDir = Split-Path -Parent $PSScriptRoot
 $nemsDir = if ($env:SUITECONTAINER_NEMS_DIR) { $env:SUITECONTAINER_NEMS_DIR } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
+& (Join-Path $PSScriptRoot 'bootstrap-host.ps1') -ProjectDir $projectDir -NemsDir $nemsDir
+. (Join-Path $PSScriptRoot 'web-host.ps1')
+$projectHash = [Security.Cryptography.SHA256]::Create()
+try { $hash = [BitConverter]::ToString($projectHash.ComputeHash([Text.Encoding]::UTF8.GetBytes($projectDir.ToLowerInvariant()))).Replace('-', '').Substring(0, 16).ToLowerInvariant() }
+finally { $projectHash.Dispose() }
+$script:containerName = "suitecontainer-$hash"
 
 function ConvertTo-PodmanMachinePath([string]$path) {
     $fullPath = [IO.Path]::GetFullPath($path)
@@ -46,6 +52,9 @@ if ($machineJson.Trim() -eq '[]') {
         if ($LASTEXITCODE -ne 0) { throw 'Could not start the Podman machine.' }
     }
 }
+
+$runningApp = (Invoke-SuiteContainerQuiet inspect --format '{{.State.Running}}' $script:containerName) -join ''
+if ($runningApp -eq 'true') { Confirm-SuiteContainerOwner; Open-SuiteContainerPage; return }
 
 # Make the host npm credentials available only during dependency installation.
 $npmrcFile = if ($env:SUITECONTAINER_NPMRC) { $env:SUITECONTAINER_NPMRC }
@@ -107,29 +116,4 @@ if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
     }
 }
 
-& podman run --rm --cgroups=disabled `
-    --mount "type=bind,src=$projectDir,dst=/project" `
-    suitecloud-workspace --prepare-launch
-if ($LASTEXITCODE -eq 10) { return }
-if ($LASTEXITCODE -ne 0) { throw 'Installer preparation failed.' }
-
-$launchMounts = @(& podman run --rm --cgroups=disabled `
-    --mount "type=bind,src=$projectDir,dst=/project,ro=true" `
-    --env "SUITECONTAINER_HOST_ROOT=$projectDir" `
-    --env 'SUITECONTAINER_HOST_PLATFORM=win32' `
-    suitecloud-workspace --launch-mounts)
-if ($LASTEXITCODE -ne 0) { throw 'Could not prepare container mounts.' }
-$mounts = @()
-foreach ($mount in $launchMounts) {
-    if ($mount) { $mounts += @('--mount', $mount) }
-}
-
-foreach ($name in @('.nems.env', 'config.toml')) {
-    $file = Join-Path $nemsDir $name
-    if (Test-Path -LiteralPath $file -PathType Leaf) {
-        $mounts += @('--mount', "type=bind,src=$file,dst=/config/$name,ro=true")
-    }
-}
-
-& podman run --rm -it --cgroups=disabled @mounts suitecloud-workspace --deploy
-if ($LASTEXITCODE -ne 0) { throw 'The container stopped with an error.' }
+Start-SuiteContainerWeb

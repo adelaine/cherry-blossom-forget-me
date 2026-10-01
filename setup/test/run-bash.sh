@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# A direct Git Bash invocation from PowerShell may inherit only Windows PATH entries.
+if [[ "${OSTYPE:-}" == msys* ]]; then
+  export PATH="/usr/bin:/bin:$PATH"
+fi
+
 test_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "$test_dir/../.." && pwd)"
 if command -v bats >/dev/null 2>&1; then

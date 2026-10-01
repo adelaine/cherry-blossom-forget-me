@@ -57,7 +57,7 @@ export function deployRepos(
     options: { workspaceRoot?: string; spawn?: typeof spawnSync } = {},
 ): void {
     const certificates = config.certificates!;
-    const passkey = randomBytes(32).toString("hex");
+    const passkey = process.env.SUITECONTAINER_DEPLOY_PASSKEY || randomBytes(32).toString("hex");
     const workspaceRoot = options.workspaceRoot ?? "/workspace";
     const spawn = options.spawn ?? spawnSync;
     const runCommand = (

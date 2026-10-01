@@ -25,12 +25,25 @@ setup() { setup_fixture; }
   [ "$status" -eq 4 ]
 }
 
-@test "Intel installation fails clearly when Homebrew is missing" {
+@test "Intel installation falls back to the official package without Homebrew" {
   make_isolated_path
   fake_command uname 'echo x86_64'
+  fake_command curl 'printf "%s\n" "$*" > "$TEST_FIXTURE_ROOT/download-args"; while [[ "$1" != --output ]]; do shift; done; touch "$2"'
+  fake_command sudo 'exit 0'
   run_launcher setup/install-podman-macos.sh
-  [ "$status" -ne 0 ]
-  [[ "$output" == *'Intel Macs need Homebrew'* ]]
+  [ "$status" -eq 0 ]
+  [[ "$(cat "$fixture_root/download-args")" == *'macos-amd64.pkg'* ]]
+  assert_called sudo
+}
+
+@test "Apple Silicon also prefers existing Homebrew" {
+  make_isolated_path
+  fake_command brew '[[ "$1" == install && "$2" == podman ]]'
+  fake_command uname 'echo arm64'
+  run_launcher setup/install-podman-macos.sh
+  [ "$status" -eq 0 ]
+  assert_called brew
+  assert_not_called uname
 }
 
 @test "unsupported architectures stop before downloading" {

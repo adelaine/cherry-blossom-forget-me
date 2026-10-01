@@ -4,10 +4,11 @@ setup_fixture() {
   fixture_bin="$BATS_TEST_TMPDIR/bin"
   fixture_nems="$BATS_TEST_TMPDIR/nems"
   mkdir -p "$fixture_root/setup" "$fixture_root/credentials" "$fixture_bin" "$fixture_nems"
-  for script in start-suitecloud.sh start-suitecloud-codebox.sh install-podman-macos.sh install-podman-codebox.sh gitlab-askpass.sh; do
-    sed 's/\r$//' "$source_root/$script" > "$fixture_root/setup/$script"
+  for script in start-suitecloud.sh start-suitecloud-codebox.sh install-podman-macos.sh install-podman-codebox.sh gitlab-askpass.sh bootstrap-host.sh web-host.sh bootstrap-token.cjs bootstrap-token.py; do
+    # Keep native installation directories out of fixtures so a future test run cannot invoke host Homebrew/Podman.
+    sed -e 's/\r$//' -e 's|/opt/homebrew/bin:/usr/local/bin:/opt/podman/bin:||g' -e 's|/opt/podman/bin:||g' "$source_root/$script" > "$fixture_root/setup/$script"
   done
-  for script in start-macos.sh start-codebox; do
+  for script in start-macos.sh start-macos.command start-codebox; do
     sed 's/\r$//' "$source_root/../$script" > "$fixture_root/$script"
   done
   sed 's/\r$//' "$source_root/../suitecontainer.config.example.json" > "$fixture_root/suitecontainer.config.example.json"
@@ -20,6 +21,7 @@ setup_fixture() {
   export TEST_FIXTURE_ROOT="$fixture_root"
   export TEST_PREPARE_STATUS=0 TEST_BUILD_STATUS=0 TEST_DEPLOY_STATUS=0 TEST_PATHS_STATUS=0
   export TEST_MACHINE_LIST=true
+  export TEST_APP_RUNNING=false TEST_APP_STARTED=false
   : > "$TEST_COMMAND_LOG"
   cat > "$fixture_bin/podman" <<'SH'
 #!/usr/bin/env bash
@@ -27,21 +29,30 @@ printf 'podman' >> "$TEST_COMMAND_LOG"
 printf ' <%s>' "$@" >> "$TEST_COMMAND_LOG"
 printf '\n' >> "$TEST_COMMAND_LOG"
 case "$1" in
+  inspect)
+    if [[ "$3" == *suitecontainer.project* ]]; then echo "$TEST_FIXTURE_ROOT";
+    elif [[ "$TEST_APP_RUNNING" == true || -f "$TEST_FIXTURE_ROOT/started" ]]; then echo true; else echo false; fi ;;
+  port) echo '127.0.0.1:49123' ;;
+  exec) echo '/#session=fixture-session' ;;
+  container) exit 1 ;;
   machine) if [[ "$2" == list ]]; then printf '%s' "$TEST_MACHINE_LIST"; fi ;;
   build) exit "$TEST_BUILD_STATUS" ;;
   run)
     for argument in "$@"; do
       case "$argument" in
-        --prepare-launch) echo 'Installer preparation'; exit "$TEST_PREPARE_STATUS" ;;
-        --launch-mounts)
+        --web-paths) exit "$TEST_PREPARE_STATUS" ;;
+        --web-mounts)
           if [[ "$TEST_PATHS_STATUS" != 0 ]]; then exit "$TEST_PATHS_STATUS"; fi
           printf '%s\n' "type=bind,src=$TEST_FIXTURE_ROOT/repos,dst=/workspace"; exit 0 ;;
-        --deploy) exit "$TEST_DEPLOY_STATUS" ;;
+        --serve) if [[ "$TEST_DEPLOY_STATUS" != 0 ]]; then exit "$TEST_DEPLOY_STATUS"; fi; touch "$TEST_FIXTURE_ROOT/started" ;;
       esac
     done ;;
 esac
 SH
   chmod +x "$fixture_bin/podman"
+  fake_command curl 'exit 0'
+  fake_command open 'exit 0'
+  fake_command osascript 'exit 0'
   fixture_path="$fixture_bin:$PATH"
 }
 
@@ -57,7 +68,7 @@ make_isolated_path() {
   # Keep only required utilities so host Podman and Homebrew cannot leak in.
   fixture_path="$fixture_bin"
   rm -f "$fixture_bin/podman"
-  for utility in bash dirname mktemp rm rmdir cat touch chmod mkdir cp; do
+  for utility in bash dirname mktemp rm rmdir cat touch chmod mkdir cp cksum awk head id hostname; do
     printf '#!/bin/bash\nexec %q "$@"\n' "$(command -v "$utility")" > "$fixture_bin/$utility"
     chmod +x "$fixture_bin/$utility"
   done

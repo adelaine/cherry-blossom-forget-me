@@ -1,4 +1,5 @@
 *.sh text eol=lf
+*.command text eol=lf
 *.bash text eol=lf
 *.bats text eol=lf
 start-codebox text eol=lf

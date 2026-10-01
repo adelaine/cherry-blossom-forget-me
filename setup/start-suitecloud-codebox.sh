@@ -4,10 +4,14 @@ set -euo pipefail
 setup_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "$setup_dir/.." && pwd)"
 nems_dir="${SUITECONTAINER_NEMS_DIR:-$HOME/.codex}"
+source "$setup_dir/bootstrap-host.sh"
+source "$setup_dir/web-host.sh"
 
 if ! command -v podman >/dev/null 2>&1; then
   bash "$setup_dir/install-podman-codebox.sh"
 fi
+
+if reuse_web_app; then exit 0; fi
 
 # Make the host npm credentials available only during dependency installation.
 npmrc_file="${SUITECONTAINER_NPMRC:-${NPM_CONFIG_USERCONFIG:-${npm_config_userconfig:-$HOME/.npmrc}}}"
@@ -19,35 +23,6 @@ if [[ -f "$npmrc_file" ]]; then
   fi
 fi
 export SUITECLOUD_PROXY="${SUITECLOUD_PROXY:-http://proxy.eng.netsuite.com:80}"
-podman build "${build_secrets[@]}" -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true --build-arg SUITECLOUD_PROXY -t suitecloud-workspace "$setup_dir"
+podman build ${build_secrets[@]+"${build_secrets[@]}"} -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true --build-arg SUITECLOUD_PROXY -t suitecloud-workspace "$setup_dir"
 
-prepare_status=0
-podman run --rm --cgroups=disabled \
-  --mount "type=bind,src=$project_dir,dst=/project" \
-  suitecloud-workspace --prepare-launch || prepare_status=$?
-if [[ "$prepare_status" -eq 10 ]]; then
-  exit 0
-fi
-if [[ "$prepare_status" -ne 0 ]]; then
-  exit "$prepare_status"
-fi
-
-launch_mounts="$(podman run --rm --cgroups=disabled \
-  --mount "type=bind,src=$project_dir,dst=/project,ro=true" \
-  --env "SUITECONTAINER_HOST_ROOT=$project_dir" \
-  --env "SUITECONTAINER_HOST_PLATFORM=linux" \
-  suitecloud-workspace --launch-mounts)"
-mounts=()
-while IFS= read -r mount; do
-  [[ -n "$mount" ]] || continue
-  mounts+=(--mount "$mount")
-done <<< "$launch_mounts"
-
-for name in .nems.env config.toml; do
-  file="$nems_dir/$name"
-  if [[ -f "$file" ]]; then
-    mounts+=(--mount "type=bind,src=$file,dst=/config/$name,ro=true")
-  fi
-done
-
-podman run --rm -it "${mounts[@]}" suitecloud-workspace --deploy
+start_web_app

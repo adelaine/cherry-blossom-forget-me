@@ -10,8 +10,18 @@ import {
 } from "./step-certificates.ts";
 import { prepareToken, removeToken } from "./step-token.ts";
 import { launchMounts, prepareConfiguration } from "./step-launch.ts";
+import { prepareWebMounts, webPathRequests } from "./web-mounts.ts";
+import { startWebServer } from "./web-server.ts";
 
 export function main(args: string[] = process.argv.slice(2)): number {
+    if (args[0] === "--serve") { startWebServer(); return 0; }
+    if (args[0] === "--web-mounts" || args[0] === "--web-paths") {
+        const hostRoot = process.env.SUITECONTAINER_HOST_ROOT;
+        if (!hostRoot) throw new Error("The launcher must supply SUITECONTAINER_HOST_ROOT.");
+        const platform = process.env.SUITECONTAINER_HOST_PLATFORM ?? "linux";
+        console.log((args[0] === "--web-mounts" ? prepareWebMounts : webPathRequests)("/project", hostRoot, platform).join("\n"));
+        return 0;
+    }
     const prepareLaunch = args[0] === "--prepare-launch";
     const launchMountsOnly = args[0] === "--launch-mounts";
     const projectRoot = "/project";
@@ -25,10 +35,10 @@ export function main(args: string[] = process.argv.slice(2)): number {
         ? args[1]
         : prepareLaunch || launchMountsOnly
           ? join(projectRoot, "suitecontainer.config.json")
-          : "/config/suitecontainer.config.json";
+          : process.env.SUITECONTAINER_CONFIG ?? "/config/suitecontainer.config.json";
     const authPath = prepareLaunch || launchMountsOnly
         ? join(projectRoot, "credentials/auth.json")
-        : "/config/credentials/auth.json";
+        : process.env.SUITECONTAINER_AUTH ?? "/config/credentials/auth.json";
     const config = readConfig(configPath ?? "", certificatePathsOnly || launchMountsOnly, authPath);
 
     if (launchMountsOnly) {
@@ -85,9 +95,9 @@ export function main(args: string[] = process.argv.slice(2)): number {
         // Deployment settings are checked here after handling an empty SuiteApp list.
         validateConfig(config, true);
     }
-    const privateKeyPath = deploy ? verifyCertificates() : null;
+    const privateKeyPath = deploy ? verifyCertificates(process.env.SUITECONTAINER_PUBLIC_KEY, process.env.SUITECONTAINER_PRIVATE_KEY) : null;
     try {
-        if (config.suiteapps.some((repo) => !repo.localPath)) prepareToken();
+        if (config.suiteapps.some((repo) => !repo.localPath)) prepareToken(authPath);
         cloneRepos(config.suiteapps);
         if (deploy) {
             deployRepos(config, privateKeyPath!);

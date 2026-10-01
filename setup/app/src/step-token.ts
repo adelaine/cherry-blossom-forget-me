@@ -82,7 +82,7 @@ export function prepareToken(
     const token =
         readAuth(authPath)["gitlab-token"]?.trim() ||
         nemsFiles.map(readToken).find(Boolean) ||
-        promptForToken();
+        (process.env.SUITECONTAINER_NONINTERACTIVE ? "" : promptForToken());
     if (!token) throw new Error("A GitLab token is required.");
     writeFileSync(destination, token, { mode: 0o600 });
 }
