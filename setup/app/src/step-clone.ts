@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { gitlabHttpsUrl, type SuiteApp } from "./step-config.ts";
 
@@ -19,6 +19,11 @@ export function run(command: string, args: string[]): void {
 export function cloneRepos(repos: SuiteApp[]): void {
     for (const repo of repos) {
         if (repo.localPath) {
+            const destination = join("/workspace", repo.directory);
+            if (!existsSync(destination) || !statSync(destination).isDirectory() ||
+                !existsSync(join(destination, ".git"))) {
+                throw new Error(`SuiteApp ${repo.directory} localPath is not a Git checkout: ${repo.localPath}`);
+            }
             console.log(`Using local checkout: ${repo.directory}`);
             continue;
         }

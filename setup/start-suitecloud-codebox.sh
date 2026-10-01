@@ -3,27 +3,11 @@ set -euo pipefail
 
 setup_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "$setup_dir/.." && pwd)"
-config_file="$project_dir/suitecontainer.config.json"
-repos_dir="$project_dir/repos"
 nems_dir="${SUITECONTAINER_NEMS_DIR:-$HOME/.codex}"
 
-config_status=0
-bash "$setup_dir/prepare-config.sh" "$project_dir" || config_status=$?
-if [[ "$config_status" -eq 10 ]]; then
-  exit 0
-fi
-if [[ "$config_status" -ne 0 ]]; then
-  exit "$config_status"
-fi
 if ! command -v podman >/dev/null 2>&1; then
   bash "$setup_dir/install-podman-codebox.sh"
 fi
-if ! podman info >/dev/null 2>&1; then
-  echo 'Podman is not ready on this codebox.' >&2
-  exit 1
-fi
-
-mkdir -p "$repos_dir"
 
 # Make the host npm credentials available only during dependency installation.
 npmrc_file="${SUITECONTAINER_NPMRC:-${NPM_CONFIG_USERCONFIG:-${npm_config_userconfig:-$HOME/.npmrc}}}"
@@ -37,63 +21,27 @@ fi
 export SUITECLOUD_PROXY="${SUITECLOUD_PROXY:-http://proxy.eng.netsuite.com:80}"
 podman build "${build_secrets[@]}" -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true --build-arg SUITECLOUD_PROXY -t suitecloud-workspace "$setup_dir"
 
-validation_output="$(podman run --rm \
-  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials,ro=true" \
-  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json,ro=true" \
-  suitecloud-workspace --validate /config/suitecontainer.config.json)"
-echo "$validation_output"
-if [[ "$validation_output" == 'There are no SuiteApps to install in suitecontainer.config.json.' ]]; then
+prepare_status=0
+podman run --rm --cgroups=disabled \
+  --mount "type=bind,src=$project_dir,dst=/project" \
+  suitecloud-workspace --prepare-launch || prepare_status=$?
+if [[ "$prepare_status" -eq 10 ]]; then
   exit 0
 fi
-
-certificate_status=0
-podman run --rm \
-  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json" \
-  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials" \
-  suitecloud-workspace --prepare-certificates || certificate_status=$?
-if [[ "$certificate_status" -eq 10 ]]; then
-  exit 0
-fi
-if [[ "$certificate_status" -ne 0 ]]; then
-  exit "$certificate_status"
+if [[ "$prepare_status" -ne 0 ]]; then
+  exit "$prepare_status"
 fi
 
-certificate_paths="$(podman run --rm \
-  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials,ro=true" \
-  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json,ro=true" \
-  --entrypoint node suitecloud-workspace \
-  /opt/suitecontainer/install.js --certificate-paths)"
-public_certificate="${certificate_paths%%$'\n'*}"
-private_certificate="${certificate_paths#*$'\n'}"
-[[ "$public_certificate" == /* ]] || public_certificate="$project_dir/$public_certificate"
-[[ "$private_certificate" == /* ]] || private_certificate="$project_dir/$private_certificate"
-if [[ ! -f "$public_certificate" || ! -f "$private_certificate" ]]; then
-  echo 'Certificate files were not found. Update their paths in credentials/auth.json.' >&2
-  exit 1
-fi
-
-mounts=(
-  --mount "type=bind,src=$project_dir/credentials/auth.json,dst=/config/credentials/auth.json,ro=true"
-  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json"
-  --mount "type=bind,src=$repos_dir,dst=/workspace"
-  --mount "type=bind,src=$public_certificate,dst=/config/certs/public.pem,ro=true"
-  --mount "type=bind,src=$private_certificate,dst=/config/certs/private.pem,ro=true"
-)
-
-local_paths="$(podman run --rm \
-  --mount "type=bind,src=$project_dir/credentials,dst=/config/credentials,ro=true" \
-  --mount "type=bind,src=$config_file,dst=/config/suitecontainer.config.json,ro=true" \
-  suitecloud-workspace --local-paths)"
-while IFS=$'\t' read -r directory local_path; do
-  [[ -n "$directory" ]] || continue
-  [[ "$local_path" == /* ]] || local_path="$project_dir/$local_path"
-  if [[ ! -e "$local_path/.git" ]]; then
-    echo "SuiteApp $directory localPath is not a Git checkout: $local_path" >&2
-    exit 1
-  fi
-  local_path="$(cd -- "$local_path" && pwd -P)"
-  mounts+=(--mount "type=bind,src=$local_path,dst=/workspace/$directory")
-done <<< "$local_paths"
+launch_mounts="$(podman run --rm --cgroups=disabled \
+  --mount "type=bind,src=$project_dir,dst=/project,ro=true" \
+  --env "SUITECONTAINER_HOST_ROOT=$project_dir" \
+  --env "SUITECONTAINER_HOST_PLATFORM=linux" \
+  suitecloud-workspace --launch-mounts)"
+mounts=()
+while IFS= read -r mount; do
+  [[ -n "$mount" ]] || continue
+  mounts+=(--mount "$mount")
+done <<< "$launch_mounts"
 
 for name in .nems.env config.toml; do
   file="$nems_dir/$name"

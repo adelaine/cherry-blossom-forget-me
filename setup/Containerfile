@@ -1,13 +1,20 @@
 FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24 AS build
 
+# Include the container's system trust store when npm connects to internal registries.
+ENV NODE_OPTIONS="--use-system-ca"
+
 WORKDIR /app
 COPY app/package.json app/package-lock.json app/tsconfig.json ./
 COPY app/src ./src
-RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token \
+COPY app/run-npm.mjs /opt/suitecontainer/run-npm.mjs
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
     if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
-    && npm ci --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund && npm run build
+    && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
+    && node /opt/suitecontainer/run-npm.mjs ci --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund && npm run build
 
 FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24
+
+ENV NODE_OPTIONS="--use-system-ca"
 
 USER root
 RUN if command -v dnf >/dev/null 2>&1; then \
@@ -19,11 +26,13 @@ RUN if command -v dnf >/dev/null 2>&1; then \
 # Accept the Oracle Free Use Terms and Conditions for unattended builds.
 ARG SUITECLOUD_CLI_ACCEPT_LICENSE=true
 # Supplied by the CodeBox launcher for the SDK download.
-ARG SUITECLOUD_PROXY
-RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token \
+ARG SUITECLOUD_PROXY=""
+COPY app/run-npm.mjs /opt/suitecontainer/run-npm.mjs
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
     if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
+    && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
     && test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \
-    && SUITECLOUD_CLI_ACCEPT_LICENSE=true npm install -g --userconfig=/run/secrets/npmrc --allow-scripts=@oracle/suitecloud-cli @oracle/suitecloud-cli \
+    && SUITECLOUD_CLI_ACCEPT_LICENSE=true node /opt/suitecontainer/run-npm.mjs install -g --userconfig=/run/secrets/npmrc --allow-scripts=@oracle/suitecloud-cli @oracle/suitecloud-cli \
     && test -n "$(find "$HOME/.suitecloud-sdk/cli" -maxdepth 1 -name '*.jar' -print -quit)" \
     && node --version \
     && java -version \

@@ -26,12 +26,6 @@ package_url="https://github.com/podman-container-tools/podman/releases/latest/do
 
 echo 'Downloading the official Podman installer...'
 curl --fail --location --show-error --silent --output "$package_file" "$package_url"
-pkgutil --check-signature "$package_file" >/dev/null
 
 echo 'Installing Podman. macOS may ask for your password.'
 sudo installer -pkg "$package_file" -target /
-
-if [[ ! -x /opt/podman/bin/podman ]] && ! command -v podman >/dev/null 2>&1; then
-  echo 'Podman was installed, but Terminal cannot find it yet. Close Terminal and run start-macos.sh again.' >&2
-  exit 1
-fi

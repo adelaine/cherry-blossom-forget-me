@@ -4,7 +4,7 @@ setup_fixture() {
   fixture_bin="$BATS_TEST_TMPDIR/bin"
   fixture_nems="$BATS_TEST_TMPDIR/nems"
   mkdir -p "$fixture_root/setup" "$fixture_root/credentials" "$fixture_bin" "$fixture_nems"
-  for script in start-suitecloud.sh start-suitecloud-codebox.sh install-podman-macos.sh install-podman-codebox.sh gitlab-askpass.sh prepare-config.sh; do
+  for script in start-suitecloud.sh start-suitecloud-codebox.sh install-podman-macos.sh install-podman-codebox.sh gitlab-askpass.sh; do
     sed 's/\r$//' "$source_root/$script" > "$fixture_root/setup/$script"
   done
   for script in start-macos.sh start-codebox; do
@@ -18,10 +18,8 @@ setup_fixture() {
   export SUITECONTAINER_NPMRC="$BATS_TEST_TMPDIR/npm config/.npmrc"
   export TEST_COMMAND_LOG="$BATS_TEST_TMPDIR/commands"
   export TEST_FIXTURE_ROOT="$fixture_root"
-  export TEST_PREPARE_STATUS=0 TEST_BUILD_STATUS=0 TEST_DEPLOY_STATUS=0 TEST_VALIDATE_STATUS=0 TEST_PATHS_STATUS=0
-  export TEST_IMAGE_STATUS=0 TEST_INFO_STATUS=0 TEST_MACHINE_LIST=existing
-  export TEST_VALIDATION_OUTPUT='Configuration is valid.'
-  export TEST_LOCAL_PATHS_OUTPUT=''
+  export TEST_PREPARE_STATUS=0 TEST_BUILD_STATUS=0 TEST_DEPLOY_STATUS=0 TEST_PATHS_STATUS=0
+  export TEST_MACHINE_LIST=true
   : > "$TEST_COMMAND_LOG"
   cat > "$fixture_bin/podman" <<'SH'
 #!/usr/bin/env bash
@@ -29,19 +27,15 @@ printf 'podman' >> "$TEST_COMMAND_LOG"
 printf ' <%s>' "$@" >> "$TEST_COMMAND_LOG"
 printf '\n' >> "$TEST_COMMAND_LOG"
 case "$1" in
-  info) exit "$TEST_INFO_STATUS" ;;
-  image) exit "$TEST_IMAGE_STATUS" ;;
   machine) if [[ "$2" == list ]]; then printf '%s' "$TEST_MACHINE_LIST"; fi ;;
   build) exit "$TEST_BUILD_STATUS" ;;
   run)
     for argument in "$@"; do
       case "$argument" in
-        --validate) printf '%s\n' "$TEST_VALIDATION_OUTPUT"; exit "$TEST_VALIDATE_STATUS" ;;
-        --prepare-certificates) echo 'Certificate preparation'; exit "$TEST_PREPARE_STATUS" ;;
-        --certificate-paths)
-          if [[ "$TEST_PATHS_STATUS" != 0 ]]; then echo 'Missing certificate ID or invalid certificate configuration' >&2; exit "$TEST_PATHS_STATUS"; fi
-          printf '%s\n' 'credentials/public.pem' 'credentials/private.pem'; exit 0 ;;
-        --local-paths) printf '%s' "$TEST_LOCAL_PATHS_OUTPUT"; exit 0 ;;
+        --prepare-launch) echo 'Installer preparation'; exit "$TEST_PREPARE_STATUS" ;;
+        --launch-mounts)
+          if [[ "$TEST_PATHS_STATUS" != 0 ]]; then exit "$TEST_PATHS_STATUS"; fi
+          printf '%s\n' "type=bind,src=$TEST_FIXTURE_ROOT/repos,dst=/workspace"; exit 0 ;;
         --deploy) exit "$TEST_DEPLOY_STATUS" ;;
       esac
     done ;;

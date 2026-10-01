@@ -36,7 +36,7 @@ Describe 'Windows SuiteCloud launcher' {
         $global:LauncherTest_calls = [Collections.Generic.List[object]]::new()
         $global:LauncherTest_imageExit = 0
         $global:LauncherTest_buildExit = 0
-        $global:LauncherTest_machineJson = ''
+        $global:LauncherTest_machineJson = '[{"Name":"fixture-machine","Default":true,"Running":true}]'
         $global:LauncherTest_prepareExit = 0
         $global:LauncherTest_pathsExit = 0
         $global:LauncherTest_deployExit = 0
@@ -51,110 +51,28 @@ Describe 'Windows SuiteCloud launcher' {
             elseif ($Arguments[0] -eq 'build') { $global:LASTEXITCODE = $global:LauncherTest_buildExit }
             elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'list') { $global:LauncherTest_machineJson }
             elseif ($Arguments[0] -eq 'machine' -and $Arguments[1] -eq 'ssh') { $global:LASTEXITCODE = $global:LauncherTest_buildExit }
-            elseif ($Arguments -contains '--prepare-certificates') { $global:LASTEXITCODE = $global:LauncherTest_prepareExit }
-            elseif ($Arguments -contains '--certificate-paths') {
+            elseif ($Arguments -contains '--prepare-launch') { $global:LASTEXITCODE = $global:LauncherTest_prepareExit }
+            elseif ($Arguments -contains '--launch-mounts') {
                 $global:LASTEXITCODE = $global:LauncherTest_pathsExit
-                $global:LauncherTest_paths
+                "type=bind,src=$global:LauncherTest_root/repos,dst=/workspace"
             }
             elseif ($Arguments -contains '--deploy') { $global:LASTEXITCODE = $global:LauncherTest_deployExit }
         }
     }
     AfterEach { $env:SUITECONTAINER_NEMS_DIR = $global:LauncherTest_oldNemsDir }
 
-    It 'copies the template and stops before installing Podman on first use' {
-        Remove-Item -LiteralPath $global:LauncherTest_configPath
-        $template = '{"suiteapps":[],"vms":[{"account":"","url":""}],"certificates":{"public":"","private":"","id":""}}'
-        Set-Content -LiteralPath (Join-Path $global:LauncherTest_root 'suitecontainer.config.example.json') -Value $template
+    It 'builds and launches with mounts supplied by the application' {
         Invoke-TestLauncher
-        (Get-Content -LiteralPath $global:LauncherTest_configPath -Raw).Trim() | Should -Be $template
-        $global:installerCalls | Should -Be 0
-        $global:LauncherTest_calls.Count | Should -Be 0
-        Should -Invoke Write-Host -ParameterFilter { "$Object" -match 'suitecontainer.config.json' }
+        $global:installerCalls | Should -Be 1
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--prepare-launch' }).Count | Should -Be 1
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--launch-mounts' }).Count | Should -Be 1
+        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
+        $deploy | Should -Contain "type=bind,src=$global:LauncherTest_root/repos,dst=/workspace"
     }
-    It 'copies the auth template when missing' {
-        Remove-Item -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json')
+    It 'stops successfully when the application requests setup' {
         $global:LauncherTest_prepareExit = 10
         Invoke-TestLauncher
-        Get-Content -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json') -Raw | Should -Be (Get-Content -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.example.json') -Raw)
-    }
-    It 'preserves existing auth and mounts it read only' {
-        $authFile = Join-Path $global:LauncherTest_root 'credentials/auth.json'
-        $before = Get-Content -LiteralPath $authFile -Raw
-        Invoke-TestLauncher
-        Get-Content -LiteralPath $authFile -Raw | Should -Be $before
-        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
-        $deploy | Should -Contain "type=bind,src=$authFile,dst=/config/credentials/auth.json,ro=true"
-    }
-    It 'mounts an existing local checkout' {
-        $checkout = New-Item -ItemType Directory -Path (Join-Path $global:LauncherTest_root 'local app')
-        New-Item -ItemType Directory -Path (Join-Path $checkout.FullName '.git') | Out-Null
-        $global:LauncherTest_config.suiteapps[0].localPath = 'local app'
-        Save-TestConfig
-        Invoke-TestLauncher
-        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
-        $deploy | Should -Contain "type=bind,src=$($checkout.FullName),dst=/workspace/example"
-    }
-    It 'stops successfully for an empty SuiteApp list' {
-        $global:LauncherTest_config.suiteapps = @()
-        Save-TestConfig
-        Invoke-TestLauncher
-        $global:installerCalls | Should -Be 0
-        $global:LauncherTest_calls.Count | Should -Be 0
-    }
-    It 'rejects malformed JSON before installing anything' {
-        Set-Content -LiteralPath $global:LauncherTest_configPath -Value '{'
-        { Invoke-TestLauncher } | Should -Throw '*not valid JSON*'
-        $global:installerCalls | Should -Be 0
-    }
-    It 'rejects a missing SuiteApp list' {
-        $global:LauncherTest_config.Remove('suiteapps')
-        Save-TestConfig
-        { Invoke-TestLauncher } | Should -Throw '*suiteapps*list*'
-    }
-    It 'rejects malformed auth before installing anything' {
-        Set-Content -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json') -Value '{'
-        { Invoke-TestLauncher } | Should -Throw '*auth.json is not valid JSON*'
-        $global:installerCalls | Should -Be 0
-    }
-    It 'reports a missing auth template before installing anything' {
-        Remove-Item -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json'), (Join-Path $global:LauncherTest_root 'credentials/auth.example.json')
-        { Invoke-TestLauncher } | Should -Throw '*Missing credentials/auth.example.json*'
-        $global:installerCalls | Should -Be 0
-    }
-    It 'rejects duplicate repository directories' {
-        $global:LauncherTest_config.suiteapps += @{ url = 'https://gitlab.eng.netsuite.com/team/other.git'; directory = 'EXAMPLE' }
-        Save-TestConfig
-        { Invoke-TestLauncher } | Should -Throw '*invalid URL or directory*'
-    }
-    It 'rejects an invalid account' {
-        $global:LauncherTest_config.vms[0].account = 'invalid account'
-        Save-TestConfig
-        { Invoke-TestLauncher } | Should -Throw '*VM*invalid*'
-    }
-    It 'rejects partial certificate configuration' {
-        $global:LauncherTest_config.certificates.private = ''
-        Save-TestConfig
-        { Invoke-TestLauncher } | Should -Throw '*both public and private*'
-        $global:installerCalls | Should -Be 0
-    }
-    It 'stops immediately after generating certificates' {
-        $global:LauncherTest_config.certificates = @{ public = ''; private = ''; id = '' }
-        Save-TestConfig
-        $global:LauncherTest_prepareExit = 10
-        { Invoke-TestLauncher } | Should -Not -Throw
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--prepare-certificates' }).Count | Should -Be 1
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--certificate-paths' -or $_ -contains '--deploy' }).Count | Should -Be 0
-    }
-    It 'validates and deploys existing certificates with paths containing spaces' {
-        Invoke-TestLauncher
-        $build = @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' })[0]
-        $build[-1] | Should -Be (Join-Path $global:LauncherTest_root 'setup')
-        $build | Should -Contain (Join-Path $global:LauncherTest_root 'setup/Containerfile')
-        $deploy = @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' })[0]
-        $publicPath = Join-Path $global:LauncherTest_root 'credentials/public.pem'
-        $deploy | Should -Contain "type=bind,src=$publicPath,dst=/config/certs/public.pem,ro=true"
-        $deploy | Should -Contain '--rm'
-        $deploy | Should -Contain "type=bind,src=$($global:LauncherTest_configPath),dst=/config/suitecontainer.config.json"
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--launch-mounts' -or $_ -contains '--deploy' }).Count | Should -Be 0
     }
     It 'automatically accepts the license for a new image' {
         $global:LauncherTest_imageExit = 1
@@ -192,21 +110,15 @@ Describe 'Windows SuiteCloud launcher' {
     It 'reports a failed build' {
         $global:LauncherTest_buildExit = 1
         { Invoke-TestLauncher } | Should -Throw '*container build failed*'
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--prepare-certificates' }).Count | Should -Be 0
+        @($global:LauncherTest_calls | Where-Object { $_ -contains '--prepare-launch' }).Count | Should -Be 0
     }
-    It 'reports failed certificate preparation' {
+    It 'propagates application preparation failures' {
         $global:LauncherTest_prepareExit = 2
-        { Invoke-TestLauncher } | Should -Throw '*Certificate preparation failed*'
+        { Invoke-TestLauncher } | Should -Throw '*Installer preparation failed*'
     }
-    It 'reports an invalid certificate ID returned by the application' {
+    It 'propagates application mount failures' {
         $global:LauncherTest_pathsExit = 1
-        $global:LauncherTest_paths = @()
-        { Invoke-TestLauncher } | Should -Throw '*certificate configuration is invalid*'
-        @($global:LauncherTest_calls | Where-Object { $_ -contains '--deploy' }).Count | Should -Be 0
-    }
-    It 'reports a missing private certificate file' {
-        Remove-Item -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/private.pem')
-        { Invoke-TestLauncher } | Should -Throw '*certificate files were not found*'
+        { Invoke-TestLauncher } | Should -Throw '*Could not prepare container mounts*'
     }
     It 'reports a failed deployment' {
         $global:LauncherTest_deployExit = 1
@@ -223,11 +135,6 @@ Describe 'Windows SuiteCloud launcher' {
             $file = Join-Path $env:SUITECONTAINER_NEMS_DIR $name
             $deploy | Should -Contain "type=bind,src=$file,dst=/config/$name,ro=true"
         }
-    }
-    It 'rejects an invalid repository branch' {
-        $global:LauncherTest_config.suiteapps[0].branch = '../invalid'
-        Save-TestConfig
-        { Invoke-TestLauncher } | Should -Throw '*invalid branch*'
     }
     AfterAll {
         Remove-Variable installerCalls -Scope Global -ErrorAction SilentlyContinue

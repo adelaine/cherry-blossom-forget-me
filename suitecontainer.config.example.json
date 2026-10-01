@@ -1,16 +1,27 @@
 {
     "suiteapps": [
         {
-            "url": "",
-            "directory": "",
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/absi-nsn.git",
+            "directory": "absi-nsn",
+            "branch": "develop",
+            "localPath": ""
+        },
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bsp-nsn.git",
+            "directory": "bsp-nsn",
+            "localPath": ""
+        },
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bank-feeds-nsn.git",
+            "directory": "bank-feeds-nsn",
+            "branch": "develop",
             "localPath": ""
         }
-
     ],
     "vms": [
         {
-            "account": "",
-            "url": ""
+            "url": "",
+            "account": "000071"
         }
     ]
 }

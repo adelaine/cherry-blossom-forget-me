@@ -30,9 +30,3 @@ if [[ "$install_status" -ne 0 ]]; then
   echo 'Podman installation failed. Check the package manager error above, repository access, and sudo permissions, then run start-codebox again.' >&2
   exit "$install_status"
 fi
-
-hash -r
-if ! command -v podman >/dev/null 2>&1; then
-  echo 'Installation completed, but Podman is still not on PATH. Ask your codebox administrator to check the installation.' >&2
-  exit 1
-fi

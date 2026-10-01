@@ -29,6 +29,42 @@ import type { Config } from "../src/step-config.ts";
 import { authenticationError } from "../src/step-suitecloud-errors.ts";
 import { cloneRepos } from "../src/step-clone.ts";
 import { deployRepos } from "../src/step-deploy.ts";
+import { launchMounts, prepareConfiguration } from "../src/step-launch.ts";
+
+test("builds mounts for external paths on Windows and Unix without splitting spaces", () => {
+    const config: Config = {
+        suiteapps: [{ directory: "local", localPath: "../local app" }],
+        vms: [],
+        certificates: { public: "../certs/public.pem", private: "credentials/private.pem", id: "cert" },
+    };
+    assert.ok(launchMounts(config, "/home/user/project", "linux").includes(
+        "type=bind,src=/home/user/local app,dst=/workspace/local",
+    ));
+    assert.ok(launchMounts(config, "C:\\work\\project", "win32").includes(
+        "type=bind,src=C:\\work\\certs\\public.pem,dst=/config/certs/public.pem,ro=true",
+    ));
+    config.suiteapps[0].localPath = "D:\\external app";
+    assert.ok(launchMounts(config, "C:\\work\\project", "win32").includes(
+        "type=bind,src=D:\\external app,dst=/workspace/local",
+    ));
+});
+
+test("the app creates first-run configuration and preserves existing files", () => {
+    withCertificateFixture((directory) => {
+        mkdirSync(join(directory, "credentials"));
+        const template = '{"suiteapps":[],"vms":[]}\n';
+        const auth = '{"gitlab-token":"existing-token"}\n';
+        writeFileSync(join(directory, "suitecontainer.config.example.json"), template);
+        writeFileSync(join(directory, "credentials/auth.example.json"), auth);
+        assert.equal(prepareConfiguration(directory), true);
+        assert.equal(readFileSync(join(directory, "suitecontainer.config.json"), "utf8"), template);
+        assert.equal(readFileSync(join(directory, "credentials/auth.json"), "utf8"), auth);
+        writeFileSync(join(directory, "suitecontainer.config.json"), "existing config");
+        assert.equal(prepareConfiguration(directory), false);
+        assert.equal(readFileSync(join(directory, "suitecontainer.config.json"), "utf8"), "existing config");
+        assert.equal(readFileSync(join(directory, "credentials/auth.json"), "utf8"), auth);
+    });
+});
 
 test("explains fatal TLS alerts without blaming the authentication certificate", () => {
     const message = authenticationError(
@@ -365,13 +401,13 @@ test("validates SuiteApps and prevents duplicate directories", () => {
     );
 });
 
-test("accepts a local checkout without a URL and skips Git", () => {
+test("accepts local checkout configuration and rejects a missing checkout", () => {
     const local = {
         directory: "local-project",
         localPath: "/already-checked-out",
     };
     assert.doesNotThrow(() => validateConfig({ suiteapps: [local], vms }));
-    assert.doesNotThrow(() => cloneRepos([local]));
+    assert.throws(() => cloneRepos([local]), /localPath is not a Git checkout/);
     assert.throws(
         () =>
             validateConfig({ suiteapps: [{ ...local, branch: "main" }], vms }),

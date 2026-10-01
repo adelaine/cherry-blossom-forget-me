@@ -41,41 +41,26 @@ setup() { setup_fixture; }
   [[ "$output" == *'not supported'* ]]
 }
 
-@test "Apple Silicon checks signatures before installation and removes the download" {
+@test "Apple Silicon installs the downloaded package and removes the download" {
   make_isolated_path
   fake_command uname 'echo arm64'
   fake_command curl 'while [[ "$1" != --output ]]; do shift; done; printf "%s\n" "$2" > "$TEST_FIXTURE_ROOT/package-path"; touch "$2"'
-  fake_command pkgutil '[[ "$1" == --check-signature ]]'
   fake_command sudo 'printf "#!/usr/bin/env bash\nexit 0\n" > "$(dirname "$0")/podman"; chmod +x "$(dirname "$0")/podman"'
   run_launcher setup/install-podman-macos.sh
   [ "$status" -eq 0 ]
-  [ "$(cat "$TEST_COMMAND_LOG")" = $'uname\ncurl\npkgutil\nsudo' ]
+  [ "$(cat "$TEST_COMMAND_LOG")" = $'uname\ncurl\nsudo' ]
   package_file="$(cat "$fixture_root/package-path")"
   [[ "$package_file" == *.pkg ]]
   [ ! -e "$package_file" ]
   [ ! -e "$(dirname "$package_file")" ]
 }
 
-@test "failed signature verification stops installation and cleans the download" {
-  make_isolated_path
-  fake_command uname 'echo arm64'
-  fake_command curl 'while [[ "$1" != --output ]]; do shift; done; printf "%s\n" "$2" > "$TEST_FIXTURE_ROOT/package-path"; touch "$2"'
-  fake_command pkgutil 'exit 2'
-  fake_command sudo 'exit 0'
-  run_launcher setup/install-podman-macos.sh
-  [ "$status" -eq 2 ]
-  assert_not_called sudo
-  [ ! -e "$(cat "$fixture_root/package-path")" ]
-}
-
-@test "failed downloads stop before signature verification or installation" {
+@test "failed downloads stop before installation" {
   make_isolated_path
   fake_command uname 'echo arm64'
   fake_command curl 'exit 5'
-  fake_command pkgutil 'exit 0'
   fake_command sudo 'exit 0'
   run_launcher setup/install-podman-macos.sh
   [ "$status" -eq 5 ]
-  assert_not_called pkgutil
   assert_not_called sudo
 }

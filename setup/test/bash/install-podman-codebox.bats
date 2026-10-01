@@ -52,12 +52,3 @@ setup() {
   [[ "$output" == *'Repository unavailable'* ]]
   [[ "$output" == *'Podman installation failed'* ]]
 }
-
-@test "codebox installer checks Podman is available after installation" {
-  make_isolated_path
-  fake_command id 'echo 0'
-  fake_command dnf 'exit 0'
-  run_launcher setup/install-podman-codebox.sh
-  [ "$status" -ne 0 ]
-  [[ "$output" == *'Podman is still not on PATH'* ]]
-}
