@@ -6,10 +6,9 @@
         "build": "node copy-runtime.mjs && tsc -p tsconfig.build.json",
         "typecheck": "tsc -p tsconfig.json",
         "dev": "tsx watch src/install.ts --serve",
-        "dev:web": "tsx watch dev/web-preview.ts",
         "start": "node dist/install.js --serve",
         "format": "prettier --config ../setup/.prettierrc --write .",
-        "test": "node --experimental-strip-types --test test/install.spec.ts test/web.spec.ts test/web-routing.spec.ts test/web-preview.spec.ts test/build.spec.ts test/sql-password-crypto.spec.ts test/sql-unlock.spec.ts"
+        "test": "node --experimental-strip-types --test test/install.spec.ts test/web.spec.ts test/web-routing.spec.ts test/build.spec.ts test/sql-password-crypto.spec.ts test/sql-unlock.spec.ts"
     },
     "dependencies": {
         "@alpinejs/csp": "^3.17.4",
