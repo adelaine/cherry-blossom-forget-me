@@ -110,7 +110,7 @@ test("the browser offers separate masked manual and unlock fields and sends only
     const state = { config: '{"vms":[{"url":"runbox.vm.eng.netsuite.com"}]}', certificates: {}, run: { state: "idle", log: "" }, ready: false,
         sql: { state: "idle", output: "", defaults: { user: "TEST_USER", service: "test.service" }, passwordHint: "hint", hasDefaultPassword: true } };
     let sent: any;
-    const context = { document: { getElementById: element }, location: { hash: "", pathname: "/" }, URLSearchParams,
+    const context = { document: { getElementById: element, addEventListener() {} }, location: { hash: "", pathname: "/" }, URLSearchParams, AbortSignal,
         sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} }, setInterval() {}, setTimeout() {}, clearTimeout() {},
         fetch: async (path: string, options: any) => { if (path === "/api/sql") sent = JSON.parse(options.body); return { ok: true, json: async () => state }; } };
     runInNewContext(deploymentPage.script, context);

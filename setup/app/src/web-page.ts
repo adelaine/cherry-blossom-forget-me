@@ -1,9 +1,11 @@
 import { ansiToHtml, ansiStyles, applyAnsiColors } from "./ansi.ts";
+import { ACTIVITY_GRACE_MS, HEARTBEAT_INTERVAL_MS } from "./web-inactivity.ts";
 
 export const deploymentPage = {
     html: `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SuiteCloud deployment</title><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script></head>
 <body><main><h1>SuiteCloud deployment</h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p>
+<p id="connection-error" role="alert" hidden></p>
 <section><h2>Credentials</h2><p id="token-state"></p><button id="change-token" hidden>Change GitLab token</button><div id="token-entry"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token"></div>
 <details id="cert-details"><summary>Certificate paths</summary><p>Paths refer to files on the computer running the launcher. Changing external paths may require relaunching.</p><label for="public">Public certificate path</label><input id="public"><label for="private">Private key path</label><input id="private"></details>
 <p>Generating a new pair replaces the active certificates. Old certificates will not be preserved. Register the new public certificate on your runbox and enter its new certificate ID.</p>
@@ -32,14 +34,35 @@ const session = fragment.get('session') || sessionStorage.getItem('suitecloud-se
 sessionStorage.setItem('suitecloud-session', session);
 history.replaceState(null, '', location.pathname);
 let state, editing = false, stopped = false, checking, credentialEditing = false, changingToken = false, sqlSubmitting = false, sqlDefaultsApplied = false, sqlDefaultsHost, sqlAccountEdited = false, sqlDatabaseEdited = false, sqlRequestError = '';
+let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false;
+const connectionMessage = 'The app is no longer running or cannot be reached. Start the launcher again to reconnect.';
+function connectionLost() {
+  if (stopped) return;
+  connectionFailed = true;
+  $('connection-error').textContent = connectionMessage;
+  $('connection-error').hidden = false;
+  for (const control of document.querySelectorAll('button,input,textarea')) control.disabled = true;
+  if (!idleCloseScheduled && Date.now() - lastActivity >= ${ACTIVITY_GRACE_MS} && state?.run.state !== 'running' && state?.sql?.state !== 'running' && !state?.sql?.preparing && !sqlSubmitting) {
+    idleCloseScheduled = true;
+    setTimeout(() => {
+      if (!connectionFailed || Date.now() - lastActivity < ${ACTIVITY_GRACE_MS}) { idleCloseScheduled = false; return; }
+      try { window.close(); } catch { /* Browsers may refuse tab closure. */ }
+    }, 5000);
+  }
+}
 async function api(path, data) {
-  const response = await fetch('/api/' + path, { method: data === undefined ? 'GET' : 'POST', headers: {'X-Session-Token': session, ...(data === undefined ? {} : {'Content-Type':'application/json'})}, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
-  const result = await response.json();
+  let response, result;
+  try {
+    response = await fetch('/api/' + path, { signal:AbortSignal.timeout(10000), method: data === undefined ? 'GET' : 'POST', headers: {'X-Session-Token': session, ...(data === undefined ? {} : {'Content-Type':'application/json'})}, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
+    result = await response.json();
+  } catch { connectionLost(); throw new Error(connectionMessage); }
+  if (response.status >= 500 || (!response.ok && result.error?.startsWith('The app is stopping'))) { connectionLost(); throw new Error(connectionMessage); }
   if (!response.ok) throw new Error(result.error || 'The request could not be completed.');
+  if (path !== 'heartbeat') { connectionFailed = false; $('connection-error').hidden = true; }
   return result;
 }
 function render(next) {
-  if (stopped) return;
+  if (stopped || connectionFailed) return;
   state = next;
   if (!editing) $('config').value = next.config;
   const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
@@ -49,6 +72,7 @@ function render(next) {
   $('change-token').hidden = !next.tokenPresent || changingToken;
   $('generate').disabled = busy;
   $('download').hidden = !next.certificates.canDownload;
+  $('download').disabled = false;
   $('cert-message').textContent = next.certificates.error;
   $('validation').textContent = next.relaunch ? 'Relaunch required. Save your changes, stop this app, and start the launcher again.' : next.error || 'Ready to deploy.';
   $('deploy').disabled = !next.ready || credentialEditing || busy;
@@ -68,6 +92,7 @@ function sqlTargetHost() {
   } catch { return ''; }
 }
 function renderSql(next, busy) {
+  if (connectionFailed) return;
   if (next.sql) {
     const host = sqlTargetHost();
     if (!sqlDefaultsApplied || sqlDefaultsHost !== host) { sqlAccountEdited = false; sqlDatabaseEdited = false; }
@@ -93,7 +118,19 @@ function renderSql(next, busy) {
     $('sql-output').textContent = next.sql.output;
   }
 }
-async function refresh() { if (stopped) return; try { const next = editing ? await api('check', {config:$('config').value}) : await api('state'); render(next); } catch (error) { $('validation').textContent = error.message; $('deploy').disabled = true; } }
+async function refresh() { if (stopped) return; try { const next = editing ? await api('check', {config:$('config').value}) : await api('state'); render(next); } catch (error) { if (stopped) return; if (!connectionFailed) connectionLost(); $('validation').textContent = error.message; } }
+async function heartbeat() {
+  if (stopped || heartbeatPending || Date.now() - lastActivity >= ${ACTIVITY_GRACE_MS}) return;
+  heartbeatPending = true;
+  try { await api('heartbeat',{}); } catch { /* Connection errors are displayed by api(). */ }
+  finally { heartbeatPending = false; }
+}
+for (const event of ['click','input','keydown','scroll']) document.addEventListener(event, event => {
+  if (!event.isTrusted || stopped) return;
+  const expired = Date.now() - lastActivity >= ${ACTIVITY_GRACE_MS};
+  lastActivity = Date.now();
+  if (expired) void heartbeat();
+}, {capture:true,passive:true});
 function action(id, fn, messageId = 'validation') { $(id).addEventListener('click', async () => { $(id).disabled = true; try { await fn(); } catch(error) { $(messageId).textContent = error.message; } finally { if (!stopped) await refresh(); } }); }
 $('config').addEventListener('input', () => { editing = true; $('deploy').disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350); });
 $('vm').addEventListener('input', () => {
@@ -146,5 +183,6 @@ action('stop', async () => {
     if (!window.closed) $('run-state').textContent = 'App stopped. Your browser kept this page open. You can close this tab.';
   }, 5000);
 });
-refresh(); setInterval(refresh, 2000);`,
+refresh(); setInterval(refresh, 2000);
+heartbeat(); setInterval(heartbeat, ${HEARTBEAT_INTERVAL_MS});`,
 };

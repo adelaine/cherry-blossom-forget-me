@@ -13,6 +13,7 @@ import type { Auth } from "../src/step-auth.ts";
 import { ansiToHtml, ansiStyles, applyAnsiColors } from "../src/ansi.ts";
 import { deploymentPage } from "../src/web-page.ts";
 import { replaceCertificates } from "../src/step-certificates.ts";
+import { ACTIVITY_GRACE_MS, HeartbeatDeadline } from "../src/web-inactivity.ts";
 import { startSql, validateSqlRequest } from "../src/sql-runner.ts";
 import { SQL_DEFAULTS, SQL_PASSWORD_HINT } from "../src/sql-settings.ts";
 
@@ -95,6 +96,131 @@ const { tokenIn, run: importToken } = require("../../bootstrap-token.cjs");
 const record: MountRecord = { hostRoot: "/project", platform: "linux", local: {}, certificates: {} };
 const emptyAuth: Auth = { "gitlab-token": "", "suitecloud-certificates": { public: "", private: "", id: "" } };
 
+test("heartbeat deadline expires at fifteen minutes and gives busy jobs a fresh grace period", () => {
+    let now = 0;
+    const deadline = new HeartbeatDeadline(() => now);
+    now = ACTIVITY_GRACE_MS - 1;
+    assert.equal(deadline.expired(false), false);
+    now++;
+    assert.equal(deadline.expired(false), true);
+    deadline.heartbeat();
+    now += ACTIVITY_GRACE_MS;
+    assert.equal(deadline.expired(true), false);
+    now += ACTIVITY_GRACE_MS - 1;
+    assert.equal(deadline.expired(false), false);
+    now++;
+    assert.equal(deadline.expired(false), true);
+});
+
+test("only authenticated same-origin heartbeats keep the server alive; polling does not", async () => {
+    const root = mkdtempSync(join(tmpdir(), "suitecontainer-idle-"));
+    mkdirSync(join(root, "credentials"));
+    const config = JSON.stringify({ suiteapps: [], vms: [] });
+    writeFileSync(join(root, "suitecontainer.config.json"), config);
+    writeFileSync(join(root, "credentials/auth.json"), JSON.stringify(emptyAuth));
+    writeFileSync(join(root, "credentials/web-mounts.json"), JSON.stringify(record));
+    const sessionFile = join(root, "session");
+    let now = 0, stops = 0;
+    const server = startWebServer({ configDirectory: root, port: 0, host: "127.0.0.1", sessionFile,
+        inactivityNow: () => now, inactivityCheckMs: 10, signalHandlers: false, onStop() { stops++; } });
+    try {
+        await once(server, "listening");
+        const address = server.address();
+        assert.ok(address && typeof address !== "string");
+        const origin = `http://127.0.0.1:${address.port}`;
+        const headers = { Origin: origin, "Content-Type": "application/json", "X-Session-Token": readFileSync(sessionFile, "utf8").split("session=")[1] };
+        const post = (path: string, data = {}) => fetch(origin + "/api/" + path, { method: "POST", headers, body: JSON.stringify(data) });
+        now = ACTIVITY_GRACE_MS - 30_000;
+        assert.equal((await post("heartbeat")).status, 200);
+        const heartbeatAt = now;
+        now = ACTIVITY_GRACE_MS;
+        await new Promise(resolve => setTimeout(resolve, 25));
+        assert.equal(server.listening, true);
+        now = heartbeatAt + ACTIVITY_GRACE_MS - 1;
+        assert.equal((await fetch(origin + "/api/state", { headers })).status, 200);
+        assert.equal((await post("check", { config })).status, 200);
+        assert.equal((await fetch(origin + "/health")).status, 200);
+        assert.equal((await fetch(origin + "/api/heartbeat", { method: "POST", body: "{}" })).status, 403);
+        assert.equal((await fetch(origin + "/api/heartbeat", { method: "POST", headers: { ...headers, Origin: "https://other.example" }, body: "{}" })).status, 403);
+        const closed = once(server, "close");
+        now++;
+        await closed;
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(stops, 1);
+        assert.equal(server.listening, false);
+    } finally {
+        server.closeAllConnections();
+        await new Promise<void>(resolve => server.close(() => resolve()));
+        rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test("browser heartbeat follows real activity, stops after fifteen minutes, and reports server loss without losing edits", async () => {
+    const elements = new Map<string, any>();
+    const element = (id: string) => {
+        if (!elements.has(id)) elements.set(id, { value: "", replaceChildren() {}, querySelectorAll: () => [], addEventListener() {} });
+        return elements.get(id);
+    };
+    const events = new Map<string, (event: { isTrusted: boolean }) => void>();
+    const intervals: number[] = [], requests: string[] = [], timers: (() => void)[] = [];
+    let now = 0, offline = false, closes = 0;
+    const next = { config: '{"vms":[]}', certificates: {}, run: { state: "idle", log: "" }, ready: false };
+    const context = {
+        document: { getElementById: element, createElement: () => ({}), querySelectorAll: () => [...elements.values()], addEventListener(event: string, handler: (event: { isTrusted: boolean }) => void) { events.set(event, handler); } },
+        location: { hash: "", pathname: "/" }, URLSearchParams, AbortSignal, Date: { now: () => now },
+        sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
+        setInterval(_callback: Function, delay: number) { intervals.push(delay); }, setTimeout(callback: () => void) { timers.push(callback); }, clearTimeout() {},
+        window: { close() { closes++; } },
+        fetch: async (path: string) => { requests.push(path); if (offline) throw new Error("fetch failed"); return { ok: true, json: async () => next }; },
+    };
+    runInNewContext(deploymentPage.script, context);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.ok(intervals.includes(30_000));
+    const beats = () => requests.filter(path => path === "/api/heartbeat").length;
+    assert.equal(beats(), 1);
+    now = ACTIVITY_GRACE_MS - 30_000;
+    await runInNewContext("heartbeat()", context);
+    assert.equal(beats(), 2);
+    now = ACTIVITY_GRACE_MS;
+    await runInNewContext("refresh(); heartbeat()", context);
+    assert.equal(beats(), 2);
+    events.get("scroll")!({ isTrusted: false });
+    await runInNewContext("heartbeat()", context);
+    assert.equal(beats(), 2);
+    events.get("input")!({ isTrusted: true });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(beats(), 3);
+    now += ACTIVITY_GRACE_MS;
+    await runInNewContext("heartbeat()", context);
+    assert.equal(beats(), 3);
+    element("config").value = "unsaved edits";
+    runInNewContext("editing = true", context);
+    offline = true;
+    await runInNewContext("refresh()", context);
+    assert.equal(element("connection-error").hidden, false);
+    assert.match(element("connection-error").textContent, /Start the launcher again/);
+    assert.equal(element("config").value, "unsaved edits");
+    assert.equal(element("save").disabled, true);
+    assert.equal(element("sql-run").disabled, true);
+    runInNewContext("render(state)", context);
+    assert.equal(element("save").disabled, true);
+    assert.equal(closes, 0);
+    timers[0]!();
+    assert.equal(closes, 1);
+    offline = false;
+    await runInNewContext("refresh()", context);
+    assert.equal(element("connection-error").hidden, true);
+    assert.equal(element("config").value, "unsaved edits");
+    assert.equal(element("save").disabled, false);
+    assert.equal(element("download").disabled, false);
+    offline = true;
+    events.get("click")!({ isTrusted: true });
+    const scheduled = timers.length;
+    await runInNewContext("refresh()", context);
+    assert.equal(timers.length, scheduled);
+    assert.equal(element("connection-error").hidden, false);
+});
+
 test("failed regeneration preserves the active pair and credentials", () => {
     const root = mkdtempSync(join(tmpdir(), "suitecontainer-replacement-"));
     const authPath = join(root, "auth.json");
@@ -125,7 +251,7 @@ test("Current VM preserves accounts and other runboxes, synchronizes JSON edits,
     let saved: any;
     const next = { config: JSON.stringify(config), certificates: {}, run: { state: "idle", log: "" }, ready: false };
     const context = {
-        document: { getElementById: element, createElement: () => ({}) }, location: { hash: "", pathname: "/" }, URLSearchParams,
+        document: { getElementById: element, createElement: () => ({}), addEventListener() {} }, location: { hash: "", pathname: "/" }, URLSearchParams, AbortSignal,
         sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
         setInterval() {}, setTimeout() {}, clearTimeout() {},
         fetch: async (path: string, options: any) => {
@@ -167,8 +293,8 @@ test("Stop app closes after five seconds only on success and explains blocked cl
         let requests = 0;
         const state = { config: '{"vms":[]}', certificates: {}, run: { state: "idle", log: "" }, ready: false };
         const context = {
-            document: { getElementById: element, querySelectorAll: () => [element("stop"), element("deploy")] },
-            location: { hash: "", pathname: "/" }, URLSearchParams,
+            document: { getElementById: element, querySelectorAll: () => [element("stop"), element("deploy")], addEventListener() {} },
+            location: { hash: "", pathname: "/" }, URLSearchParams, AbortSignal,
             sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
             setInterval() {}, clearTimeout() {},
             setTimeout(callback: () => void, delay: number) { timers.push({ callback, delay }); },
@@ -218,7 +344,9 @@ test("certificate generation is explicit, deployment uses snapshots, and a faile
     const sessionFile = join(root, "session");
     const workerScript = join(root, "worker.cjs");
     writeFileSync(workerScript, `const fs = require('node:fs'); setTimeout(() => { console.log(JSON.parse(fs.readFileSync(process.env.SUITECONTAINER_CONFIG, 'utf8')).vms[0].account); console.log(JSON.parse(fs.readFileSync(process.env.SUITECONTAINER_AUTH, 'utf8'))['gitlab-token']); console.log(process.env.SUITECONTAINER_DEPLOY_PASSKEY); process.exit(1); }, 2000);`);
-    const server = startWebServer({ configDirectory: root, port: 0, host: "127.0.0.1", sessionFile, workerScript, onStop: () => {}, signalHandlers: false });
+    let now = 0;
+    const server = startWebServer({ configDirectory: root, port: 0, host: "127.0.0.1", sessionFile, workerScript, onStop: () => {}, signalHandlers: false,
+        inactivityNow: () => now, inactivityCheckMs: 10 });
     try {
         await once(server, "listening");
         const address = server.address();
@@ -249,6 +377,11 @@ test("certificate generation is explicit, deployment uses snapshots, and a faile
         assert.equal((await post("credentials", { id: "replacement-id" })).status, 200);
         assert.equal((await state()).ready, true);
         assert.equal((await post("deploy", { config: JSON.stringify(config) })).status, 202);
+        now += ACTIVITY_GRACE_MS + 1;
+        await new Promise(resolve => setTimeout(resolve, 25));
+        assert.equal(server.listening, true);
+        assert.equal((await state()).run.state, "running");
+        assert.equal((await post("heartbeat")).status, 200);
         for (const path of ["deploy", "credentials", "settings", "generate", "stop"]) assert.equal((await post(path, { config: JSON.stringify(config) })).status, 409);
         writeFileSync(configFile, JSON.stringify({ ...config, vms: [{ account: "000072", url: config.vms[0].url }] }));
         const finished = async () => {
@@ -265,6 +398,9 @@ test("certificate generation is explicit, deployment uses snapshots, and a faile
         assert.ok(!failed.run.log.includes("worker-secret"));
         assert.match(failed.run.log, /\[redacted\]/);
         assert.equal((await state()).run.state, "failed");
+        now += ACTIVITY_GRACE_MS - 1;
+        await new Promise(resolve => setTimeout(resolve, 25));
+        assert.equal(server.listening, true);
         writeFileSync(workerScript, "console.log('All SuiteApps were deployed.');");
         assert.equal((await post("deploy", { config: JSON.stringify(config) })).status, 202);
         assert.equal((await finished()).run.state, "succeeded");
@@ -443,8 +579,10 @@ test("SQL endpoint requires authorization, preserves settings, blocks concurrent
     writeFileSync(authFile, JSON.stringify(emptyAuth));
     writeFileSync(join(root, "credentials/web-mounts.json"), JSON.stringify(record));
     const sessionFile = join(root, "session");
+    let now = 0;
     const server = startWebServer({ configDirectory: root, port: 0, host: "127.0.0.1", sessionFile,
-        sqlCommand: process.execPath, sqlArgs: [sqlStub(root), "delay"], onStop() {}, signalHandlers: false });
+        sqlCommand: process.execPath, sqlArgs: [sqlStub(root), "delay"], onStop() {}, signalHandlers: false,
+        inactivityNow: () => now, inactivityCheckMs: 10 });
     try {
         await once(server, "listening");
         const address = server.address();
@@ -461,6 +599,10 @@ test("SQL endpoint requires authorization, preserves settings, blocks concurrent
         assert.equal(first.status, 202);
         const running = await first.json();
         assert.equal(running.sql.state, "running");
+        now += ACTIVITY_GRACE_MS + 1;
+        await new Promise(resolve => setTimeout(resolve, 25));
+        assert.equal(server.listening, true);
+        assert.equal((await post("heartbeat", {})).status, 200);
         assert.equal(running.sql.host, sqlConfig.vms[0].url);
         assert.deepEqual(running.sql.defaults, SQL_DEFAULTS);
         assert.equal(running.sql.passwordHint, SQL_PASSWORD_HINT);
@@ -499,7 +641,7 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
         sql: { state: "idle", output: "", defaults: { user: "TEST_ACCOUNT", service: "test.service" }, passwordHint: '<a riddle & hint>' } };
     let response: any = idle, sent: any, reject = false;
     const context = {
-        document: { getElementById: element, createElement: () => ({}) }, location: { hash: "", pathname: "/" }, URLSearchParams,
+        document: { getElementById: element, createElement: () => ({}), addEventListener() {} }, location: { hash: "", pathname: "/" }, URLSearchParams, AbortSignal,
         sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} },
         setInterval() {}, setTimeout() {}, clearTimeout() {},
         fetch: async (path: string, options: any) => {

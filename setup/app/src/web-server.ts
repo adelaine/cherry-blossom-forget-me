@@ -13,6 +13,7 @@ import { deploymentPage } from "./web-page.ts";
 import { startSql, validateSqlRequest } from "./sql-runner.ts";
 import { SQL_DEFAULTS, SQL_PASSWORD_HINT, SQL_PASSWORD_SALT } from "./sql-settings.ts";
 import { decryptSqlPassword } from "./sql-password-crypto.ts";
+import { HeartbeatDeadline } from "./web-inactivity.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
@@ -38,6 +39,7 @@ export function startWebServer(options: {
     configDirectory?: string; port?: number; host?: string; workerScript?: string;
     sessionFile?: string; onStop?: () => void; signalHandlers?: boolean;
     sqlCommand?: string; sqlArgs?: string[]; sqlTimeoutMs?: number;
+    inactivityNow?: () => number; inactivityCheckMs?: number;
 } = {}): Server {
     const configDirectory = options.configDirectory ?? "/config";
     const configPath = join(configDirectory, "suitecontainer.config.json");
@@ -71,6 +73,7 @@ export function startWebServer(options: {
     let snapshot: string | undefined;
     let stopping = false;
     let generatedCertificates = false;
+    const heartbeatDeadline = new HeartbeatDeadline(options.inactivityNow);
     const secrets = new Set([passkey, session]);
     const busy = () => sqlPreparing || run.state === "running" || sqlRun.state === "running";
     const busyMessage = () => sqlPreparing ? "SQL credentials are being unlocked. Wait before making changes." : sqlRun.state === "running"
@@ -198,10 +201,14 @@ export function startWebServer(options: {
             }
             if (req.method !== "POST") { reply(res, 404, { error: "Page not found." }); return; }
             if (stopping) { reply(res, 409, { error: "The app is stopping. Relaunch to continue." }); return; }
-            if (busy() && url.pathname !== "/api/check") { reply(res, 409, { error: busyMessage() }); return; }
+            if (busy() && !["/api/check", "/api/heartbeat"].includes(url.pathname)) { reply(res, 409, { error: busyMessage() }); return; }
             const input = await body(req);
             // Recheck after the asynchronous body read to prevent simultaneous clicks starting two workers.
             if (stopping) { reply(res, 409, { error: "The app is stopping." }); return; }
+            if (url.pathname === "/api/heartbeat") {
+                heartbeatDeadline.heartbeat();
+                reply(res, 200, { alive: true }); return;
+            }
             if (url.pathname === "/api/check") {
                 if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
                 reply(res, 200, status(input.config)); return;
@@ -230,7 +237,7 @@ export function startWebServer(options: {
                         if (stopping) throw new Error("The app is stopping. Relaunch to continue.");
                         request.password = decrypted.toString("utf8");
                         validateSqlRequest(request, config);
-                    } finally { decrypted?.fill(0); sqlPreparing = false; }
+                    } finally { decrypted?.fill(0); sqlPreparing = false; heartbeatDeadline.heartbeat(); }
                 }
                 secrets.add(request.password);
                 const execution = startSql(request, { command: options.sqlCommand, args: options.sqlArgs, timeoutMs: options.sqlTimeoutMs });
@@ -239,6 +246,7 @@ export function startWebServer(options: {
                 void execution.result.then(result => {
                     sqlRun = { ...sqlRun, ...result };
                     sqlWorker = undefined;
+                    heartbeatDeadline.heartbeat();
                 });
                 reply(res, 202, status(input.config)); return;
             }
@@ -274,6 +282,7 @@ export function startWebServer(options: {
                     run.log = redact(run.log);
                     if (snapshot) rmSync(snapshot, { recursive: true, force: true });
                     snapshot = undefined; worker = undefined;
+                    heartbeatDeadline.heartbeat();
                 });
                 reply(res, 202, status()); return;
             }
@@ -311,14 +320,23 @@ export function startWebServer(options: {
                 reply(res, 200, status()); return;
             }
             if (url.pathname === "/api/stop") {
-                stopping = true;
                 reply(res, 200, { stopped: true });
-                server.close(options.onStop ?? (() => process.exit(0)));
+                stopApp();
                 return;
             }
             reply(res, 404, { error: "Page not found." });
         } catch (error) { reply(res, 400, { error: redact(message(error)) }); }
     });
+    const stopApp = () => {
+        if (stopping) return;
+        stopping = true;
+        server.close(options.onStop ?? (() => process.exit(0)));
+    };
+    const inactivityTimer = setInterval(() => {
+        if (!stopping && heartbeatDeadline.expired(busy())) stopApp();
+    }, options.inactivityCheckMs ?? 1000);
+    inactivityTimer.unref();
+    server.once("close", () => clearInterval(inactivityTimer));
     server.requestTimeout = 15_000;
     server.once("close", () => sqlWorker?.kill("SIGKILL"));
     server.on("error", error => { console.error(message(error)); process.exitCode = 1; });
