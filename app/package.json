@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "node copy-runtime.mjs && tsc -p tsconfig.json",
+        "build": "node copy-runtime.mjs && tsc -p tsconfig.build.json",
+        "typecheck": "tsc -p tsconfig.json",
         "dev": "tsx watch src/install.ts --serve",
         "start": "node dist/install.js --serve",
         "format": "prettier --config ../setup/.prettierrc --write .",
@@ -18,7 +19,7 @@
     },
     "devDependencies": {
         "@types/alpinejs": "^3.17.0",
-        "@types/node": "^24.19.0",
+        "@types/node": "^24.19.1",
         "prettier": "3.9.9",
         "tsx": "^4.23.0",
         "typescript": "^7.0.2"

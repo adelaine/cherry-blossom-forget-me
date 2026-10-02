@@ -4,7 +4,7 @@ FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24 AS build
 ENV NODE_OPTIONS="--use-system-ca"
 
 WORKDIR /app
-COPY app/package.json app/package-lock.json app/tsconfig.json ./
+COPY app/package.json app/package-lock.json app/tsconfig.build.json ./
 COPY app/src ./src
 COPY app/copy-runtime.mjs ./copy-runtime.mjs
 COPY app/run-npm.mjs /opt/suitecontainer/run-npm.mjs

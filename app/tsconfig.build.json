@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "NodeNext",
+        "strict": true,
+        "verbatimModuleSyntax": true,
+        "rewriteRelativeImportExtensions": true,
+        "skipLibCheck": true,
+        "types": ["node"],
+        "jsx": "react-jsx",
+        "jsxImportSource": "hono/jsx",
+        "noEmit": false,
+        "rootDir": "./src",
+        "outDir": "./dist"
+    },
+    "include": ["src/**/*.ts"]
+}

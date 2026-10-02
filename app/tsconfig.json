@@ -1,16 +1,8 @@
 {
+    "extends": "./tsconfig.build.json",
     "compilerOptions": {
-        "target": "ESNext",
-        "module": "NodeNext",
-        "strict": true,
-        "verbatimModuleSyntax": true,
-        "rewriteRelativeImportExtensions": true,
-        "skipLibCheck": true,
-        "types": ["node"],
-        "jsx": "react-jsx",
-        "jsxImportSource": "hono/jsx",
-        "rootDir": "./src",
-        "outDir": "./dist"
+        "noEmit": true,
+        "rootDir": "."
     },
-    "include": ["src/**/*.ts"]
+    "include": ["src/**/*.ts", "test/**/*.ts"]
 }

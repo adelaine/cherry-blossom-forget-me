@@ -13,7 +13,7 @@ test("copied runtime packages and compiled code run without the development depe
     });
     assert.equal(copy.error, undefined, copy.error?.message);
     assert.equal(copy.status, 0, copy.stdout + copy.stderr);
-    const build = spawnSync(process.execPath, [join(appDirectory, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], {
+    const build = spawnSync(process.execPath, [join(appDirectory, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.build.json"], {
         cwd: appDirectory, encoding: "utf8", timeout: 90_000,
     });
     assert.equal(build.error, undefined, build.error?.message);
