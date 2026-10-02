@@ -147,6 +147,7 @@ $('vm').addEventListener('input', () => {
     config.vms[0].url = $('vm').value.trim();
     $('config').value = JSON.stringify(config, null, 4);
     editing = true; $('deploy').disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350);
+    $('settings-message').textContent = 'Settings changed. Save settings, or click Deploy to save and deploy.';
     $('credential-message').textContent = 'VM address changed. Save credentials or settings to keep it.';
   } catch { $('credential-message').textContent = 'Fix the configuration JSON in Settings before changing Current VM.'; $('deploy').disabled = true; }
 });
@@ -174,7 +175,7 @@ $('sql-run').addEventListener('click', async () => {
 });
 $('change-token').addEventListener('click', () => { changingToken = true; $('token-entry').hidden = false; $('change-token').hidden = true; $('token').focus(); });
 action('save', async () => { render(await api('settings', {config:$('config').value})); editing = false; $('settings-message').textContent = 'Settings saved.'; }, 'settings-message');
-action('credentials', async () => { const data = Object.fromEntries(['public','private','id','token'].map(key => [key,$(key).value])); data.config = $('config').value; const next = await api('credentials',data); credentialEditing = false; editing = false; changingToken = false; $('token').value = ''; render(next); $('credential-message').textContent = 'Credentials and settings saved.'; }, 'credential-message');
+action('credentials', async () => { const data = Object.fromEntries(['public','private','id','token'].map(key => [key,$(key).value])); data.config = $('config').value; const next = await api('credentials',data); credentialEditing = false; editing = false; changingToken = false; $('token').value = ''; render(next); $('credential-message').textContent = 'Credentials and settings saved.'; $('settings-message').textContent = 'Settings saved.'; }, 'credential-message');
 action('generate', async () => { if ((state.certificates.hasExisting || credentialEditing) && !confirm('Generate new certificates? Old certificates saved by this app will not be preserved, and the saved certificate ID will be cleared. Files stored elsewhere are not changed. Register the new public certificate on your runbox before deploying.')) return; const next = await api('generate',{replace:true}); for (const key of ['public','private','id']) $(key).value = next.certificates[key] || ''; credentialEditing = !!$('token').value.trim(); render(next); $('cert-details').open = true; $('credential-message').textContent = 'New certificates saved. Download the public certificate, register it on your runbox, then enter the assigned certificate ID and click Save credentials.'; }, 'credential-message');
 action('deploy', async () => { render(await api('deploy',{config:$('config').value})); editing = false; });
 action('download', async () => { const response = await fetch('/api/certificate',{headers:{'X-Session-Token':session}}); if (!response.ok) throw new Error((await response.json()).error); const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href = url; a.download = 'public.pem'; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000); }, 'credential-message');
