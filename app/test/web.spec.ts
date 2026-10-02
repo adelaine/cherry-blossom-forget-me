@@ -94,13 +94,13 @@ test("ANSI converter is self-contained in the served browser script", () => {
 
 test("the page loads local Pico and registers Alpine before its deferred CSP runtime", () => {
     assert.match(deploymentPage.html, /<link rel="stylesheet" href="\/pico.css">/);
-    assert.match(deploymentPage.html, /<main x-data="deployment" x-cloak>/);
+    assert.match(deploymentPage.html, /<main class="container" x-data="deployment" x-cloak>/);
     assert.ok(deploymentPage.html.indexOf('src="/page.js"') < deploymentPage.html.indexOf('src="/alpine.js"'));
     assert.match(deploymentPage.html, /<script src="\/alpine.js" defer><\/script>/);
     assert.match(deploymentPage.html, /@click="clickdeploy"/);
     assert.match(deploymentPage.html, /:disabled="view.deploy.disabled"/);
     assert.match(deploymentPage.html, /x-text="view.validation.text"/);
-    assert.ok(!deploymentPage.html.includes('class="container"'));
+    assert.ok(deploymentPage.html.includes('class="grid"'));
     assert.ok(!deploymentPage.style.includes('button{'));
     assert.ok(!deploymentPage.style.includes('input,textarea{'));
     assert.ok(!/onclick=|oninput=|<script>/.test(deploymentPage.html));
@@ -719,6 +719,6 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
     assert.match(element("sql-message").textContent, /Connection input is invalid/);
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') > deploymentPage.html.indexOf('Configuration JSON'));
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') < deploymentPage.html.indexOf('<h2>Deployment</h2>'));
-    assert.match(deploymentPage.html, /<details id="sql-details"[^>]*><summary><h2>SQL<\/h2><\/summary>/);
+    assert.match(deploymentPage.html, /<h2>SQL<\/h2><details id="sql-details"[^>]*><summary>Connection and SQL statement<\/summary>/);
     assert.ok(!deploymentPage.html.includes('id="sql-target"'));
 });

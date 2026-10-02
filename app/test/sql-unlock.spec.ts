@@ -140,7 +140,7 @@ test("the browser offers separate masked manual and unlock fields and sends only
     assert.equal(element("sql-unlock").disabled, true);
     assert.equal(element("sql-run").disabled, false);
     assert.match(deploymentPage.html, /id="sql-unlock" type="password"/);
-    assert.match(deploymentPage.html, /<div class="sql-connection-row"><div><label for="sql-password">[\s\S]*?<div><label for="sql-unlock">[\s\S]*?<\/div><\/div>/);
+    assert.match(deploymentPage.html, /<div class="grid"><div><label for="sql-password">[\s\S]*?<div><label for="sql-unlock">[\s\S]*?<\/div><\/div>/);
     element("sql-account").value = "MANUAL_USER";
     element("sql-account").input();
     state.sql.defaults = { user: "UPDATED_USER", service: "updated.service" };
