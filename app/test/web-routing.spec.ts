@@ -55,7 +55,7 @@ test("public browser assets are local, use classless Pico and retain restrictive
         const require = createRequire(import.meta.url);
         const assets = [
             ["/alpine.js", "text/javascript", readFileSync(require.resolve("@alpinejs/csp/dist/cdn.min.js"), "utf8")],
-            ["/pico.css", "text/css", readFileSync(require.resolve("@picocss/pico/css/pico.classless.min.css"), "utf8")],
+            ["/pico.css", "text/css", readFileSync(require.resolve("@picocss/pico/css/pico.classless.zinc.min.css"), "utf8")],
         ];
         for (const [path, type, content] of assets) {
             const response = await fetch(app.origin + path);

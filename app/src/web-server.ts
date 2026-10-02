@@ -167,7 +167,7 @@ export function startWebServer(options: {
     // Source-mode development uses installed packages; built runtime uses emitted assets.
     const sourceMode = import.meta.url.endsWith(".ts");
     const alpine = readFileSync(sourceMode ? require.resolve("@alpinejs/csp/dist/cdn.min.js") : new URL("./assets/alpine.js", import.meta.url), "utf8");
-    const pico = readFileSync(sourceMode ? require.resolve("@picocss/pico/css/pico.classless.min.css") : new URL("./assets/pico.css", import.meta.url), "utf8");
+    const pico = readFileSync(sourceMode ? require.resolve("@picocss/pico/css/pico.classless.zinc.min.css") : new URL("./assets/pico.css", import.meta.url), "utf8");
     app.use("*", async (c, next) => {
         c.header("X-Content-Type-Options", "nosniff");
         c.header("Referrer-Policy", "no-referrer");
