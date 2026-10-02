@@ -1,14 +1,16 @@
 {
     "compilerOptions": {
-        "target": "ES2022",
+        "target": "ESNext",
         "module": "NodeNext",
-        "moduleResolution": "NodeNext",
         "strict": true,
-        "rootDir": "src",
-        "outDir": "dist",
-        "types": ["node"],
+        "verbatimModuleSyntax": true,
+        "rewriteRelativeImportExtensions": true,
         "skipLibCheck": true,
-        "rewriteRelativeImportExtensions": true
+        "types": ["node"],
+        "jsx": "react-jsx",
+        "jsxImportSource": "hono/jsx",
+        "rootDir": "./src",
+        "outDir": "./dist"
     },
     "include": ["src/**/*.ts"]
 }

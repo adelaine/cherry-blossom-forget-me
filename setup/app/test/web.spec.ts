@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mountChanges, startWebServer } from "../src/web-server.ts";
 import { runInNewContext } from "node:vm";
+import { initializeBrowser } from "./browser-harness.ts";
 import { credentialPath, type MountRecord } from "../src/web-mounts.ts";
 import type { Auth } from "../src/step-auth.ts";
 import { ansiToHtml, ansiStyles, applyAnsiColors } from "../src/ansi.ts";
@@ -78,17 +79,31 @@ test("ANSI RGB rendering assigns only validated CSS properties", () => {
     applyAnsiColors(root);
     assert.deepEqual(spans[0]!.style, { color: '#0c2238', backgroundColor: '#ff0080' });
     assert.deepEqual(spans[1]!.style, {});
-    const browserApply = new Function(`${deploymentPage.script.split('const $ =')[0]} return applyAnsiColors;`)();
+    const browserApply = new Function(`${deploymentPage.script.split("document.addEventListener('alpine:init'")[0]} return applyAnsiColors;`)();
     browserApply(root);
     assert.ok(deploymentPage.script.includes('applyAnsiColors(log)'));
 });
 
 test("ANSI converter is self-contained in the served browser script", () => {
-    const browserConverter = new Function(`${deploymentPage.script.split('const $ =')[0]} return ansiToHtml;`)();
+    const browserConverter = new Function(`${deploymentPage.script.split("document.addEventListener('alpine:init'")[0]} return ansiToHtml;`)();
     assert.equal(browserConverter('\x1b[31m<red>'), ansiToHtml('\x1b[31m<red>'));
     assert.ok(deploymentPage.script.includes('log.innerHTML = ansiToHtml(next.run.log)'));
     assert.ok(deploymentPage.style.includes(ansiStyles));
     new Function(deploymentPage.script);
+});
+
+test("the page loads local Pico and registers Alpine before its deferred CSP runtime", () => {
+    assert.match(deploymentPage.html, /<link rel="stylesheet" href="\/pico.css">/);
+    assert.match(deploymentPage.html, /<main x-data="deployment" x-cloak>/);
+    assert.ok(deploymentPage.html.indexOf('src="/page.js"') < deploymentPage.html.indexOf('src="/alpine.js"'));
+    assert.match(deploymentPage.html, /<script src="\/alpine.js" defer><\/script>/);
+    assert.match(deploymentPage.html, /@click="clickdeploy"/);
+    assert.match(deploymentPage.html, /:disabled="view.deploy.disabled"/);
+    assert.match(deploymentPage.html, /x-text="view.validation.text"/);
+    assert.ok(!deploymentPage.html.includes('class="container"'));
+    assert.ok(!deploymentPage.style.includes('button{'));
+    assert.ok(!deploymentPage.style.includes('input,textarea{'));
+    assert.ok(!/onclick=|oninput=|<script>/.test(deploymentPage.html));
 });
 
 const require = createRequire(import.meta.url);
@@ -173,7 +188,7 @@ test("browser heartbeat follows real activity, stops after fifteen minutes, and 
         window: { close() { closes++; } },
         fetch: async (path: string) => { requests.push(path); if (offline) throw new Error("fetch failed"); return { ok: true, json: async () => next }; },
     };
-    runInNewContext(deploymentPage.script, context);
+    initializeBrowser(context);
     await new Promise(resolve => setImmediate(resolve));
     assert.ok(intervals.includes(30_000));
     const beats = () => requests.filter(path => path === "/api/heartbeat").length;
@@ -259,7 +274,7 @@ test("Current VM preserves accounts and other runboxes, synchronizes JSON edits,
             return { ok: true, json: async () => next };
         },
     };
-    runInNewContext(deploymentPage.script, context);
+    initializeBrowser(context);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(element("vm").value, config.vms[0].url);
     element("vm").value = "new.vm.eng.netsuite.com";
@@ -307,7 +322,7 @@ test("Stop app closes after five seconds only on success and explains blocked cl
             window: { closed: false, close() { closes++; } },
             fetch: async (path: string) => { requests++; return { ok: path !== "/api/stop" || success, json: async () => path === "/api/stop" ? { error: "Deployment is running." } : state }; },
         };
-        runInNewContext(deploymentPage.script, context);
+        initializeBrowser(context);
         await new Promise(resolve => setImmediate(resolve));
         await element("stop").click();
         assert.equal(closes, 0);
@@ -661,7 +676,7 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
             return { ok: true, json: async () => response };
         },
     };
-    runInNewContext(deploymentPage.script, context);
+    initializeBrowser(context);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(element("sql-account").value, "TEST_ACCOUNT");
     assert.equal(element("sql-password").value, "");
@@ -704,6 +719,6 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
     assert.match(element("sql-message").textContent, /Connection input is invalid/);
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') > deploymentPage.html.indexOf('Configuration JSON'));
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') < deploymentPage.html.indexOf('<h2>Deployment</h2>'));
-    assert.match(deploymentPage.html, /<details id="sql-details"><summary><h2>SQL<\/h2><\/summary>/);
+    assert.match(deploymentPage.html, /<details id="sql-details"[^>]*><summary><h2>SQL<\/h2><\/summary>/);
     assert.ok(!deploymentPage.html.includes('id="sql-target"'));
 });

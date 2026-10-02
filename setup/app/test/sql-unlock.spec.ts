@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runInNewContext } from "node:vm";
+import { initializeBrowser } from "./browser-harness.ts";
 import { startWebServer } from "../src/web-server.ts";
 import { encryptSqlPassword } from "../src/sql-password-crypto.ts";
 import { SQL_PASSWORD_SALT } from "../src/sql-settings.ts";
@@ -113,7 +114,7 @@ test("the browser offers separate masked manual and unlock fields and sends only
     const context = { document: { getElementById: element, addEventListener() {} }, location: { hash: "", pathname: "/" }, URLSearchParams, AbortSignal,
         sessionStorage: { getItem: () => "", setItem() {} }, history: { replaceState() {} }, setInterval() {}, setTimeout() {}, clearTimeout() {},
         fetch: async (path: string, options: any) => { if (path === "/api/sql") sent = JSON.parse(options.body); return { ok: true, json: async () => state }; } };
-    runInNewContext(deploymentPage.script, context);
+    initializeBrowser(context);
     await new Promise(resolve => setImmediate(resolve));
     element("sql-statement").value = "SELECT 1 FROM dual;";
     element("sql-password").value = "manual-password";

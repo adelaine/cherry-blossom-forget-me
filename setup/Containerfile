@@ -6,6 +6,7 @@ ENV NODE_OPTIONS="--use-system-ca"
 WORKDIR /app
 COPY app/package.json app/package-lock.json app/tsconfig.json ./
 COPY app/src ./src
+COPY app/copy-runtime.mjs ./copy-runtime.mjs
 COPY app/run-npm.mjs /opt/suitecontainer/run-npm.mjs
 RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
     if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
@@ -45,7 +46,6 @@ RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=s
 COPY --from=build /app/dist/ /opt/suitecontainer/
 COPY gitlab-askpass.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
-    && printf '{"type":"module"}\n' > /opt/suitecontainer/package.json \
     && mkdir -p /workspace /config
 
 WORKDIR /workspace

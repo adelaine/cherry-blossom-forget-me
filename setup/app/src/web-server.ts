@@ -1,4 +1,8 @@
-import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
+import { type Server } from "node:http";
+import { createRequire } from "node:module";
+import { Hono, type Context } from "hono";
+import { createAdaptorServer } from "@hono/node-server";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, chmodSync, copyFileSync, constants } from "node:fs";
@@ -157,179 +161,205 @@ export function startWebServer(options: {
                 hasDefaultPassword: existsSync(sqlUserPath) || existsSync(sqlDefaultPath), preparing: sqlPreparing },
         };
     };
-    const reply = (res: ServerResponse, code: number, value: unknown) => {
-        res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-        res.end(JSON.stringify(value));
-    };
-    const authorized = (req: IncomingMessage) => {
-        const supplied = Buffer.from(String(req.headers["x-session-token"] ?? ""));
-        const expected = Buffer.from(session);
-        return supplied.length === expected.length && timingSafeEqual(supplied, expected);
-    };
-    const body = async (req: IncomingMessage) => {
-        const chunks: Buffer[] = [];
-        let length = 0;
-        for await (const chunk of req) {
-            const bytes = Buffer.from(chunk);
-            length += bytes.length;
-            if (length > 128 * 1024) throw new Error("Settings are too large (maximum 128 KiB).");
-            chunks.push(bytes);
-        }
-        const data = Buffer.concat(chunks).toString("utf8");
-        const value: unknown = JSON.parse(data || "{}");
-        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected settings as an object.");
-        return value as Record<string, unknown>;
-    };
-    const server = createServer(async (req, res) => {
-        res.setHeader("X-Content-Type-Options", "nosniff");
-        res.setHeader("Referrer-Policy", "no-referrer");
-        res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
-        const host = req.headers.host ?? "";
-        if (!/^(?:localhost|127\.0\.0\.1):\d+$/.test(host)) { reply(res, 403, { error: "Open the app through its localhost address." }); return; }
-        const url = new URL(req.url ?? "/", `http://${host}`);
-        if (req.method === "GET" && ["/", "/page.js", "/page.css"].includes(url.pathname)) {
-            const asset = url.pathname === "/" ? deploymentPage.html : url.pathname === "/page.js" ? deploymentPage.script : deploymentPage.style;
-            res.writeHead(200, { "Content-Type": url.pathname === "/" ? "text/html; charset=utf-8" : url.pathname === "/page.js" ? "text/javascript; charset=utf-8" : "text/css; charset=utf-8", "Cache-Control": "no-store" });
-            res.end(asset); return;
-        }
-        if (req.method === "GET" && url.pathname === "/health") { reply(res, 200, { ready: true }); return; }
-        if (!authorized(req) || (req.method !== "GET" && req.headers.origin !== `http://${host}`)) { reply(res, 403, { error: "Reopen the page using the launcher URL." }); return; }
-        try {
-            if (req.method === "GET" && url.pathname === "/api/state") { reply(res, 200, status()); return; }
-            if (req.method === "GET" && url.pathname === "/api/certificate") {
-                const cert = certificateState(readAuth(authPath));
-                if (cert.error || !cert.publicPath) throw new Error("A valid certificate pair is required before downloading.");
-                res.writeHead(200, { "Content-Type": "application/x-pem-file", "Content-Disposition": 'attachment; filename="public.pem"', "Cache-Control": "no-store" });
-                res.end(readFileSync(cert.publicPath)); return;
-            }
-            if (req.method !== "POST") { reply(res, 404, { error: "Page not found." }); return; }
-            if (stopping) { reply(res, 409, { error: "The app is stopping. Relaunch to continue." }); return; }
-            if (busy() && !["/api/check", "/api/heartbeat"].includes(url.pathname)) { reply(res, 409, { error: busyMessage() }); return; }
-            const input = await body(req);
-            // Recheck after the asynchronous body read to prevent simultaneous clicks starting two workers.
-            if (stopping) { reply(res, 409, { error: "The app is stopping." }); return; }
-            if (url.pathname === "/api/heartbeat") {
-                heartbeatDeadline.heartbeat();
-                reply(res, 200, { alive: true }); return;
-            }
-            if (url.pathname === "/api/check") {
-                if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
-                reply(res, 200, status(input.config)); return;
-            }
-            if (busy()) { reply(res, 409, { error: busyMessage() }); return; }
-            if (url.pathname === "/api/sql") {
-                if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
-                // SQL needs a configured target, not SuiteCloud certificates or a GitLab token.
-                // Use the visible configuration without saving it as a side effect of execution.
-                const config = JSON.parse(input.config);
-                if ((input.password !== undefined && typeof input.password !== "string") || (input.unlock !== undefined && typeof input.unlock !== "string")) throw new Error("Enter your SQL password or the answer to the password hint.");
-                const manual = typeof input.password === "string" && !!input.password;
-                const unlock = typeof input.unlock === "string" && !!input.unlock;
-                if (manual && unlock) throw new Error("Use only one option: your SQL password or the answer to the password hint.");
-                if (!manual && !unlock) throw new Error("Enter your SQL password, or answer the password hint to unlock the saved password.");
-                const request = validateSqlRequest({ ...input, host: config?.vms?.[0]?.url, password: manual ? input.password : "pending-unlock" }, config);
-                if (unlock) {
-                    sqlPreparing = true;
-                    let decrypted: Buffer | undefined;
-                    try {
-                        let encrypted: string;
-                        prepareSqlUser();
-                        try { encrypted = readFileSync(sqlUserPath, "utf8").trim(); }
-                        catch { throw new Error("Cannot read credentials/.sql-user. Enter the SQL password manually or restore the encrypted user file."); }
-                        decrypted = await decryptSqlPassword(encrypted, input.unlock as string, SQL_PASSWORD_SALT);
-                        if (stopping) throw new Error("The app is stopping. Relaunch to continue.");
-                        request.password = decrypted.toString("utf8");
-                        validateSqlRequest(request, config);
-                    } finally { decrypted?.fill(0); sqlPreparing = false; heartbeatDeadline.heartbeat(); }
-                }
-                secrets.add(request.password);
-                const execution = startSql(request, { command: options.sqlCommand, args: options.sqlArgs, timeoutMs: options.sqlTimeoutMs });
-                sqlWorker = execution.child;
-                sqlRun = { state: "running", output: "", host: request.host, database: request.database };
-                void execution.result.then(result => {
-                    sqlRun = { ...sqlRun, ...result };
-                    sqlWorker = undefined;
-                    heartbeatDeadline.heartbeat();
-                });
-                reply(res, 202, status(input.config)); return;
-            }
-            if (url.pathname === "/api/settings" || url.pathname === "/api/deploy") {
-                if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
-                const value = JSON.parse(input.config);
-                if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
-                // Write in place: replacing a bind-mounted file would leave the container reading its old inode.
-                writeFileSync(configPath, JSON.stringify(value, null, 4) + "\n");
-                if (url.pathname === "/api/settings") { reply(res, 200, status()); return; }
-                const ready = readiness(input.config);
-                if (!ready.ready || !ready.config || !ready.auth || !ready.cert) { reply(res, 400, { error: ready.error }); return; }
-                snapshot = mkdtempSync(join(tmpdir(), "suitecontainer-run-"));
-                const workerConfig = join(snapshot, "config.json");
-                const workerAuth = join(snapshot, "auth.json");
-                writeFileSync(workerConfig, JSON.stringify(ready.config), { mode: 0o600 });
-                writeFileSync(workerAuth, JSON.stringify(ready.auth), { mode: 0o600 });
-                if (ready.auth["gitlab-token"]) secrets.add(ready.auth["gitlab-token"]);
-                run = { state: "running", log: "Starting deployment...\n", started: new Date().toISOString() };
-                worker = spawn(process.execPath, [options.workerScript ?? fileURLToPath(new URL("./install.js", import.meta.url)), "--deploy"], {
-                    stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true,
-                    env: { ...process.env, SUITECONTAINER_CONFIG: workerConfig, SUITECONTAINER_AUTH: workerAuth,
-                        SUITECONTAINER_PUBLIC_KEY: ready.cert.publicPath!, SUITECONTAINER_PRIVATE_KEY: ready.cert.privatePath!,
-                        SUITECONTAINER_NONINTERACTIVE: "1", SUITECONTAINER_DEPLOY_PASSKEY: passkey },
-                });
-                const append = (chunk: Buffer) => { run.log = (run.log + chunk.toString()).slice(-512 * 1024); };
-                worker.stdout!.on("data", append);
-                worker.stderr!.on("data", append);
-                worker.on("error", error => append(Buffer.from(message(error) + "\n")));
-                worker.on("close", code => {
-                    run.state = code === 0 ? "succeeded" : "failed";
-                    run.finished = new Date().toISOString();
-                    run.log = redact(run.log);
-                    if (snapshot) rmSync(snapshot, { recursive: true, force: true });
-                    snapshot = undefined; worker = undefined;
-                    heartbeatDeadline.heartbeat();
-                });
-                reply(res, 202, status()); return;
-            }
-            if (url.pathname === "/api/credentials") {
-                let settings: string | undefined;
-                if (input.config !== undefined) {
-                    if (typeof input.config !== "string") throw new Error("Configuration must be JSON text.");
-                    const value = JSON.parse(input.config);
-                    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
-                    settings = input.config;
-                }
-                const auth = readAuth(authPath);
-                if (input.token !== undefined) {
-                    if (typeof input.token !== "string" || /[\r\n\0]/.test(input.token)) throw new Error("Enter a valid GitLab token.");
-                    if (input.token.trim()) auth["gitlab-token"] = input.token.trim();
-                }
-                const cert = auth["suitecloud-certificates"] ?? { public: "", private: "", id: "" };
-                for (const key of ["public", "private", "id"] as const) {
-                    if (input[key] !== undefined) {
-                        if (typeof input[key] !== "string" || /[\r\n\0,]/.test(input[key])) throw new Error("Certificate settings must be single-line text.");
-                        cert[key] = input[key].trim();
-                    }
-                }
-                auth["suitecloud-certificates"] = cert;
-                if (settings !== undefined) writeFileSync(configPath, settings);
-                writeFileSync(authPath, JSON.stringify(auth, null, 4) + "\n", { mode: 0o600 });
-                chmodSync(authPath, 0o600);
-                reply(res, 200, status()); return;
-            }
-            if (url.pathname === "/api/generate") {
-                const auth = readAuth(authPath);
-                if (certificateState(auth).hasExisting && input.replace !== true) throw new Error("Confirm replacement: old certificates generated by this app will not be preserved, and the saved certificate ID will be cleared.");
-                replaceCertificates(credentials, authPath);
-                generatedCertificates = true;
-                reply(res, 200, status()); return;
-            }
-            if (url.pathname === "/api/stop") {
-                reply(res, 200, { stopped: true });
-                stopApp();
-                return;
-            }
-            reply(res, 404, { error: "Page not found." });
-        } catch (error) { reply(res, 400, { error: redact(message(error)) }); }
+    const app = new Hono<{ Variables: { input: Record<string, unknown> } }>();
+    const reply = (c: Context, code: ContentfulStatusCode, value: unknown) => c.json(value, code);
+    const require = createRequire(import.meta.url);
+    // Source-mode development uses installed packages; built runtime uses emitted assets.
+    const sourceMode = import.meta.url.endsWith(".ts");
+    const alpine = readFileSync(sourceMode ? require.resolve("@alpinejs/csp/dist/cdn.min.js") : new URL("./assets/alpine.js", import.meta.url), "utf8");
+    const pico = readFileSync(sourceMode ? require.resolve("@picocss/pico/css/pico.classless.min.css") : new URL("./assets/pico.css", import.meta.url), "utf8");
+    app.use("*", async (c, next) => {
+        c.header("X-Content-Type-Options", "nosniff");
+        c.header("Referrer-Policy", "no-referrer");
+        c.header("Cache-Control", "no-store");
+        // Classless Pico uses embedded SVG images for disclosure and form icons.
+        c.header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+        const host = c.req.header("host") ?? "";
+        if (!/^(?:localhost|127\.0\.0\.1):\d+$/.test(host)) return reply(c, 403, { error: "Open the app through its localhost address." });
+        await next();
     });
+    for (const [path, contentType, content] of [
+        ["/", "text/html", deploymentPage.html],
+        ["/page.js", "text/javascript", deploymentPage.script],
+        ["/page.css", "text/css", deploymentPage.style],
+        ["/alpine.js", "text/javascript", alpine],
+        ["/pico.css", "text/css", pico],
+    ]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
+    app.get("/health", c => reply(c, 200, { ready: true }));
+    app.use("*", async (c, next) => {
+        const supplied = Buffer.from(c.req.header("x-session-token") ?? "");
+        const expected = Buffer.from(session);
+        if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected) ||
+            (c.req.method !== "GET" && c.req.header("origin") !== 'http://' + c.req.header("host")))
+            return reply(c, 403, { error: "Reopen the page using the launcher URL." });
+        await next();
+    });
+    app.get("/api/state", c => reply(c, 200, status()));
+    app.get("/api/certificate", c => {
+        const cert = certificateState(readAuth(authPath));
+        if (cert.error || !cert.publicPath) throw new Error("A valid certificate pair is required before downloading.");
+        c.header("Content-Type", "application/x-pem-file");
+        c.header("Content-Disposition", 'attachment; filename="public.pem"');
+        return c.body(new Uint8Array(readFileSync(cert.publicPath)));
+    });
+    app.use("/api/*", async (c, next) => {
+        if (c.req.method !== "POST") return reply(c, 404, { error: "Page not found." });
+        if (stopping) return reply(c, 409, { error: "The app is stopping. Relaunch to continue." });
+        const background = ["/api/check", "/api/heartbeat"].includes(c.req.path);
+        if (busy() && !background) return reply(c, 409, { error: busyMessage() });
+        // Count every byte before side effects, including requests without Content-Length.
+        const chunks: Uint8Array[] = [];
+        let length = 0;
+        const reader = c.req.raw.body?.getReader();
+        if (reader) {
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    length += value.byteLength;
+                    if (length > 128 * 1024) {
+                        await reader.cancel();
+                        throw new Error("Settings are too large (maximum 128 KiB).");
+                    }
+                    chunks.push(value);
+                }
+            } finally { reader.releaseLock(); }
+        }
+        const input: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+        if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Expected settings as an object.");
+        // Recheck after the asynchronous read: another request may have started a worker.
+        if (stopping) return reply(c, 409, { error: "The app is stopping." });
+        if (busy() && !background) return reply(c, 409, { error: busyMessage() });
+        c.set("input", input as Record<string, unknown>);
+        await next();
+    });
+    app.post("/api/heartbeat", async c => {
+        const input = c.get("input");
+        heartbeatDeadline.heartbeat();
+        return reply(c, 200, { alive: true });
+    });
+    app.post("/api/check", async c => {
+        const input = c.get("input");
+        if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
+        return reply(c, 200, status(input.config));
+    });
+    app.post("/api/sql", async c => {
+        const input = c.get("input");
+        if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
+        // SQL needs a configured target, not SuiteCloud certificates or a GitLab token.
+        // Use the visible configuration without saving it as a side effect of execution.
+        const config = JSON.parse(input.config);
+        if ((input.password !== undefined && typeof input.password !== "string") || (input.unlock !== undefined && typeof input.unlock !== "string")) throw new Error("Enter your SQL password or the answer to the password hint.");
+        const manual = typeof input.password === "string" && !!input.password;
+        const unlock = typeof input.unlock === "string" && !!input.unlock;
+        if (manual && unlock) throw new Error("Use only one option: your SQL password or the answer to the password hint.");
+        if (!manual && !unlock) throw new Error("Enter your SQL password, or answer the password hint to unlock the saved password.");
+        const request = validateSqlRequest({ ...input, host: config?.vms?.[0]?.url, password: manual ? input.password : "pending-unlock" }, config);
+        if (unlock) {
+            sqlPreparing = true;
+            let decrypted: Buffer | undefined;
+            try {
+                let encrypted: string;
+                prepareSqlUser();
+                try { encrypted = readFileSync(sqlUserPath, "utf8").trim(); }
+                catch { throw new Error("Cannot read credentials/.sql-user. Enter the SQL password manually or restore the encrypted user file."); }
+                decrypted = await decryptSqlPassword(encrypted, input.unlock as string, SQL_PASSWORD_SALT);
+                if (stopping) throw new Error("The app is stopping. Relaunch to continue.");
+                request.password = decrypted.toString("utf8");
+                validateSqlRequest(request, config);
+            } finally { decrypted?.fill(0); sqlPreparing = false; heartbeatDeadline.heartbeat(); }
+        }
+        secrets.add(request.password);
+        const execution = startSql(request, { command: options.sqlCommand, args: options.sqlArgs, timeoutMs: options.sqlTimeoutMs });
+        sqlWorker = execution.child;
+        sqlRun = { state: "running", output: "", host: request.host, database: request.database };
+        void execution.result.then(result => {
+            sqlRun = { ...sqlRun, ...result };
+            sqlWorker = undefined;
+            heartbeatDeadline.heartbeat();
+        });
+        return reply(c, 202, status(input.config));
+    });
+    app.on("POST", ["/api/settings", "/api/deploy"], async c => {
+        const input = c.get("input");
+        if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
+        const value = JSON.parse(input.config);
+        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
+        // Write in place: replacing a bind-mounted file would leave the container reading its old inode.
+        writeFileSync(configPath, JSON.stringify(value, null, 4) + "\n");
+        if (c.req.path === "/api/settings") { return reply(c, 200, status()); }
+        const ready = readiness(input.config);
+        if (!ready.ready || !ready.config || !ready.auth || !ready.cert) { return reply(c, 400, { error: ready.error }); }
+        snapshot = mkdtempSync(join(tmpdir(), "suitecontainer-run-"));
+        const workerConfig = join(snapshot, "config.json");
+        const workerAuth = join(snapshot, "auth.json");
+        writeFileSync(workerConfig, JSON.stringify(ready.config), { mode: 0o600 });
+        writeFileSync(workerAuth, JSON.stringify(ready.auth), { mode: 0o600 });
+        if (ready.auth["gitlab-token"]) secrets.add(ready.auth["gitlab-token"]);
+        run = { state: "running", log: "Starting deployment...\n", started: new Date().toISOString() };
+        worker = spawn(process.execPath, [options.workerScript ?? fileURLToPath(new URL("./install.js", import.meta.url)), "--deploy"], {
+            stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true,
+            env: { ...process.env, SUITECONTAINER_CONFIG: workerConfig, SUITECONTAINER_AUTH: workerAuth,
+                SUITECONTAINER_PUBLIC_KEY: ready.cert.publicPath!, SUITECONTAINER_PRIVATE_KEY: ready.cert.privatePath!,
+                SUITECONTAINER_NONINTERACTIVE: "1", SUITECONTAINER_DEPLOY_PASSKEY: passkey },
+        });
+        const append = (chunk: Buffer) => { run.log = (run.log + chunk.toString()).slice(-512 * 1024); };
+        worker.stdout!.on("data", append);
+        worker.stderr!.on("data", append);
+        worker.on("error", error => append(Buffer.from(message(error) + "\n")));
+        worker.on("close", code => {
+            run.state = code === 0 ? "succeeded" : "failed";
+            run.finished = new Date().toISOString();
+            run.log = redact(run.log);
+            if (snapshot) rmSync(snapshot, { recursive: true, force: true });
+            snapshot = undefined; worker = undefined;
+            heartbeatDeadline.heartbeat();
+        });
+        return reply(c, 202, status());
+    });
+    app.post("/api/credentials", async c => {
+        const input = c.get("input");
+        let settings: string | undefined;
+        if (input.config !== undefined) {
+            if (typeof input.config !== "string") throw new Error("Configuration must be JSON text.");
+            const value = JSON.parse(input.config);
+            if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
+            settings = input.config;
+        }
+        const auth = readAuth(authPath);
+        if (input.token !== undefined) {
+            if (typeof input.token !== "string" || /[\r\n\0]/.test(input.token)) throw new Error("Enter a valid GitLab token.");
+            if (input.token.trim()) auth["gitlab-token"] = input.token.trim();
+        }
+        const cert = auth["suitecloud-certificates"] ?? { public: "", private: "", id: "" };
+        for (const key of ["public", "private", "id"] as const) {
+            if (input[key] !== undefined) {
+                if (typeof input[key] !== "string" || /[\r\n\0,]/.test(input[key])) throw new Error("Certificate settings must be single-line text.");
+                cert[key] = input[key].trim();
+            }
+        }
+        auth["suitecloud-certificates"] = cert;
+        if (settings !== undefined) writeFileSync(configPath, settings);
+        writeFileSync(authPath, JSON.stringify(auth, null, 4) + "\n", { mode: 0o600 });
+        chmodSync(authPath, 0o600);
+        return reply(c, 200, status());
+    });
+    app.post("/api/generate", c => {
+        const input = c.get("input");
+        const auth = readAuth(authPath);
+        if (certificateState(auth).hasExisting && input.replace !== true) throw new Error("Confirm replacement: old certificates generated by this app will not be preserved, and the saved certificate ID will be cleared.");
+        replaceCertificates(credentials, authPath);
+        generatedCertificates = true;
+        return reply(c, 200, status());
+    });
+    app.post("/api/stop", c => {
+        const response = reply(c, 200, { stopped: true });
+        stopApp();
+        return response;
+    });
+    app.notFound(c => reply(c, 404, { error: "Page not found." }));
+    app.onError((error, c) => reply(c, 400, { error: redact(message(error)) }));
+    const server = createAdaptorServer({ fetch: app.fetch }) as Server;
     const stopApp = () => {
         if (stopping) return;
         stopping = true;
