@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-setup_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+bootstrap_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+setup_dir="$(cd -- "$bootstrap_dir/.." && pwd)"
 project_dir="$(cd -- "$setup_dir/.." && pwd)"
 nems_dir="${SUITECONTAINER_NEMS_DIR:-$HOME/.codex}"
-source "$setup_dir/bootstrap-host.sh"
-source "$setup_dir/web-host.sh"
+source "$bootstrap_dir/bootstrap-host.sh"
+source "$bootstrap_dir/web-host.sh"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/opt/podman/bin:$PATH"
 
 if ! command -v podman >/dev/null 2>&1; then
   export PATH="/opt/podman/bin:$PATH"
 fi
 if ! command -v podman >/dev/null 2>&1; then
-  bash "$setup_dir/install-podman-macos.sh"
+  bash "$setup_dir/installers/install-podman-macos.sh"
 fi
 machines="$(podman machine list --format '{{.Name}}')"
 if [[ -z "$machines" ]]; then
@@ -33,7 +34,7 @@ if [[ -f "$npmrc_file" ]]; then
     build_secrets+=(--secret "id=npm-token,env=NSX_NPM_TOKEN,type=env")
   fi
 fi
-if ! podman build ${build_secrets[@]+"${build_secrets[@]}"} -f "$setup_dir/Containerfile" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$setup_dir"; then
+if ! podman build ${build_secrets[@]+"${build_secrets[@]}"} -f "$setup_dir/Containerfile" --ignorefile "$setup_dir/.containerignore" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"; then
   echo 'The container build failed.' >&2
   exit 1
 fi

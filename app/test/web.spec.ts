@@ -107,7 +107,7 @@ test("the page loads local Pico and registers Alpine before its deferred CSP run
 });
 
 const require = createRequire(import.meta.url);
-const { tokenIn, run: importToken } = require("../../bootstrap-token.cjs");
+const { tokenIn, run: importToken } = require("../../setup/bootstrap/bootstrap-token.cjs");
 const record: MountRecord = { hostRoot: "/project", platform: "linux", local: {}, certificates: {} };
 const emptyAuth: Auth = { "gitlab-token": "", "suitecloud-certificates": { public: "", private: "", id: "" } };
 

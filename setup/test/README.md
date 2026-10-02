@@ -40,7 +40,7 @@ Pester 5.7.1 and bats-core 1.12.0. This cache is ignored by Git.
 ## TypeScript
 
 ```sh
-cd setup/app
+cd app
 npm test
 ```
 

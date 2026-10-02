@@ -3,8 +3,8 @@ setup_fixture() {
   fixture_root="$BATS_TEST_TMPDIR/project with spaces"
   fixture_bin="$BATS_TEST_TMPDIR/bin"
   fixture_nems="$BATS_TEST_TMPDIR/nems"
-  mkdir -p "$fixture_root/setup" "$fixture_root/credentials" "$fixture_bin" "$fixture_nems"
-  for script in start-suitecloud.sh start-suitecloud-codebox.sh install-podman-macos.sh install-podman-codebox.sh gitlab-askpass.sh bootstrap-host.sh web-host.sh bootstrap-token.cjs bootstrap-token.py; do
+  mkdir -p "$fixture_root/setup/bootstrap" "$fixture_root/setup/installers" "$fixture_root/credentials" "$fixture_bin" "$fixture_nems"
+  for script in bootstrap/start-suitecloud.sh bootstrap/start-suitecloud-codebox.sh installers/install-podman-macos.sh installers/install-podman-codebox.sh gitlab-askpass.sh bootstrap/bootstrap-host.sh bootstrap/web-host.sh bootstrap/bootstrap-token.cjs bootstrap/bootstrap-token.py; do
     # Keep native installation directories out of fixtures so a future test run cannot invoke host Homebrew/Podman.
     sed -e 's/\r$//' -e 's|/opt/homebrew/bin:/usr/local/bin:/opt/podman/bin:||g' -e 's|/opt/podman/bin:||g' "$source_root/$script" > "$fixture_root/setup/$script"
   done

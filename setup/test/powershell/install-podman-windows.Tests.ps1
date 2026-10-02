@@ -1,5 +1,5 @@
 BeforeAll {
-    $installerSource = Join-Path $PSScriptRoot '../../install-podman-windows.ps1'
+    $installerSource = Join-Path $PSScriptRoot '../../installers/install-podman-windows.ps1'
     function podman { param([Parameter(ValueFromRemainingArguments = $true)][object[]] $Arguments) }
     function winget { param([Parameter(ValueFromRemainingArguments = $true)][object[]] $Arguments) }
 }

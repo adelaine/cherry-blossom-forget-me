@@ -1,5 +1,5 @@
 BeforeAll {
-    $launcherSource = Join-Path $PSScriptRoot '../../start-suitecloud.ps1'
+    $launcherSource = Join-Path $PSScriptRoot '../../bootstrap/start-suitecloud.ps1'
     function podman { param([Parameter(ValueFromRemainingArguments = $true)][object[]] $Arguments) }
     function Save-TestConfig {
         $settings = $global:LauncherTest_config.Clone()
@@ -14,14 +14,15 @@ BeforeAll {
 Describe 'Windows SuiteCloud launcher' {
     BeforeEach {
         $global:LauncherTest_root = Join-Path $TestDrive ([guid]::NewGuid().ToString() + ' workspace with spaces')
-        $setup = New-Item -ItemType Directory -Path (Join-Path $global:LauncherTest_root 'setup')
+        $setup = New-Item -ItemType Directory -Path (Join-Path $global:LauncherTest_root 'setup/bootstrap')
+        $installers = New-Item -ItemType Directory -Path (Join-Path $global:LauncherTest_root 'setup/installers')
         $global:LauncherTest_launcherPath = Join-Path $setup.FullName 'start-suitecloud.ps1'
         Copy-Item -LiteralPath $launcherSource -Destination $global:LauncherTest_launcherPath
         foreach ($helper in @('bootstrap-host.ps1','web-host.ps1')) {
             Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $launcherSource) $helper) -Destination $setup.FullName
         }
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot '../../../suitecontainer.config.example.json') -Destination $global:LauncherTest_root
-        Set-Content -LiteralPath (Join-Path $setup.FullName 'install-podman-windows.ps1') -Value '$global:installerCalls++'
+        Set-Content -LiteralPath (Join-Path $installers.FullName 'install-podman-windows.ps1') -Value '$global:installerCalls++'
         $global:installerCalls = 0
         $global:LauncherTest_oldNemsDir = $env:SUITECONTAINER_NEMS_DIR
         $env:SUITECONTAINER_NEMS_DIR = Join-Path $global:LauncherTest_root 'fixture credentials'
@@ -106,6 +107,9 @@ Describe 'Windows SuiteCloud launcher' {
         { Invoke-TestLauncher } | Should -Not -Throw
         $build = @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' })[0]
         $build | Should -Contain 'SUITECLOUD_CLI_ACCEPT_LICENSE=true'
+        $build[-1] | Should -Be $global:LauncherTest_root
+        $build[[array]::IndexOf($build, '-f') + 1] | Should -Be (Join-Path $global:LauncherTest_root 'setup/Containerfile')
+        $build[[array]::IndexOf($build, '--ignorefile') + 1] | Should -Be (Join-Path $global:LauncherTest_root 'setup/.containerignore')
         Should -Invoke Read-Host -Times 0 -Exactly
     }
     It 'builds with secrets inside the WSL machine without exposing the token' {
@@ -125,6 +129,10 @@ Describe 'Windows SuiteCloud launcher' {
             $ssh[-1] | Should -Match 'id=npmrc,src=/mnt/[a-z]/'
             $ssh[-1] | Should -Match 'id=npm-token,src=/mnt/[a-z]/'
             $ssh[-1] | Should -Not -Match 'test-token|\\'
+            $remoteRoot = '/mnt/' + $global:LauncherTest_root.Substring(0, 1).ToLowerInvariant() + '/' + $global:LauncherTest_root.Substring(3).Replace('\', '/')
+            $ssh[-1] | Should -Match ([regex]::Escape("'-f' '$remoteRoot/setup/Containerfile'"))
+            $ssh[-1] | Should -Match ([regex]::Escape("'--ignorefile' '$remoteRoot/setup/.containerignore'"))
+            $ssh[-1] | Should -Match ([regex]::Escape("'$remoteRoot'") + '$')
             @($global:LauncherTest_calls | Where-Object { $_[0] -eq 'build' }).Count | Should -Be 0
             @(Get-ChildItem -LiteralPath $global:LauncherTest_root -Filter 'suitecontainer-npm-token-*').Count | Should -Be 0
         } finally {

@@ -23,32 +23,32 @@ BeforeAll {
 Describe 'Windows batch wrappers' -Skip:([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     BeforeEach {
         $script:fixtureRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString() + ' path with spaces')
-        New-Item -ItemType Directory -Path (Join-Path $script:fixtureRoot 'setup') | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $script:fixtureRoot 'setup/bootstrap') | Out-Null
     }
     It 'routes the root wrapper to its setup wrapper and preserves success' {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot 'start-windows.cmd') -Destination $script:fixtureRoot
-        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/start-suitecloud.cmd') -Value "@echo off`r`necho routed-to-setup`r`nexit /b 0"
+        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/bootstrap/start-suitecloud.cmd') -Value "@echo off`r`necho routed-to-setup`r`nexit /b 0"
         $result = Invoke-BatchFixture (Join-Path $script:fixtureRoot 'start-windows.cmd')
         $result.ExitCode | Should -Be 0
         $result.Output | Should -Match 'routed-to-setup'
     }
     It 'preserves a failing child exit code through the root wrapper' {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot 'start-windows.cmd') -Destination $script:fixtureRoot
-        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/start-suitecloud.cmd') -Value "@echo off`r`nexit /b 7"
+        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/bootstrap/start-suitecloud.cmd') -Value "@echo off`r`nexit /b 7"
         $result = Invoke-BatchFixture (Join-Path $script:fixtureRoot 'start-windows.cmd')
         $result.ExitCode | Should -Be 7
     }
     It 'runs the setup PowerShell script from a directory containing spaces' {
-        Copy-Item -LiteralPath (Join-Path $repositoryRoot 'setup/start-suitecloud.cmd') -Destination (Join-Path $script:fixtureRoot 'setup')
-        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/start-suitecloud.ps1') -Value "Write-Output 'routed-to-powershell'; exit 0"
-        $result = Invoke-BatchFixture (Join-Path $script:fixtureRoot 'setup/start-suitecloud.cmd')
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot 'setup/bootstrap/start-suitecloud.cmd') -Destination (Join-Path $script:fixtureRoot 'setup/bootstrap')
+        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/bootstrap/start-suitecloud.ps1') -Value "Write-Output 'routed-to-powershell'; exit 0"
+        $result = Invoke-BatchFixture (Join-Path $script:fixtureRoot 'setup/bootstrap/start-suitecloud.cmd')
         $result.ExitCode | Should -Be 0
         $result.Output | Should -Match 'routed-to-powershell'
     }
     It 'preserves PowerShell failure after the pause prompt' {
-        Copy-Item -LiteralPath (Join-Path $repositoryRoot 'setup/start-suitecloud.cmd') -Destination (Join-Path $script:fixtureRoot 'setup')
-        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/start-suitecloud.ps1') -Value 'exit 9'
-        $result = Invoke-BatchFixture (Join-Path $script:fixtureRoot 'setup/start-suitecloud.cmd')
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot 'setup/bootstrap/start-suitecloud.cmd') -Destination (Join-Path $script:fixtureRoot 'setup/bootstrap')
+        Set-Content -LiteralPath (Join-Path $script:fixtureRoot 'setup/bootstrap/start-suitecloud.ps1') -Value 'exit 9'
+        $result = Invoke-BatchFixture (Join-Path $script:fixtureRoot 'setup/bootstrap/start-suitecloud.cmd')
         $result.ExitCode | Should -Be 9
     }
 }

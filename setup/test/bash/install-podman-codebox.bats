@@ -7,7 +7,7 @@ setup() {
 }
 
 @test "codebox installer reuses existing Podman without installing packages" {
-  run_launcher setup/install-podman-codebox.sh
+  run_launcher setup/installers/install-podman-codebox.sh
   [ "$status" -eq 0 ]
   [ ! -s "$TEST_COMMAND_LOG" ]
 }
@@ -17,7 +17,7 @@ setup() {
   fake_command id 'echo 1000'
   fake_command sudo '[[ "$*" == "dnf install -y podman" ]] || exit 2; "$@"'
   fake_command dnf 'cp "$TEST_FIXTURE_ROOT/podman-fixture" "$(dirname "$0")/podman"'
-  run_launcher setup/install-podman-codebox.sh
+  run_launcher setup/installers/install-podman-codebox.sh
   [ "$status" -eq 0 ]
   assert_called sudo
   assert_called dnf
@@ -27,7 +27,7 @@ setup() {
   make_isolated_path
   fake_command id 'echo 0'
   fake_command yum '[[ "$*" == "install -y podman" ]] || exit 2; cp "$TEST_FIXTURE_ROOT/podman-fixture" "$(dirname "$0")/podman"'
-  run_launcher setup/install-podman-codebox.sh
+  run_launcher setup/installers/install-podman-codebox.sh
   [ "$status" -eq 0 ]
   assert_called yum
   assert_not_called sudo
@@ -37,7 +37,7 @@ setup() {
   make_isolated_path
   fake_command id 'echo 1000'
   fake_command dnf 'exit 0'
-  run_launcher setup/install-podman-codebox.sh
+  run_launcher setup/installers/install-podman-codebox.sh
   [ "$status" -ne 0 ]
   [[ "$output" == *'requires sudo access'* ]]
   assert_not_called dnf
@@ -47,7 +47,7 @@ setup() {
   make_isolated_path
   fake_command id 'echo 0'
   fake_command dnf 'echo "Repository unavailable" >&2; exit 4'
-  run_launcher setup/install-podman-codebox.sh
+  run_launcher setup/installers/install-podman-codebox.sh
   [ "$status" -eq 4 ]
   [[ "$output" == *'Repository unavailable'* ]]
   [[ "$output" == *'Podman installation failed'* ]]

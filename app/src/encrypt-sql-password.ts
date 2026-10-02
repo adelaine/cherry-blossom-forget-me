@@ -30,7 +30,7 @@ async function hiddenPrompt(label: string): Promise<string> {
 }
 
 export async function generateEncryptedPassword(args = process.argv.slice(2)): Promise<void> {
-    if (args.some(arg => arg !== "--stdin")) throw new Error("Usage: node setup/app/src/encrypt-sql-password.ts [--stdin]");
+    if (args.some(arg => arg !== "--stdin")) throw new Error("Usage: node app/src/encrypt-sql-password.ts [--stdin]");
     let sqlPassword: string, unlockPassword: string;
     if (args.includes("--stdin")) {
         // For automation only: {sqlPassword, unlockPassword}. Never log input.

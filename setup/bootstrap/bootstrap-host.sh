@@ -14,11 +14,11 @@ token_sources=(
 )
 if [[ -z "${SUITECONTAINER_NEMS_DIR:-}" ]]; then token_sources+=("$HOME/.nems.env"); fi
 if [[ "$(uname -s)" == Darwin ]]; then
-  osascript -l JavaScript "$setup_dir/bootstrap-token.cjs" "$project_dir/credentials/auth.json" "${token_sources[@]}"
+  osascript -l JavaScript "$bootstrap_dir/bootstrap-token.cjs" "$project_dir/credentials/auth.json" "${token_sources[@]}"
 elif command -v node >/dev/null 2>&1; then
-  node "$setup_dir/bootstrap-token.cjs" "$project_dir/credentials/auth.json" "${token_sources[@]}"
+  node "$bootstrap_dir/bootstrap-token.cjs" "$project_dir/credentials/auth.json" "${token_sources[@]}"
 elif command -v python3 >/dev/null 2>&1; then
-  python3 "$setup_dir/bootstrap-token.py" "$project_dir/credentials/auth.json" "${token_sources[@]}"
+  python3 "$bootstrap_dir/bootstrap-token.py" "$project_dir/credentials/auth.json" "${token_sources[@]}"
 else
   echo 'Token discovery is unavailable on this host. Enter your GitLab token on the deployment page if needed.'
 fi

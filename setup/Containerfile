@@ -44,7 +44,7 @@ RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=s
     && suitecloud --version
 
 COPY --from=build /app/dist/ /opt/suitecontainer/
-COPY gitlab-askpass.sh /usr/local/bin/
+COPY setup/gitlab-askpass.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
     && mkdir -p /workspace /config
 

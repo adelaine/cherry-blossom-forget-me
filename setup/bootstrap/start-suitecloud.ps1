@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
-$projectDir = Split-Path -Parent $PSScriptRoot
+$setupDir = Split-Path -Parent $PSScriptRoot
+$projectDir = Split-Path -Parent $setupDir
 $nemsDir = if ($env:SUITECONTAINER_NEMS_DIR) { $env:SUITECONTAINER_NEMS_DIR } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
 & (Join-Path $PSScriptRoot 'bootstrap-host.ps1') -ProjectDir $projectDir -NemsDir $nemsDir
 . (Join-Path $PSScriptRoot 'web-host.ps1')
@@ -33,7 +34,7 @@ function Export-WindowsRootCertificates([string]$destination) {
     [IO.File]::WriteAllText($destination, ($pem -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
 }
 
-& (Join-Path $PSScriptRoot 'install-podman-windows.ps1')
+& (Join-Path $setupDir 'installers/install-podman-windows.ps1')
 
 $machineJson = (& podman machine list --format json) -join "`n"
 if ($LASTEXITCODE -ne 0) { throw 'Could not check the Podman machine.' }
@@ -95,9 +96,10 @@ if ($wslMachine) {
             $remoteSecrets += @('--secret', "id=npm-token,src=$(ConvertTo-PodmanMachinePath $tokenFile)")
         }
         $remoteArgs = @('podman', 'build') + $remoteSecrets + @(
-            '-f', (ConvertTo-PodmanMachinePath (Join-Path $PSScriptRoot 'Containerfile')),
+            '-f', (ConvertTo-PodmanMachinePath (Join-Path $setupDir 'Containerfile')),
+            '--ignorefile', (ConvertTo-PodmanMachinePath (Join-Path $setupDir '.containerignore')),
             '--build-arg', 'SUITECLOUD_CLI_ACCEPT_LICENSE=true', '-t', 'suitecloud-workspace',
-            (ConvertTo-PodmanMachinePath $PSScriptRoot)
+            (ConvertTo-PodmanMachinePath $projectDir)
         )
         $remoteCommand = ($remoteArgs | ForEach-Object { Quote-PosixArgument $_ }) -join ' '
         & podman machine ssh $wslMachine.Name -- $remoteCommand
@@ -107,7 +109,7 @@ if ($wslMachine) {
         }
     }
 } else {
-    & podman build @buildSecrets -f (Join-Path $PSScriptRoot 'Containerfile') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $PSScriptRoot
+    & podman build @buildSecrets -f (Join-Path $setupDir 'Containerfile') --ignorefile (Join-Path $setupDir '.containerignore') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $projectDir
 }
 if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 } finally {
