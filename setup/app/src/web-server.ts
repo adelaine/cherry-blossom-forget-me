@@ -31,8 +31,13 @@ export function mountChanges(config: Config, auth: Auth, record: MountRecord, al
 }
 
 function message(error: unknown): string {
-    return (error instanceof Error ? error.message : String(error))
+    const text = (error instanceof Error ? error.message : String(error))
         .replace(/ Update .* and run the start script again\.$/, "");
+    if (text === "credentials/auth.json needs the NetSuite certificate ID.") return "Enter a valid Certificate ID assigned by NetSuite in Credentials and click Save credentials.";
+    if (text === "VM 1 needs an account ID and a NetSuite domain.") return "Enter your runbox domain in Current VM, without https:// or /devhome. Check the first VM's account ID in Settings.";
+    if (text === "Certificate files were not mounted. Check their paths in credentials/auth.json.") return "Cannot find both certificate files. Check Certificate paths in Credentials and relaunch if needed, or use Generate certificates to create a new pair.";
+    if (text === "The public and private certificate files do not match or cannot be read.") return "The certificate files do not match or cannot be read. Check Certificate paths in Credentials, or generate and register a new pair.";
+    return text;
 }
 
 export function startWebServer(options: {
@@ -99,13 +104,11 @@ export function startWebServer(options: {
             else {
                 publicPath = mountedCredentialPath(certs.public);
                 privatePath = mountedCredentialPath(certs.private);
-                if (!publicPath || !privatePath) error = "Certificate paths require new mounts. Save your settings and relaunch.";
+                if (!publicPath || !privatePath) error = "Save credentials, stop the app, and run the launcher again to use these certificate files. You can also generate a new pair here.";
                 else { try { verifyCertificates(publicPath, privatePath); } catch (e) { error = message(e); } }
             }
-        } else if (mounted) error = "Certificate files already exist. Enter their matching public and private paths.";
-        else error = certs
-            ? "Generate certificates, register the public certificate on your runbox, and enter the assigned certificate ID."
-            : "Save credentials with both certificate paths empty, then generate certificates and register the public certificate on your runbox.";
+        } else if (mounted) error = "Certificate files already exist. Enter both paths in Certificate paths and save credentials, or generate and register a new pair.";
+        else error = "Click Generate certificates, download and register the public certificate on your runbox, then enter its assigned certificate ID and save credentials.";
         return { hasExisting: mounted || !!certs?.public || !!certs?.private, error, publicPath, privatePath };
     };
     const readiness = (text: string) => {
@@ -118,7 +121,7 @@ export function startWebServer(options: {
             if (cert.error) throw new Error(cert.error);
             config.certificates = auth["suitecloud-certificates"];
             validateConfig(config, true);
-            if (config.suiteapps.some(repo => !repo.localPath) && !auth["gitlab-token"]?.trim()) throw new Error("Enter a GitLab token to copy the SuiteApps.");
+            if (config.suiteapps.some(repo => !repo.localPath) && !auth["gitlab-token"]?.trim()) throw new Error("Paste a GitLab token in Credentials and click Save credentials to copy SuiteApps from GitLab.");
             return { ready: true, error: "", config, auth, cert };
         } catch (error) { return { ready: false, error: message(error) }; }
     };
@@ -219,11 +222,11 @@ export function startWebServer(options: {
                 // SQL needs a configured target, not SuiteCloud certificates or a GitLab token.
                 // Use the visible configuration without saving it as a side effect of execution.
                 const config = JSON.parse(input.config);
-                if ((input.password !== undefined && typeof input.password !== "string") || (input.unlock !== undefined && typeof input.unlock !== "string")) throw new Error("Enter a SQL password or the password hint.");
+                if ((input.password !== undefined && typeof input.password !== "string") || (input.unlock !== undefined && typeof input.unlock !== "string")) throw new Error("Enter your SQL password or the answer to the password hint.");
                 const manual = typeof input.password === "string" && !!input.password;
                 const unlock = typeof input.unlock === "string" && !!input.unlock;
-                if (manual && unlock) throw new Error("Use only one option: the SQL password or the password hint.");
-                if (!manual && !unlock) throw new Error("Enter a SQL password or the password hint for the default password.");
+                if (manual && unlock) throw new Error("Use only one option: your SQL password or the answer to the password hint.");
+                if (!manual && !unlock) throw new Error("Enter your SQL password, or answer the password hint to unlock the saved password.");
                 const request = validateSqlRequest({ ...input, host: config?.vms?.[0]?.url, password: manual ? input.password : "pending-unlock" }, config);
                 if (unlock) {
                     sqlPreparing = true;
@@ -314,7 +317,7 @@ export function startWebServer(options: {
             }
             if (url.pathname === "/api/generate") {
                 const auth = readAuth(authPath);
-                if (certificateState(auth).hasExisting && input.replace !== true) throw new Error("Confirm replacement: old certificates will not be preserved.");
+                if (certificateState(auth).hasExisting && input.replace !== true) throw new Error("Confirm replacement: old certificates generated by this app will not be preserved, and the saved certificate ID will be cleared.");
                 replaceCertificates(credentials, authPath);
                 generatedCertificates = true;
                 reply(res, 200, status()); return;

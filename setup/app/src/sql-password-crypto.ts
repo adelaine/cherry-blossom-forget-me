@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, scrypt } from "node:crypto";
 
 function validateInput(password: string, salt: string): void {
-    if (!password || Buffer.byteLength(password) > 1024) throw new Error("Enter a password hint (maximum 1024 bytes).");
+    if (!password || Buffer.byteLength(password) > 1024) throw new Error("Enter the answer to the password hint (maximum 1024 bytes).");
     if (!salt || Buffer.byteLength(salt) > 1024) throw new Error("Set SQL_PASSWORD_SALT before generating or unlocking credentials.");
 }
 
@@ -39,6 +39,6 @@ export async function decryptSqlPassword(encrypted: string, unlockPassword: stri
         partial = decipher.update(ciphertext);
         return Buffer.concat([partial, decipher.final()]);
     } catch {
-        throw new Error("Could not unlock SQL credentials. Check the password hint and try again.");
+        throw new Error("Could not unlock the saved SQL password. Check your answer to the password hint, or enter your SQL password directly.");
     } finally { key.fill(0); partial?.fill(0); }
 }

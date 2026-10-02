@@ -30,7 +30,7 @@ test("encryption uses fresh initialization vectors and rejects tampering and mal
     parts[2] = tag.toString("base64url");
     await assert.rejects(decryptSqlPassword(parts.join(":"), unlockPassword, SQL_PASSWORD_SALT), /Could not unlock/);
     await assert.rejects(decryptSqlPassword("sql-v1:invalid", unlockPassword, SQL_PASSWORD_SALT), /invalid/);
-    await assert.rejects(encryptSqlPassword(sqlPassword, "", SQL_PASSWORD_SALT), /Enter a password hint/);
+    await assert.rejects(encryptSqlPassword(sqlPassword, "", SQL_PASSWORD_SALT), /Enter the answer to the password hint/);
 });
 
 test("the one-time generator prints only encrypted data and does not echo invalid input", async () => {

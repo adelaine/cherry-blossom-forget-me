@@ -279,6 +279,12 @@ test("Current VM preserves accounts and other runboxes, synchronizes JSON edits,
     element("vm").input();
     assert.equal(element("config").value, "invalid JSON");
     assert.match(element("credential-message").textContent, /Fix the configuration JSON/);
+    runInNewContext("editing = false; credentialEditing = false; render({...state,run:{state:'running',log:''}})", context);
+    assert.match(element("validation").textContent, /Deployment is running/);
+    runInNewContext("render({...state,run:{state:'idle',log:''},sql:{state:'running',output:'',defaults:{user:'',service:''}}})", context);
+    assert.match(element("validation").textContent, /SQL is running/);
+    runInNewContext("render({...state,sql:{...state.sql,state:'idle',preparing:true}})", context);
+    assert.match(element("validation").textContent, /Unlocking the saved SQL password/);
 });
 
 test("Stop app closes after five seconds only on success and explains blocked closure", async () => {
@@ -308,22 +314,24 @@ test("Stop app closes after five seconds only on success and explains blocked cl
         if (success) {
             assert.equal(timers.length, 1);
             assert.equal(timers[0]!.delay, 5000);
-            assert.match(element("run-state").textContent, /close in 5 seconds/);
+            assert.match(element("run-state").textContent, /Attempting to close this page/);
             assert.equal(element("stop").disabled, true);
             const stoppedRequests = requests;
             await runInNewContext("refresh()", context);
             runInNewContext("render({run:{state:'idle'}})", context);
             assert.equal(requests, stoppedRequests);
-            assert.match(element("run-state").textContent, /close in 5 seconds/);
+            assert.match(element("run-state").textContent, /Attempting to close this page/);
             timers[0]!.callback();
             assert.equal(closes, 1);
             assert.match(element("run-state").textContent, /browser kept this page open/);
         } else {
             assert.equal(timers.length, 0);
             assert.equal(element("stop").disabled, false);
+            assert.match(element("validation").textContent, /Deployment is running/);
             const activeRequests = requests;
             await runInNewContext("refresh()", context);
             assert.equal(requests, activeRequests + 1);
+            assert.match(element("validation").textContent, /Deployment is running/);
         }
     }
 });
