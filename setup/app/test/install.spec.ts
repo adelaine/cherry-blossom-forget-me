@@ -209,6 +209,7 @@ test("keeps specified certificate paths and rejects a partial configuration", ()
     withCertificateFixture((directory) => {
         const config: Config = {
             suiteapps: [suiteapp],
+            vms: [],
             certificates: {
                 id: "existing",
                 public: "public.pem",
@@ -246,7 +247,7 @@ test("does not overwrite an incomplete existing certificate pair", () => {
         assert.throws(
             () =>
                 prepareCertificates(
-                    { suiteapps: [suiteapp] },
+                    { suiteapps: [suiteapp], vms: [] },
                     sshDirectory,
                     join(directory, "auth.json"),
                 ),
@@ -267,7 +268,7 @@ test("removes partial files when OpenSSL cannot run", () => {
             process.env.PATH = "";
             assert.throws(() =>
                 prepareCertificates(
-                    { suiteapps: [suiteapp] },
+                    { suiteapps: [suiteapp], vms: [] },
                     sshDirectory,
                     join(directory, "auth.json"),
                 ),
@@ -301,6 +302,7 @@ test(
             const configPath = join(directory, "auth.json");
             const config: Config = {
                 suiteapps: [suiteapp],
+                vms: [],
                 certificates: { id: "old_id", public: "", private: "" },
             };
             assert.equal(

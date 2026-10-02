@@ -26,7 +26,7 @@ open_web_page() {
         echo "From your computer, forward the port: ssh -N -L $port:127.0.0.1:$port $(id -un)@$(hostname -f)"
         echo 'Then open the deployment page address above in your browser.'
       fi
-      echo 'The app stays running. Use Stop app on the page when finished.'
+      echo 'The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.'
       return 0
     fi
     if [[ "$(podman inspect --format '{{.State.Running}}' "$container_name" 2>/dev/null)" != true ]]; then

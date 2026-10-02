@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { readAuth } from "./step-auth.ts";
 
 export type SuiteApp = { url?: string; directory: string; branch?: string; localPath?: string };
-export type Vm = { account: string; url: string };
+export type Vm = { account: string; url: string; database?: { user?: string; service?: string } };
 export type Config = {
     suiteapps: SuiteApp[];
     certificates?: { public: string; private: string; id: string };

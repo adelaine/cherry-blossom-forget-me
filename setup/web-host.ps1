@@ -34,7 +34,7 @@ function Open-SuiteContainerPage {
                 $url = "http://127.0.0.1:$port$suffix"
                 Write-Host "Deployment page: $url"
                 try { Start-Process $url } catch { Write-Host 'Open the address above in your browser.' }
-                Write-Host 'The app stays running. Use Stop app on the page when finished.'
+                Write-Host 'The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.'
                 return
             }
         }
