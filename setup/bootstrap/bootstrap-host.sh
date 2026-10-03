@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sourced before Podman installation; never sources token files as shell code.
 umask 077
-mkdir -p "$project_dir/credentials" "$project_dir/repos"
+mkdir -p "$project_dir/credentials" "$project_dir/repos" "$project_dir/sftp-files"
 if [[ ! -f "$project_dir/suitecontainer.config.json" ]]; then
   cp "$project_dir/suitecontainer.config.example.json" "$project_dir/suitecontainer.config.json"
 fi

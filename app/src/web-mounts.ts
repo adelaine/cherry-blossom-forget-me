@@ -64,6 +64,7 @@ export function prepareWebMounts(projectRoot: string, hostRoot: string, platform
     mount("suitecontainer.config.json", "/config/suitecontainer.config.json");
     mount("credentials", "/config/credentials");
     mount("repos", "/workspace");
+    mount("sftp-files", "/srv/sftp/files", true);
     // Broken or incomplete settings must still reach the editor.
     let config: { suiteapps?: { directory?: string; localPath?: string }[] } = {};
     let auth: Auth = {};

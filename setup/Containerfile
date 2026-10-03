@@ -19,10 +19,10 @@ ENV NODE_OPTIONS="--use-system-ca"
 
 USER root
 RUN if command -v dnf >/dev/null 2>&1; then \
-      dnf install -y git openssl ca-certificates java-21-openjdk-devel oracle-instantclient-release-26ai-el10 \
+      dnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel oracle-instantclient-release-26ai-el10 \
       && dnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus && dnf clean all; \
     else \
-      microdnf install -y git openssl ca-certificates java-21-openjdk-devel oracle-instantclient-release-26ai-el10 \
+      microdnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel oracle-instantclient-release-26ai-el10 \
       && microdnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus && microdnf clean all; \
     fi
 RUN sqlplus -V
@@ -45,8 +45,12 @@ RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=s
 
 COPY --from=build /app/dist/ /opt/suitecontainer/
 COPY setup/gitlab-askpass.sh /usr/local/bin/
+COPY setup/sftp/start.sh /usr/local/bin/start-sftp
 RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
-    && mkdir -p /workspace /config
+    && chmod 755 /usr/local/bin/start-sftp \
+    && useradd --uid 1000 --no-create-home --home-dir /files --shell /bin/sh files \
+    && mkdir -p /workspace /config /srv/sftp/files /run/sshd /run/sftp \
+    && chmod 755 /srv /srv/sftp
 
 WORKDIR /workspace
 ENTRYPOINT ["node", "/opt/suitecontainer/install.js"]

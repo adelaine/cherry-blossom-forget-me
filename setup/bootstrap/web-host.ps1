@@ -72,7 +72,7 @@ function Start-SuiteContainerWeb {
         & podman rm $script:containerName | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Could not remove the previous stopped app.' }
     }
-    & podman run -d --name $script:containerName --label "suitecontainer.project=$projectDir" --cgroups=disabled --publish '127.0.0.1::8080' @mounts suitecloud-workspace --serve | Out-Null
+    & podman run -d --name $script:containerName --label "suitecontainer.project=$projectDir" --cgroups=disabled --publish '127.0.0.1::8080' --publish '127.0.0.1::8000' --env SUITECONTAINER_SFTP=1 @mounts suitecloud-workspace --serve | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not start the deployment page.' }
     Open-SuiteContainerPage
 }

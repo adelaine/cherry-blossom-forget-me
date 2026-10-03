@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 export type Auth = {
     "gitlab-token"?: string;
+    sftp?: { port: number; username: string; password: string };
     "suitecloud-certificates"?: { public: string; private: string; id: string };
 };
 
@@ -18,6 +19,14 @@ export function readAuth(path = "/config/credentials/auth.json"): Auth {
         throw new Error("credentials/auth.json must contain an object.");
     }
     const auth = value as Auth;
+    if (auth.sftp !== undefined &&
+        (!auth.sftp || typeof auth.sftp !== "object" || Array.isArray(auth.sftp) ||
+            !Number.isInteger(auth.sftp.port) || auth.sftp.port < 1024 || auth.sftp.port > 65535 ||
+            typeof auth.sftp.username !== "string" || !/^[a-z_][a-z0-9_-]{0,31}$/.test(auth.sftp.username) ||
+            ["root", "nobody"].includes(auth.sftp.username) ||
+            typeof auth.sftp.password !== "string" || /[\r\n\0]/.test(auth.sftp.password))) {
+        throw new Error("Set sftp.port (1024-65535), sftp.username, and a single-line sftp.password in credentials/auth.json.");
+    }
     if (
         auth["gitlab-token"] !== undefined &&
         typeof auth["gitlab-token"] !== "string"

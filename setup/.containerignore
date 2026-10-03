@@ -12,4 +12,6 @@ app/*
 setup/*
 !setup/Containerfile
 !setup/gitlab-askpass.sh
+!setup/sftp/
+!setup/sftp/start.sh
 !setup/.containerignore

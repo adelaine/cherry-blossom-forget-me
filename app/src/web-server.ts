@@ -18,6 +18,7 @@ import { startSql, validateSqlRequest } from "./sql-runner.ts";
 import { SQL_DEFAULTS, SQL_PASSWORD_HINT, SQL_PASSWORD_SALT } from "./sql-settings.ts";
 import { decryptSqlPassword } from "./sql-password-crypto.ts";
 import { HeartbeatDeadline } from "./web-inactivity.ts";
+import { startSftpServer, sftpTunnelActive } from "./sftp-server.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
@@ -93,6 +94,7 @@ export function startWebServer(options: {
         let token = "";
         try { token = readAuth(authPath)["gitlab-token"] ?? ""; } catch { /* malformed auth */ }
         if (token) secrets.add(token);
+        try { const password = readAuth(authPath).sftp?.password; if (password) secrets.add(password); } catch { /* malformed auth */ }
         for (const secret of secrets) if (secret) text = text.split(secret).join("[redacted]");
         return text.replace(/-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----|$)/g, "[private key redacted]");
     };
@@ -388,16 +390,23 @@ export function startWebServer(options: {
     app.notFound(c => reply(c, 404, { error: "Page not found." }));
     app.onError((error, c) => reply(c, 400, { error: redact(message(error)) }));
     const server = createAdaptorServer({ fetch: app.fetch }) as Server;
+    const sftpServer = startSftpServer();
+    sftpServer?.on("error", error => { console.error(`SFTP could not start: ${message(error)}`); process.exit(1); });
+    sftpServer?.on("exit", code => {
+        if (!stopping) { console.error(`SFTP stopped unexpectedly (${code}). Relaunch SuiteContainer.`); process.exit(1); }
+    });
     const stopApp = () => {
         if (stopping) return;
         stopping = true;
+        sftpServer?.kill();
         server.close(options.onStop ?? (() => process.exit(0)));
     };
     const inactivityTimer = setInterval(() => {
-        if (!stopping && heartbeatDeadline.expired(busy())) stopApp();
+        if (!stopping && heartbeatDeadline.expired(busy() || sftpTunnelActive())) stopApp();
     }, options.inactivityCheckMs ?? 1000);
     inactivityTimer.unref();
     server.once("close", () => clearInterval(inactivityTimer));
+    server.once("close", () => sftpServer?.kill());
     server.requestTimeout = 15_000;
     server.once("close", () => sqlWorker?.kill("SIGKILL"));
     server.on("error", error => { console.error(message(error)); process.exitCode = 1; });
@@ -407,6 +416,7 @@ export function startWebServer(options: {
     });
     const shutdown = () => {
         stopping = true;
+        sftpServer?.kill();
         sqlWorker?.kill("SIGKILL");
         if (worker?.pid) { try { process.kill(-worker.pid, "SIGTERM"); } catch { worker.kill("SIGTERM"); } }
         server.close();

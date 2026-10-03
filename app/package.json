@@ -7,6 +7,7 @@
         "typecheck": "tsc -p tsconfig.json",
         "dev": "tsx watch src/install.ts --serve",
         "start": "node dist/install.js --serve",
+        "sftp": "node --experimental-strip-types src/sftp.ts",
         "format": "prettier --config ../setup/.prettierrc --write .",
         "test": "node --experimental-strip-types --test test/install.spec.ts test/web.spec.ts test/web-routing.spec.ts test/build.spec.ts test/sql-password-crypto.spec.ts test/sql-unlock.spec.ts"
     },

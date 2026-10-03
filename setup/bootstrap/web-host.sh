@@ -75,6 +75,6 @@ start_web_app() {
     podman rm "$container_name" >/dev/null
   fi
   podman run -d --name "$container_name" --label "suitecontainer.project=$project_dir" \
-    --cgroups=disabled -p 127.0.0.1::8080 "${mounts[@]}" suitecloud-workspace --serve >/dev/null
+    --cgroups=disabled -p 127.0.0.1::8080 -p 127.0.0.1::8000 --env SUITECONTAINER_SFTP=1 "${mounts[@]}" suitecloud-workspace --serve >/dev/null
   open_web_page
 }

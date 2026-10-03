@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $credentialsDir = Join-Path $ProjectDir 'credentials'
 [IO.Directory]::CreateDirectory($credentialsDir) | Out-Null
 [IO.Directory]::CreateDirectory((Join-Path $ProjectDir 'repos')) | Out-Null
+[IO.Directory]::CreateDirectory((Join-Path $ProjectDir 'sftp-files')) | Out-Null
 $configFile = Join-Path $ProjectDir 'suitecontainer.config.json'
 if (-not (Test-Path -LiteralPath $configFile)) { Copy-Item -LiteralPath (Join-Path $ProjectDir 'suitecontainer.config.example.json') -Destination $configFile }
 $authFile = Join-Path $credentialsDir 'auth.json'
