@@ -20,7 +20,7 @@ export const deploymentPage = {
 <body><main class="container" x-data="deployment" x-cloak>
 <label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
-<header><hgroup><h1><mark>SuiteCloud deployment</mark></h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup>
+<header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup>
 <p><small>The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.</small></p></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
 <div class="setup-sections">
