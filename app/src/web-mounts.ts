@@ -7,6 +7,9 @@ export type MountRecord = {
     platform: string;
     local: Record<string, string>;
     certificates: Record<string, string>;
+    sftp?: string;
+    sshKey?: string;
+    sshKnownHosts?: string;
 };
 
 export function hostPath(record: MountRecord, path: string): string {
@@ -35,6 +38,8 @@ export function webPathRequests(projectRoot: string, hostRoot: string, platform:
         seen.add(`${kind}/${name}`);
         result.push(`${kind}\t${name}\t${absolute}`);
     };
+    if (process.env.SUITECONTAINER_SSH_KEY) add("ssh", "key", process.env.SUITECONTAINER_SSH_KEY);
+    if (process.env.SUITECONTAINER_SSH_KNOWN_HOSTS) add("ssh", "known_hosts", process.env.SUITECONTAINER_SSH_KNOWN_HOSTS);
     try {
         const config = JSON.parse(readFileSync(join(projectRoot, "suitecontainer.config.json"), "utf8"));
         for (const repo of Array.isArray(config?.suiteapps) ? config.suiteapps : []) {
@@ -44,6 +49,7 @@ export function webPathRequests(projectRoot: string, hostRoot: string, platform:
     } catch (error) { if (error instanceof Error && error.message.startsWith("Mount paths")) throw error; }
     try {
         const auth = JSON.parse(readFileSync(join(projectRoot, "credentials/auth.json"), "utf8"));
+        add("sftp", "files", typeof auth?.sftp?.path === "string" && auth.sftp.path.trim() ? auth.sftp.path : "sftp-files");
         for (const key of ["public", "private"]) {
             const path = auth?.["suitecloud-certificates"]?.[key];
             if (typeof path === "string" && path.trim()) add("external", key, path);
@@ -64,12 +70,25 @@ export function prepareWebMounts(projectRoot: string, hostRoot: string, platform
     mount("suitecontainer.config.json", "/config/suitecontainer.config.json");
     mount("credentials", "/config/credentials");
     mount("repos", "/workspace");
-    mount("sftp-files", "/srv/sftp/files", true);
+    if (process.env.SUITECONTAINER_SSH_KEY && existsSync("/ssh/key")) {
+        mount(process.env.SUITECONTAINER_SSH_KEY, "/config/ssh/key", true);
+        record.sshKey = hostPath(record, process.env.SUITECONTAINER_SSH_KEY);
+    }
+    if (process.env.SUITECONTAINER_SSH_KNOWN_HOSTS && existsSync("/ssh/known_hosts")) {
+        mount(process.env.SUITECONTAINER_SSH_KNOWN_HOSTS, "/config/ssh/known_hosts", true);
+        record.sshKnownHosts = hostPath(record, process.env.SUITECONTAINER_SSH_KNOWN_HOSTS);
+    }
     // Broken or incomplete settings must still reach the editor.
     let config: { suiteapps?: { directory?: string; localPath?: string }[] } = {};
     let auth: Auth = {};
     try { config = JSON.parse(readFileSync(join(projectRoot, "suitecontainer.config.json"), "utf8")); } catch { /* editor repairs it */ }
     try { auth = JSON.parse(readFileSync(join(projectRoot, "credentials/auth.json"), "utf8")); } catch { /* page explains it */ }
+    const sftpPath = auth.sftp?.path?.trim() || "sftp-files";
+    // The launcher stages the selected directory before the app resolves mounts.
+    if (sftpPath && existsSync("/sftp/files") && statSync("/sftp/files").isDirectory()) {
+        mount(sftpPath, "/srv/sftp/files", true);
+        record.sftp = hostPath(record, sftpPath);
+    }
     for (const repo of Array.isArray(config?.suiteapps) ? config.suiteapps : []) {
         if (!repo || typeof repo.localPath !== "string" || !repo.localPath ||
             typeof repo.directory !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repo.directory)) continue;

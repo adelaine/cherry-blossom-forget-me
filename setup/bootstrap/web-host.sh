@@ -51,21 +51,25 @@ reuse_web_app() {
 
 start_web_app() {
   local requests kind name path launch_mounts mount
+  local ssh_key="${SUITECONTAINER_SSH_KEY:-$HOME/.ssh/id_ed25519}"
+  if [[ ! -f "$ssh_key" && -z "${SUITECONTAINER_SSH_KEY:-}" ]]; then ssh_key="$HOME/.ssh/id_rsa"; fi
+  local ssh_known_hosts="${SUITECONTAINER_SSH_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}"
+  local ssh_environment=(--env "SUITECONTAINER_SSH_KEY=$ssh_key" --env "SUITECONTAINER_SSH_KNOWN_HOSTS=$ssh_known_hosts")
   local staged=(--mount "type=bind,src=$project_dir,dst=/project")
   requests="$(podman run --rm --cgroups=disabled \
     --mount "type=bind,src=$project_dir,dst=/project,ro=true" \
     --env "SUITECONTAINER_HOST_ROOT=$project_dir" \
-    --env SUITECONTAINER_HOST_PLATFORM=linux suitecloud-workspace --web-paths)" || return $?
+    --env SUITECONTAINER_HOST_PLATFORM=linux "${ssh_environment[@]}" suitecloud-workspace --web-paths)" || return $?
   while IFS=$'\t' read -r kind name path; do
     [[ -n "$path" ]] || continue
-    if { [[ "$kind" == local && -d "$path" ]]; } || { [[ "$kind" == external && -f "$path" ]]; }; then
+    if { [[ ( "$kind" == local || "$kind" == sftp ) && -d "$path" ]]; } || { [[ ( "$kind" == external || "$kind" == ssh ) && -f "$path" ]]; }; then
       if [[ "$kind" == external ]]; then name="$name.pem"; fi
       staged+=(--mount "type=bind,src=$path,dst=/$kind/$name,ro=true")
     fi
   done <<< "$requests"
   launch_mounts="$(podman run --rm --cgroups=disabled "${staged[@]}" \
     --env "SUITECONTAINER_HOST_ROOT=$project_dir" \
-    --env SUITECONTAINER_HOST_PLATFORM=linux suitecloud-workspace --web-mounts)" || return $?
+    --env SUITECONTAINER_HOST_PLATFORM=linux "${ssh_environment[@]}" suitecloud-workspace --web-mounts)" || return $?
   local mounts=()
   while IFS= read -r mount; do
     [[ -n "$mount" ]] && mounts+=(--mount "$mount")

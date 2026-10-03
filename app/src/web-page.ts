@@ -21,7 +21,7 @@ export const deploymentPage = {
 <label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
 <header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup>
-<p><small>The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.</small></p></header>
+<p><small>The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish, and running SFTP keeps the app open. Use Stop app to stop it sooner, or run the launcher again to reopen it.</small></p></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
 <div class="setup-sections">
 <article><details class="setup-section" id="credentials-section" open><summary><h2>Credentials</h2></summary><ol class="credential-steps" role="list"><li><h3>GitLab token</h3><p id="token-state" x-text="view.token_state.text"></p><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></li>
@@ -42,6 +42,27 @@ export const deploymentPage = {
 <p>SQL runs on Current VM. Enter your SQL password, or answer the hint to unlock the saved password. Entering one clears the other.</p><p id="sql-unlock-availability" hidden :hidden="view.sql_unlock_availability.hidden" x-text="view.sql_unlock_availability.text"></p>
 <label for="sql-statement">SQL statement</label><textarea id="sql-statement" rows="8" spellcheck="false" placeholder="SELECT * FROM your_table;" :disabled="view.sql_statement.disabled" @input="inputsql_statement"></textarea>
 <fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></article>
+<article><details class="setup-section" id="sftp-section" open><summary><h2>SFTP</h2></summary>
+<p>Share files from your laptop with NetSuite through the runbox. Start SFTP when needed; it does not start automatically.</p>
+<fieldset class="grid" aria-label="SFTP actions"><button id="sftp-start" disabled :disabled="view.sftp_start.disabled" @click="clicksftp_start">Start SFTP</button><button id="sftp-stop" class="secondary outline" disabled :disabled="view.sftp_stop.disabled" @click="clicksftp_stop">Stop SFTP</button><button id="sftp-save" class="secondary" disabled :disabled="view.sftp_save.disabled" @click="clicksftp_save">Save settings</button></fieldset>
+<p id="sftp-message" role="status" x-text="view.sftp_message.text"></p>
+<details open><summary>SFTP settings</summary>
+<div class="grid"><div><label for="sftp-user">User</label><input id="sftp-user" autocomplete="off" spellcheck="false" :disabled="view.sftp_user.disabled" @input="inputsftp_user"></div>
+<div><label for="sftp-port">Port</label><input id="sftp-port" type="number" min="1" max="65535" step="1" :disabled="view.sftp_port.disabled" @input="inputsftp_port"></div></div>
+<div class="grid"><div><label for="sftp-password">Password</label><input id="sftp-password" type="password" autocomplete="new-password" aria-describedby="sftp-password-help" :disabled="view.sftp_password.disabled" @input="inputsftp_password"><p id="sftp-password-help" x-text="view.sftp_password_help.text"></p></div>
+<div><label for="sftp-path">Absolute path to local folder</label><input id="sftp-path" spellcheck="false" aria-describedby="sftp-path-help" :disabled="view.sftp_path.disabled" @input="inputsftp_path"><p id="sftp-path-help">Leave blank to use the default folder <strong>sftp-files</strong>. Changing this value requires a restart.</p></div></div>
+</details>
+<details open><summary>NetSuite connection fields</summary>
+<p>Use these saved settings after SFTP is running. Internal SFTP addresses must be allowed on the runbox.</p>
+<div class="sftp-connection-grid">
+<div><label for="sftp-netsuite-url">URL</label><input id="sftp-netsuite-url" disabled value="localhost"></div>
+<div class="sftp-connection-key"><label for="sftp-host-key">Host key</label><textarea id="sftp-host-key" disabled spellcheck="false" rows="5" aria-describedby="sftp-host-key-help"></textarea></div>
+<div class="sftp-connection-user"><label for="sftp-netsuite-user">Username</label><input id="sftp-netsuite-user" disabled></div>
+<div class="sftp-connection-port"><label for="sftp-netsuite-port">Port</label><input id="sftp-netsuite-port" disabled></div>
+<div class="sftp-connection-password"><label for="sftp-netsuite-password">Password</label><input id="sftp-netsuite-password" type="text" disabled value="use the password saved above"></div>
+</div>
+</details>
+</details></article>
 </div>
 <article><h2>Deployment</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset class="grid" aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy</button>
 <button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><p id="run-state" role="status" x-text="view.run_state.text">Loading…</p><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
@@ -70,7 +91,7 @@ details>summary::after{display:none}
 details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
 details[open]>summary::before{transform:rotate(90deg)}
 @media(min-width:768px){
-.setup-sections:not(:has(>article>.setup-section[open])){display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-block:2rem}
+.setup-sections:not(:has(>article>.setup-section[open])){display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;margin-block:2rem}
 .setup-sections:not(:has(>article>.setup-section[open]))>article{margin:0;padding:1.5rem;min-width:0}
 }
 .setup-section{margin-bottom:0}
@@ -81,6 +102,13 @@ details[open]>summary::before{transform:rotate(90deg)}
 [x-cloak],[hidden]{display:none!important}
 main p:empty{display:none}
 textarea{font-family:var(--pico-font-family-monospace)}
+.sftp-connection-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:var(--pico-grid-column-gap,1rem)}
+.sftp-connection-grid>div{min-width:0}
+.sftp-connection-key{grid-column:2;grid-row:1/span 2;display:flex;flex-direction:column}
+.sftp-connection-key textarea{flex:1;min-height:0;resize:none}
+.sftp-connection-user{grid-column:1;grid-row:2}
+.sftp-connection-port{grid-column:2;grid-row:3}
+.sftp-connection-password{grid-column:1;grid-row:3}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;max-height:32rem;overflow:auto;line-height:1.55;background-color:light-dark(#f0eee8,#000);color:light-dark(#343d48,#c8cdd6);color-scheme:inherit;border:1px solid light-dark(#d7d5cf,transparent)}
 pre#log{min-height:24rem;}
 pre :is(.ansi-fg-2,.ansi-fg-10){color:light-dark(#008447,#38d98a)}
@@ -104,8 +132,8 @@ document.addEventListener('alpine:init', () => {
       ])),
       ...Object.fromEntries([
         ['change', 'theme-toggle'],
-        ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement'].map(id => ['input', id]),
-        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop'].map(id => ['click', id]),
+        ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path'].map(id => ['input', id]),
+        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save'].map(id => ['click', id]),
       ].map(([event, id]) => {
         const name = event + id.replaceAll('-', '_');
         return [name, () => handlers[name]()];
@@ -119,11 +147,12 @@ document.addEventListener('alpine:init', () => {
         history.replaceState(null, '', location.pathname);
         let sectionsInitialized = false, lastDeploymentStarted;
         const collapseSetupSections = () => {
-          for (const id of ['credentials-section','settings-section','sql-section']) $(id).open = false;
+          for (const id of ['credentials-section','settings-section','sql-section','sftp-section']) $(id).open = false;
         };
         let state, editing = false, stopped = false, checking, credentialEditing = false, changingToken = false, sqlSubmitting = false, sqlDefaultsApplied = false, sqlDefaultsHost, sqlAccountEdited = false, sqlDatabaseEdited = false, sqlRequestError = '';
         let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false, actionError = '';
         let themeSaving = false;
+        let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '', actionBusy = false;
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
         function applyTheme(theme) {
           if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
@@ -139,7 +168,7 @@ document.addEventListener('alpine:init', () => {
           view.connection_error.text = connectionMessage;
           view.connection_error.hidden = false;
           for (const control of document.querySelectorAll('button,input,textarea')) if (control.id) view[control.id.replaceAll('-', '_')].disabled = true;
-          if (!idleCloseScheduled && Date.now() - lastActivity >= ${ACTIVITY_GRACE_MS} && state?.run.state !== 'running' && state?.sql?.state !== 'running' && !state?.sql?.preparing && !sqlSubmitting) {
+          if (!idleCloseScheduled && Date.now() - lastActivity >= ${ACTIVITY_GRACE_MS} && state?.run.state !== 'running' && state?.sql?.state !== 'running' && !state?.sql?.preparing && !sqlSubmitting && !['starting','running'].includes(state?.sftp?.state) && !sftpSubmitting) {
             idleCloseScheduled = true;
             setTimeout(() => {
               if (!connectionFailed || Date.now() - lastActivity < ${ACTIVITY_GRACE_MS}) { idleCloseScheduled = false; return; }
@@ -150,7 +179,7 @@ document.addEventListener('alpine:init', () => {
         async function api(path, data) {
           let response, result;
           try {
-            response = await fetch('/api/' + path, { signal:AbortSignal.timeout(10000), method: data === undefined ? 'GET' : 'POST', headers: {'X-Session-Token': session, ...(data === undefined ? {} : {'Content-Type':'application/json'})}, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
+            response = await fetch('/api/' + path, { signal:AbortSignal.timeout(path === 'sftp' ? 30000 : 10000), method: data === undefined ? 'GET' : 'POST', headers: {'X-Session-Token': session, ...(data === undefined ? {} : {'Content-Type':'application/json'})}, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
             result = await response.json();
           } catch { connectionLost(); throw new Error(connectionMessage); }
           if (response.status >= 500 || (!response.ok && result.error?.startsWith('The app is stopping'))) { connectionLost(); throw new Error(connectionMessage); }
@@ -171,7 +200,7 @@ document.addEventListener('alpine:init', () => {
             collapseSetupSections();
           }
           if (!editing) $('config').value = next.config;
-          const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
+          const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting || sftpSubmitting;
           if (!credentialEditing) for (const key of ['public','private','id']) $(key).value = next.certificates[key] || '';
           view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token is saved. Paste it below and click Save credentials. A token is needed for SuiteApps copied from GitLab.';
           view.token_entry.hidden = next.tokenPresent && !changingToken;
@@ -195,6 +224,30 @@ document.addEventListener('alpine:init', () => {
           view.runbox_link.hidden = !host;
           if (host) $('runbox-link').href = 'https://' + host + '/devhome';
           renderSql(next, busy);
+          renderSftp(next, busy);
+        }
+        function renderSftp(next, busy) {
+          if (connectionFailed) return;
+          const sftp = next.sftp;
+          const active = ['starting','running'].includes(sftp?.state);
+          const submitting = sftpSubmitting || actionBusy || sqlSubmitting || themeSaving;
+          if (!sftpEditing && sftp) {
+            $('sftp-user').value = sftp.username;
+            $('sftp-port').value = sftp.port;
+            $('sftp-path').value = sftp.path || '';
+          }
+          for (const id of ['sftp-user','sftp-port','sftp-password','sftp-path']) view[id.replaceAll('-', '_')].disabled = !sftp || busy || active || submitting;
+          view.sftp_start.disabled = !sftp || busy || active || submitting || sftp.relaunch;
+          view.sftp_save.disabled = !sftp || busy || active || submitting;
+          view.sftp_stop.disabled = !sftp || submitting || !active && !['starting','running'].includes(sftp.tunnel?.state);
+          view.sftp_password_help.text = sftp?.passwordPresent ? 'A password is saved. Leave blank to use existing password.' : 'Enter a password before starting SFTP.';
+          $('sftp-netsuite-user').value = sftp?.username || '';
+          $('sftp-netsuite-port').value = sftp ? String(sftp.port) : '';
+          $('sftp-host-key').value = sftp?.hostKey || '';
+          const status = sftp ? ({stopped:'SFTP is stopped.',starting:'SFTP is starting…',running:'SFTP is running.',failed:'SFTP failed.'})[sftp.state] : 'Loading SFTP settings…';
+          const tunnel = sftp?.tunnel;
+          const tunnelMessage = tunnel?.error || (tunnel?.state === 'starting' ? 'Connecting the runbox tunnel…' : sftp?.state === 'running' && tunnel?.state !== 'running' ? 'The runbox tunnel is not connected.' : '');
+          view.sftp_message.text = [status, sftpRequestError || sftp?.error || sftpNotice || (sftpEditing ? 'SFTP settings changed. Save settings or click Start SFTP.' : ''), tunnelMessage, sftp?.relaunch ? 'Relaunch required. Stop the app and start the launcher again to mount the selected folder.' : ''].filter(Boolean).join(' ');
         }
         function currentVmHost() {
           try {
@@ -242,7 +295,7 @@ document.addEventListener('alpine:init', () => {
           lastActivity = Date.now();
           if (expired) void heartbeat();
         }, {capture:true,passive:true});
-        function action(id, fn, messageId = 'validation') { listen(id, 'click', async () => { actionError = ''; view[id.replaceAll('-', '_')].disabled = true; try { await fn(); } catch(error) { if (messageId === 'validation') actionError = error.message; view[messageId.replaceAll('-', '_')].text = error.message; } finally { if (!stopped) await refresh(); } }); }
+        function action(id, fn, messageId = 'validation') { listen(id, 'click', async () => { actionError = ''; actionBusy = true; if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting); view[id.replaceAll('-', '_')].disabled = true; try { await fn(); } catch(error) { if (messageId === 'validation') actionError = error.message; view[messageId.replaceAll('-', '_')].text = error.message; } finally { actionBusy = false; if (!stopped) await refresh(); } }); }
         listen('theme-toggle', 'change', async () => {
           if (themeSaving || stopped || connectionFailed) return;
           const theme = $('theme-toggle').checked ? 'dark' : 'light';
@@ -289,6 +342,23 @@ document.addEventListener('alpine:init', () => {
           } catch { view.credential_message.text = 'Fix the configuration JSON in Settings before changing Current VM.'; view.deploy.disabled = true; }
         });
         for (const key of ['public','private','id','token']) listen(key, 'input', () => { actionError = ''; credentialEditing = true; view.credential_message.text = 'Credentials changed. Click Save credentials before deploying.'; view.deploy.disabled = true; });
+        for (const key of ['sftp-user','sftp-port','sftp-password','sftp-path']) listen(key, 'input', () => {
+          sftpEditing = true; sftpRequestError = ''; sftpNotice = '';
+          if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting);
+        });
+        for (const operation of ['start','stop','save']) listen('sftp-' + operation, 'click', async () => {
+          if (sftpSubmitting || actionBusy || sqlSubmitting || themeSaving || !state?.sftp) return;
+          sftpSubmitting = true; sftpRequestError = ''; sftpNotice = '';
+          render(state);
+          try {
+            const data = operation === 'stop' ? {action:operation} : {action:operation,username:$('sftp-user').value.trim(),port:Number($('sftp-port').value),path:$('sftp-path').value.trim(),...($('sftp-password').value ? {password:$('sftp-password').value} : {})};
+            const next = await api('sftp', data);
+            if (operation !== 'stop') { sftpEditing = false; $('sftp-password').value = ''; }
+            sftpNotice = operation === 'save' ? 'SFTP settings saved.' : '';
+            render(next);
+          } catch (error) { sftpRequestError = error.message; }
+          finally { sftpSubmitting = false; if (!stopped) render(state); }
+        });
         for (const key of ['sql-account','sql-database','sql-password','sql-unlock','sql-statement']) listen(key, 'input', () => {
           if (key === 'sql-account') sqlAccountEdited = true;
           if (key === 'sql-database') sqlDatabaseEdited = true;

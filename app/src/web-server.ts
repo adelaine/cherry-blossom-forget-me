@@ -18,7 +18,7 @@ import { startSql, validateSqlRequest } from "./sql-runner.ts";
 import { SQL_DEFAULTS, SQL_PASSWORD_HINT, SQL_PASSWORD_SALT } from "./sql-settings.ts";
 import { decryptSqlPassword } from "./sql-password-crypto.ts";
 import { HeartbeatDeadline } from "./web-inactivity.ts";
-import { startSftpServer, sftpTunnelActive } from "./sftp-server.ts";
+import { SftpService } from "./sftp-server.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
@@ -75,6 +75,7 @@ export function startWebServer(options: {
     const session = randomBytes(32).toString("hex");
     const passkey = randomBytes(32).toString("hex");
     const record: MountRecord = JSON.parse(readFileSync(join(credentials, "web-mounts.json"), "utf8"));
+    const sftpService = new SftpService(credentials, record);
     let run: Run = { state: "idle", log: "" };
     let sqlRun: { state: Run["state"]; output: string; host?: string; database?: string } = { state: "idle", output: "" };
     let sqlWorker: ChildProcess | undefined;
@@ -168,6 +169,7 @@ export function startWebServer(options: {
             relaunch, run: { ...run, log: redact(run.log) },
             sql: { ...sqlRun, output: redact(sqlRun.output), defaults: sqlDefaults, passwordHint: SQL_PASSWORD_HINT,
                 hasDefaultPassword: existsSync(sqlUserPath) || existsSync(sqlDefaultPath), preparing: sqlPreparing },
+            sftp: sftpService.status(auth),
         };
     };
     const app = new Hono<{ Variables: { input: Record<string, unknown> } }>();
@@ -268,6 +270,29 @@ export function startWebServer(options: {
         }
         value.status = { ...value.status, theme };
         writeFileSync(configPath, JSON.stringify(value, null, 4) + "\n");
+        return reply(c, 200, status());
+    });
+    app.post("/api/sftp", async c => {
+        const input = c.get("input");
+        if (!["save", "start", "stop"].includes(String(input.action))) throw new Error("Choose Start SFTP, Stop SFTP, or Save settings.");
+        if (input.action === "stop") { sftpService.stop(); return reply(c, 200, status()); }
+        if (sftpService.active) throw new Error("Stop SFTP before changing its settings.");
+        const auth = readAuth(authPath);
+        const saved = auth.sftp ?? { username: "suitecontainer", port: 8000, password: "" };
+        if (typeof input.username !== "string" || typeof input.port !== "number" || typeof input.path !== "string" ||
+            (input.password !== undefined && typeof input.password !== "string")) throw new Error("Enter the SFTP user, port, password, and local folder.");
+        const next: Auth = { ...auth, sftp: { username: input.username.trim(), port: input.port,
+            password: input.password ? String(input.password) : saved.password, path: input.path.trim() } };
+        // Validate through the same credential parser before writing the real file.
+        const temporary = join(credentials, `.sftp-${randomBytes(8).toString("hex")}.json`);
+        try { writeFileSync(temporary, JSON.stringify(next), { mode: 0o600 }); readAuth(temporary); }
+        finally { rmSync(temporary, { force: true }); }
+        writeFileSync(authPath, JSON.stringify(next, null, 4) + "\n", { mode: 0o600 });
+        secrets.add(next.sftp!.password);
+        if (input.action === "start") {
+            const host = JSON.parse(readFileSync(configPath, "utf8"))?.vms?.[0]?.url;
+            await sftpService.start(next, typeof host === "string" ? host : "");
+        }
         return reply(c, 200, status());
     });
     app.post("/api/sql", async c => {
@@ -390,23 +415,18 @@ export function startWebServer(options: {
     app.notFound(c => reply(c, 404, { error: "Page not found." }));
     app.onError((error, c) => reply(c, 400, { error: redact(message(error)) }));
     const server = createAdaptorServer({ fetch: app.fetch }) as Server;
-    const sftpServer = startSftpServer();
-    sftpServer?.on("error", error => { console.error(`SFTP could not start: ${message(error)}`); process.exit(1); });
-    sftpServer?.on("exit", code => {
-        if (!stopping) { console.error(`SFTP stopped unexpectedly (${code}). Relaunch SuiteContainer.`); process.exit(1); }
-    });
     const stopApp = () => {
         if (stopping) return;
         stopping = true;
-        sftpServer?.kill();
+        sftpService.stop();
         server.close(options.onStop ?? (() => process.exit(0)));
     };
     const inactivityTimer = setInterval(() => {
-        if (!stopping && heartbeatDeadline.expired(busy() || sftpTunnelActive())) stopApp();
+        if (!stopping && heartbeatDeadline.expired(busy() || sftpService.active)) stopApp();
     }, options.inactivityCheckMs ?? 1000);
     inactivityTimer.unref();
     server.once("close", () => clearInterval(inactivityTimer));
-    server.once("close", () => sftpServer?.kill());
+    server.once("close", () => sftpService.stop());
     server.requestTimeout = 15_000;
     server.once("close", () => sqlWorker?.kill("SIGKILL"));
     server.on("error", error => { console.error(message(error)); process.exitCode = 1; });
@@ -416,7 +436,7 @@ export function startWebServer(options: {
     });
     const shutdown = () => {
         stopping = true;
-        sftpServer?.kill();
+        sftpService.stop();
         sqlWorker?.kill("SIGKILL");
         if (worker?.pid) { try { process.kill(-worker.pid, "SIGTERM"); } catch { worker.kill("SIGTERM"); } }
         server.close();

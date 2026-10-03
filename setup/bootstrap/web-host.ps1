@@ -49,20 +49,24 @@ function Open-SuiteContainerPage {
 }
 
 function Start-SuiteContainerWeb {
+    $sshHome = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.ssh'
+    $sshKey = if ($env:SUITECONTAINER_SSH_KEY) { $env:SUITECONTAINER_SSH_KEY } elseif (Test-Path -LiteralPath (Join-Path $sshHome 'id_ed25519')) { Join-Path $sshHome 'id_ed25519' } else { Join-Path $sshHome 'id_rsa' }
+    $sshKnownHosts = if ($env:SUITECONTAINER_SSH_KNOWN_HOSTS) { $env:SUITECONTAINER_SSH_KNOWN_HOSTS } else { Join-Path $sshHome 'known_hosts' }
+    $sshEnvironment = @('--env', "SUITECONTAINER_SSH_KEY=$sshKey", '--env', "SUITECONTAINER_SSH_KNOWN_HOSTS=$sshKnownHosts")
     $base = @('--mount', "type=bind,src=$projectDir,dst=/project,ro=true", '--env', "SUITECONTAINER_HOST_ROOT=$projectDir", '--env', 'SUITECONTAINER_HOST_PLATFORM=win32')
-    $requests = @(& podman run --rm --cgroups=disabled @base suitecloud-workspace --web-paths)
+    $requests = @(& podman run --rm --cgroups=disabled @base @sshEnvironment suitecloud-workspace --web-paths)
     if ($LASTEXITCODE -ne 0) { throw 'Could not read container mount settings.' }
     $staged = @('--mount', "type=bind,src=$projectDir,dst=/project")
     foreach ($request in $requests) {
         if (-not $request) { continue }
         $kind, $name, $path = $request -split "`t", 3
-        $pathType = if ($kind -eq 'local') { 'Container' } else { 'Leaf' }
+        $pathType = if ($kind -eq 'local' -or $kind -eq 'sftp') { 'Container' } else { 'Leaf' }
         if (Test-Path -LiteralPath $path -PathType $pathType) {
             if ($kind -eq 'external') { $name += '.pem' }
             $staged += @('--mount', "type=bind,src=$path,dst=/$kind/$name,ro=true")
         }
     }
-    $launchMounts = @(& podman run --rm --cgroups=disabled @staged --env "SUITECONTAINER_HOST_ROOT=$projectDir" --env 'SUITECONTAINER_HOST_PLATFORM=win32' suitecloud-workspace --web-mounts)
+    $launchMounts = @(& podman run --rm --cgroups=disabled @staged @sshEnvironment --env "SUITECONTAINER_HOST_ROOT=$projectDir" --env 'SUITECONTAINER_HOST_PLATFORM=win32' suitecloud-workspace --web-mounts)
     if ($LASTEXITCODE -ne 0) { throw 'Could not prepare container mounts.' }
     $mounts = @()
     foreach ($mount in $launchMounts) { if ($mount) { $mounts += @('--mount', $mount) } }
