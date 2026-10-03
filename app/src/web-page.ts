@@ -102,7 +102,7 @@ details[open]>summary::before{transform:rotate(90deg)}
 @media(max-width:575px){article{padding:1rem}.credential-steps>li{padding-inline-start:2.5rem}}
 [x-cloak],[hidden]{display:none!important}
 main :is(p,blockquote):empty{display:none}
-blockquote.status-message{--pico-primary:light-dark(#9236a4,#cd68e0);--pico-blockquote-border-color:var(--pico-primary);margin:0 0 var(--pico-typography-spacing-vertical);padding:0.25rem 1.5rem;font-size:var(--pico-font-size);color:var(--pico-primary);background-color:color-mix(in srgb,var(--pico-primary) 8%,transparent)}
+blockquote.status-message{--pico-primary:light-dark(#9236a4,#cd68e0);--pico-blockquote-border-color:var(--pico-primary);margin:0 0 var(--pico-typography-spacing-vertical);padding:0.25rem 1.5rem;color:var(--pico-primary);background-color:color-mix(in srgb,var(--pico-primary) 8%,transparent)}
 textarea{font-family:var(--pico-font-family-monospace)}
 .sftp-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sftp-connection-grid>div{min-width:0}
