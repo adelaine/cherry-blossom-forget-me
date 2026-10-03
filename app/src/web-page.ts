@@ -3,8 +3,10 @@ import { ACTIVITY_GRACE_MS, HEARTBEAT_INTERVAL_MS } from "./web-inactivity.ts";
 
 export const deploymentPage = {
     html: `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SuiteCloud deployment</title><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
+<label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label>
+<p id="theme-message" role="status" x-text="view.theme_message.text"></p>
 <header><hgroup><h1><mark>SuiteCloud deployment</mark></h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup>
 <p><small>The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.</small></p></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
@@ -38,6 +40,8 @@ export const deploymentPage = {
 h1,h2,h3,h4,h5,h6{--pico-font-weight:400}
 mark{--pico-mark-gradient:linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
 button{--pico-border-radius:2rem}
+.theme-toggle{display:flex;align-items:center;gap:0.5rem;width:fit-content;margin-inline-start:auto;font-family:system-ui,"Segoe UI",sans-serif,var(--pico-font-family-emoji)}
+.theme-toggle input{margin:0}
 article{margin:2rem auto;padding:2rem}
 .credential-steps{list-style:none;padding:0;counter-reset:credential-step}
 .credential-steps>li{position:relative;counter-increment:credential-step;padding-inline-start:3rem;padding-block-end:1.5rem}
@@ -70,6 +74,7 @@ document.addEventListener('alpine:init', () => {
         { hidden: element.hidden, disabled: !!element.disabled, text: element.tagName === 'P' ? element.textContent : '' },
       ])),
       ...Object.fromEntries([
+        ['change', 'theme-toggle'],
         ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement'].map(id => ['input', id]),
         ...['sql-run','change-token','save','credentials','generate','deploy','download','stop'].map(id => ['click', id]),
       ].map(([event, id]) => {
@@ -89,6 +94,15 @@ document.addEventListener('alpine:init', () => {
         };
         let state, editing = false, stopped = false, checking, credentialEditing = false, changingToken = false, sqlSubmitting = false, sqlDefaultsApplied = false, sqlDefaultsHost, sqlAccountEdited = false, sqlDatabaseEdited = false, sqlRequestError = '';
         let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false, actionError = '';
+        let themeSaving = false;
+        const systemTheme = matchMedia('(prefers-color-scheme: dark)');
+        function applyTheme(theme) {
+          if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+          else delete document.documentElement.dataset.theme;
+          $('theme-toggle').checked = theme === 'dark' || (theme !== 'light' && systemTheme.matches);
+        }
+        applyTheme();
+        systemTheme.addEventListener('change', () => { if (!themeSaving && !state?.theme) applyTheme(); });
         const connectionMessage = 'Connection to the app was lost. It may have stopped automatically after inactivity. Start the launcher again to reconnect.';
         function connectionLost() {
           if (stopped) return;
@@ -118,6 +132,7 @@ document.addEventListener('alpine:init', () => {
         function render(next) {
           if (stopped || connectionFailed) return;
           state = next;
+          if (!themeSaving) applyTheme(next.theme);
           if (!sectionsInitialized) {
             sectionsInitialized = true;
             if (next.deploymentStarted) collapseSetupSections();
@@ -196,6 +211,35 @@ document.addEventListener('alpine:init', () => {
           if (expired) void heartbeat();
         }, {capture:true,passive:true});
         function action(id, fn, messageId = 'validation') { listen(id, 'click', async () => { actionError = ''; view[id.replaceAll('-', '_')].disabled = true; try { await fn(); } catch(error) { if (messageId === 'validation') actionError = error.message; view[messageId.replaceAll('-', '_')].text = error.message; } finally { if (!stopped) await refresh(); } }); }
+        listen('theme-toggle', 'change', async () => {
+          if (themeSaving || stopped || connectionFailed) return;
+          const theme = $('theme-toggle').checked ? 'dark' : 'light';
+          themeSaving = true;
+          view.theme_toggle.disabled = true;
+          view.theme_message.text = '';
+          applyTheme(theme);
+          try {
+            const next = await api('theme', {theme});
+            if (editing) {
+              try {
+                const config = JSON.parse($('config').value);
+                if (config && typeof config === 'object' && !Array.isArray(config) &&
+                    (config.status === undefined || (config.status && typeof config.status === 'object' && !Array.isArray(config.status)))) {
+                  config.status = {...config.status, theme};
+                  $('config').value = JSON.stringify(config, null, 4);
+                }
+              } catch { /* Keep unfinished JSON edits intact. */ }
+            }
+            themeSaving = false;
+            render(next);
+          } catch (error) {
+            view.theme_message.text = error.message;
+            applyTheme(state?.theme);
+          } finally {
+            themeSaving = false;
+            view.theme_toggle.disabled = connectionFailed || stopped;
+          }
+        });
         listen('config', 'input', () => { actionError = ''; editing = true; view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.'; view.deploy.disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350); });
         listen('vm', 'input', () => {
           actionError = '';
@@ -243,6 +287,7 @@ document.addEventListener('alpine:init', () => {
         action('stop', async () => {
           await api('stop',{});
           stopped = true;
+          view.theme_toggle.disabled = true;
           view.run_state.text = 'App stopped. Attempting to close this page…';
           for (const button of document.querySelectorAll('button')) if (button.id) view[button.id.replaceAll('-', '_')].disabled = true;
           setTimeout(() => {

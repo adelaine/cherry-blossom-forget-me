@@ -7,7 +7,7 @@ export type Config = {
     suiteapps: SuiteApp[];
     certificates?: { public: string; private: string; id: string };
     vms: Vm[];
-    status?: { "deploy-start-ok"?: 0 | 1 };
+    status?: { "deploy-start-ok"?: 0 | 1; theme?: "light" | "dark" };
 };
 
 function invalidConfig(message: string): never {
@@ -82,6 +82,9 @@ export function validateConfig(
         (!config.status || typeof config.status !== "object" || Array.isArray(config.status) ||
             (config.status["deploy-start-ok"] !== undefined && ![0, 1].includes(config.status["deploy-start-ok"])))) {
         invalidConfig("Set status.deploy-start-ok to 0 or 1.");
+    }
+    if (config.status?.theme !== undefined && !["light", "dark"].includes(config.status.theme)) {
+        invalidConfig('Set status.theme to "light" or "dark", or remove it to use the system theme.');
     }
     if (config.suiteapps.length > 0) {
         if (!Array.isArray(config.vms) || config.vms.length === 0)

@@ -137,6 +137,11 @@ export function startWebServer(options: {
         const ready = readiness(text);
         let sqlDefaults = { ...SQL_DEFAULTS };
         let deploymentStarted = false;
+        let theme: "light" | "dark" | undefined;
+        try {
+            const savedTheme = JSON.parse(readFileSync(configPath, "utf8"))?.status?.theme;
+            if (savedTheme === "light" || savedTheme === "dark") theme = savedTheme;
+        } catch { /* Configuration validation explains malformed JSON. */ }
         try {
             const config = JSON.parse(text);
             deploymentStarted = config?.status?.["deploy-start-ok"] === 1;
@@ -155,6 +160,7 @@ export function startWebServer(options: {
             config: text, ready: ready.ready && !busy(), error: credentialError || ready.error,
             credentialError, tokenPresent: !!auth["gitlab-token"]?.trim(),
             deploymentStarted,
+            theme,
             certificates: {
                 public: /[\r\n]/.test(auth["suitecloud-certificates"]?.public ?? "") ? "" : auth["suitecloud-certificates"]?.public ?? "",
                 private: /[\r\n]/.test(auth["suitecloud-certificates"]?.private ?? "") ? "" : auth["suitecloud-certificates"]?.private ?? "",
@@ -216,7 +222,7 @@ export function startWebServer(options: {
     app.use("/api/*", async (c, next) => {
         if (c.req.method !== "POST") return reply(c, 404, { error: "Page not found." });
         if (stopping) return reply(c, 409, { error: "The app is stopping. Relaunch to continue." });
-        const background = ["/api/check", "/api/heartbeat"].includes(c.req.path);
+        const background = ["/api/check", "/api/heartbeat", "/api/theme"].includes(c.req.path);
         if (busy() && !background) return reply(c, 409, { error: busyMessage() });
         // Count every byte before side effects, including requests without Content-Length.
         const chunks: Uint8Array[] = [];
@@ -253,6 +259,18 @@ export function startWebServer(options: {
         const input = c.get("input");
         if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
         return reply(c, 200, status(input.config));
+    });
+    app.post("/api/theme", c => {
+        const theme = c.get("input").theme;
+        if (theme !== "light" && theme !== "dark") throw new Error('Choose "light" or "dark" for the theme.');
+        const value = JSON.parse(readFileSync(configPath, "utf8"));
+        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Configuration must be a JSON object.");
+        if (value.status !== undefined && (!value.status || typeof value.status !== "object" || Array.isArray(value.status))) {
+            throw new Error("Set status to an object in Settings before changing the theme.");
+        }
+        value.status = { ...value.status, theme };
+        writeFileSync(configPath, JSON.stringify(value, null, 4) + "\n");
+        return reply(c, 200, status());
     });
     app.post("/api/sql", async c => {
         const input = c.get("input");
