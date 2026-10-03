@@ -10,6 +10,7 @@ export const deploymentPage = {
 <header><hgroup><h1><mark>SuiteCloud deployment</mark></h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup>
 <p><small>The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.</small></p></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
+<div class="setup-sections">
 <article><details class="setup-section" id="credentials-section" open><summary><h2>Credentials</h2></summary><ol class="credential-steps" role="list"><li><h3>GitLab token</h3><p id="token-state" x-text="view.token_state.text"></p><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></li>
 <li><h3>Certificate paths</h3><details id="cert-details"><summary>View file paths</summary><p>Paths refer to files on the computer running the launcher. Changing external paths may require relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
 <p>Generating a new pair replaces the certificates saved by this app and clears the saved certificate ID. Old certificates saved by this app will not be preserved. Files stored elsewhere are not changed. Register the new public certificate on your runbox before deploying.</p>
@@ -20,14 +21,15 @@ export const deploymentPage = {
 <label for="id">Certificate ID assigned by NetSuite</label><input id="id" :disabled="view.id.disabled" @input="inputid"></li></ol><fieldset><button id="credentials" :disabled="view.credentials.disabled" @click="clickcredentials">Save credentials</button></fieldset><p id="credential-message" role="status" x-text="view.credential_message.text"></p></details></article>
 <article><details class="setup-section" id="settings-section" open><summary><h2>Settings</h2></summary><p>Use Current VM above to set your first runbox address. Keep the account ID unless your runbox uses a different account. Additional runboxes can be entered in <code>vms</code> below.</p>
 <label for="config">Configuration JSON</label><textarea id="config" spellcheck="false" rows="22" :disabled="view.config.disabled" @input="inputconfig"></textarea><fieldset><button id="save" :disabled="view.save.disabled" @click="clicksave">Save settings</button></fieldset><p id="settings-message" role="status" x-text="view.settings_message.text"></p></details></article>
-<article><details class="setup-section" id="sql-section" open><summary><h2>SQL</h2></summary><details id="sql-details"><summary>Connection and SQL statement</summary>
+<article><details class="setup-section" id="sql-section" open><summary><h2>SQL</h2></summary>
 <div class="grid"><div><label for="sql-account">User</label><input id="sql-account" autocomplete="off" spellcheck="false" :disabled="view.sql_account.disabled" @input="inputsql_account"></div>
 <div><label for="sql-database">Service Name</label><input id="sql-database" autocomplete="off" spellcheck="false" :disabled="view.sql_database.disabled" @input="inputsql_database"></div></div>
 <div class="grid"><div><label for="sql-password">Password</label><input id="sql-password" type="password" autocomplete="off" :disabled="view.sql_password.disabled" @input="inputsql_password"></div>
 <div><label for="sql-unlock">Answer to password hint</label><input id="sql-unlock" type="password" autocomplete="off" aria-describedby="sql-password-hint sql-unlock-availability" :disabled="view.sql_unlock.disabled" @input="inputsql_unlock"><p id="sql-password-hint" hidden :hidden="view.sql_password_hint.hidden" x-text="view.sql_password_hint.text"></p></div></div>
 <p>SQL runs on Current VM. Enter your SQL password, or answer the hint to unlock the saved password. Entering one clears the other.</p><p id="sql-unlock-availability" hidden :hidden="view.sql_unlock_availability.hidden" x-text="view.sql_unlock_availability.text"></p>
 <label for="sql-statement">SQL statement</label><textarea id="sql-statement" rows="8" spellcheck="false" placeholder="SELECT * FROM your_table;" :disabled="view.sql_statement.disabled" @input="inputsql_statement"></textarea>
-<fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></details></article>
+<fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></article>
+</div>
 <article><h2>Deployment</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset class="grid" aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy</button>
 <button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><p id="run-state" role="status" x-text="view.run_state.text">Loading…</p><pre data-theme="dark" id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
 </main></body></html>`,
@@ -51,6 +53,10 @@ details>summary{--pico-primary:light-dark(#876400,#c79400);--pico-accordion-clos
 details>summary::after{display:none}
 details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
 details[open]>summary::before{transform:rotate(90deg)}
+@media(min-width:768px){
+.setup-sections:not(:has(>article>.setup-section[open])){display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-block:2rem}
+.setup-sections:not(:has(>article>.setup-section[open]))>article{margin:0;padding:1.5rem;min-width:0}
+}
 .setup-section{margin-bottom:0}
 .setup-section>summary h2{margin:0}
 .setup-section[open]>summary{margin-bottom:1.5rem}

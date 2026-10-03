@@ -696,6 +696,5 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
     assert.match(element("sql-message").textContent, /Connection input is invalid/);
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') > deploymentPage.html.indexOf('Configuration JSON'));
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') < deploymentPage.html.indexOf('<h2>Deployment</h2>'));
-    assert.match(deploymentPage.html, /<details id="sql-details"[^>]*><summary>Connection and SQL statement<\/summary>/);
     assert.ok(!deploymentPage.html.includes('id="sql-target"'));
 });
