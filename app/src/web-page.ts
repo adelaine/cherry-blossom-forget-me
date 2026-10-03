@@ -16,7 +16,7 @@ const lightTheme = `
 
 export const deploymentPage = {
     html: `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
 <label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>

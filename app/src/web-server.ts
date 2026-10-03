@@ -196,6 +196,11 @@ export function startWebServer(options: {
         ["/alpine.js", "text/javascript", alpine],
         ["/pico.css", "text/css", pico],
     ]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
+    const favicon = readFileSync(new URL("./assets/favicon.png", import.meta.url));
+    app.get("/favicon.png", c => {
+        c.header("Content-Type", "image/png");
+        return c.body(new Uint8Array(favicon));
+    });
     for (const name of ["Ubuntu-Light.ttf", "Ubuntu-Regular.ttf", "Ubuntu-Medium.ttf", "Ubuntu-Bold.ttf"]) {
         const font = readFileSync(new URL("./assets/fonts/" + name, import.meta.url));
         app.get("/fonts/" + name, c => {
