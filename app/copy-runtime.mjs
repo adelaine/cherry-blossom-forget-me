@@ -29,4 +29,5 @@ for (const name of ["hono", "@hono/node-server"]) {
 }
 copyFileSync(require.resolve("@alpinejs/csp/dist/cdn.min.js"), join(outputDirectory, "assets/alpine.js"));
 copyFileSync(require.resolve("@picocss/pico/css/pico.min.css"), join(outputDirectory, "assets/pico.css"));
+cpSync(join(appDirectory, "src/assets/fonts"), join(outputDirectory, "assets/fonts"), { recursive: true });
 writeFileSync(join(outputDirectory, "package.json"), JSON.stringify({ type: "module" }) + "\n");

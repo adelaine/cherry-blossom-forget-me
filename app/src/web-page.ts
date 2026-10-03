@@ -5,17 +5,17 @@ export const deploymentPage = {
     html: `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SuiteCloud deployment</title><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
-<header><hgroup><h1>SuiteCloud deployment</h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup>
+<header><hgroup><h1><mark>SuiteCloud deployment</mark></h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup>
 <p><small>The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.</small></p></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
-<article><h2>Credentials</h2><p id="token-state" x-text="view.token_state.text"></p><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div>
-<details id="cert-details"><summary>Certificate paths</summary><p>Paths refer to files on the computer running the launcher. Changing external paths may require relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
+<article><h2>Credentials</h2><ol class="credential-steps" role="list"><li><h3>GitLab token</h3><p id="token-state" x-text="view.token_state.text"></p><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></li>
+<li><h3>Certificate paths</h3><details id="cert-details"><summary>View file paths</summary><p>Paths refer to files on the computer running the launcher. Changing external paths may require relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
 <p>Generating a new pair replaces the certificates saved by this app and clears the saved certificate ID. Old certificates saved by this app will not be preserved. Files stored elsewhere are not changed. Register the new public certificate on your runbox before deploying.</p>
-<fieldset class="grid" aria-label="Certificate actions"><button class="secondary" id="generate" :disabled="view.generate.disabled" @click="clickgenerate">Generate certificates</button>
-<button class="secondary outline" id="download" hidden :hidden="view.download.hidden" :disabled="view.download.disabled" @click="clickdownload">Download public certificate</button></fieldset>
+<fieldset class="grid" aria-label="Certificate actions"><button class="secondary outline" id="generate" :disabled="view.generate.disabled" @click="clickgenerate">Generate certificates</button>
+<button class="secondary" id="download" hidden :hidden="view.download.hidden" :disabled="view.download.disabled" @click="clickdownload">Download public certificate</button></fieldset>
 <p id="cert-message" x-text="view.cert_message.text"></p><div id="registration"><p>Register the public certificate on your runbox: open <strong>Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup</strong>, select SuiteCloud Development Integration and the appropriate entity and role, and upload <strong>public.pem</strong>. Copy the assigned certificate ID below. Keep the private key on this computer.</p><p><a id="runbox-link" hidden target="_blank" rel="noopener noreferrer" :hidden="view.runbox_link.hidden">Open runbox</a> <a href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0422011927.html" target="_blank" rel="noopener noreferrer">NetSuite setup guide</a></p></div>
-<label for="vm">Current VM (runbox domain)</label><input id="vm" placeholder="your-runbox.vm.eng.netsuite.com" :disabled="view.vm.disabled" @input="inputvm"><p>Enter only the domain, without https:// or /devhome. This updates the first VM in Settings and the Open runbox link. Save credentials also saves the settings shown below. Deployment uses every VM listed in Settings.</p>
-<label for="id">Certificate ID assigned by NetSuite</label><input id="id" :disabled="view.id.disabled" @input="inputid"><fieldset><button id="credentials" :disabled="view.credentials.disabled" @click="clickcredentials">Save credentials</button></fieldset><p id="credential-message" role="status" x-text="view.credential_message.text"></p></article>
+</li><li><h3>Current VM</h3><label for="vm">Current VM (runbox domain)</label><input id="vm" aria-describedby="vm-help" placeholder="your-runbox.vm.eng.netsuite.com" :disabled="view.vm.disabled" @input="inputvm"><p id="vm-help"><small>Enter only the domain, without https:// or /devhome. This updates the first VM in Settings and the Open runbox link. Save credentials also saves the settings shown below. Deployment uses every VM listed in Settings.</small></p>
+<label for="id">Certificate ID assigned by NetSuite</label><input id="id" :disabled="view.id.disabled" @input="inputid"></li></ol><fieldset><button id="credentials" :disabled="view.credentials.disabled" @click="clickcredentials">Save credentials</button></fieldset><p id="credential-message" role="status" x-text="view.credential_message.text"></p></article>
 <article><h2>Settings</h2><p>Use Current VM above to set your first runbox address. Keep the account ID unless your runbox uses a different account. Additional runboxes can be entered in <code>vms</code> below.</p>
 <label for="config">Configuration JSON</label><textarea id="config" spellcheck="false" rows="22" :disabled="view.config.disabled" @input="inputconfig"></textarea><fieldset><button class="secondary" id="save" :disabled="view.save.disabled" @click="clicksave">Save settings</button></fieldset><p id="settings-message" role="status" x-text="view.settings_message.text"></p></article>
 <article><h2>SQL</h2><details id="sql-details"><summary>Connection and SQL statement</summary>
@@ -30,6 +30,25 @@ export const deploymentPage = {
 <button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><p id="run-state" role="status" x-text="view.run_state.text">Loading…</p><pre data-theme="dark" id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
 </main></body></html>`,
     style: `${ansiStyles}
+@font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Light.ttf') format('truetype');font-style:normal;font-weight:300;font-display:swap}
+@font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Medium.ttf') format('truetype');font-style:normal;font-weight:500;font-display:swap}
+@font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Bold.ttf') format('truetype');font-style:normal;font-weight:700;font-display:swap}
+:root{--pico-font-family-sans-serif:Ubuntu,system-ui,Helvetica,sans-serif,var(--pico-font-family-emoji);--pico-font-weight:300}
+h1,h2,h3,h4,h5,h6{--pico-font-weight:400}
+mark{--pico-mark-gradient:linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
+button{--pico-border-radius:2rem}
+article{margin:2rem auto;padding:2rem}
+.credential-steps{list-style:none;padding:0;counter-reset:credential-step}
+.credential-steps>li{position:relative;counter-increment:credential-step;padding-inline-start:3rem;padding-block-end:1.5rem}
+.credential-steps>li::before{content:counter(credential-step);position:absolute;inset-inline-start:0;inset-block-start:0;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;background:var(--pico-secondary-background);color:var(--pico-secondary-inverse);font-weight:500}
+.credential-steps>li:not(:last-child)::after{content:"";position:absolute;inset-inline-start:1rem;inset-block:2.25rem 0.25rem;width:0;border-inline-start:1px solid var(--pico-muted-border-color)}
+details>summary{--pico-primary:light-dark(#876400,#c79400);--pico-accordion-close-summary-color:var(--pico-primary);--pico-accordion-open-summary-color:var(--pico-primary);--pico-accordion-active-summary-color:var(--pico-primary);display:flex;align-items:center;gap:0.75rem;font-weight:500}
+details>summary::after{display:none}
+details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
+details[open]>summary::before{transform:rotate(90deg)}
+:is(input:not([type="checkbox"]),textarea):enabled{background-color:light-dark(#fff,#111)}
+@media(max-width:575px){article{padding:1rem}.credential-steps>li{padding-inline-start:2.5rem}}
 [x-cloak],[hidden]{display:none!important}
 main p:empty{display:none}
 textarea{font-family:var(--pico-font-family-monospace)}

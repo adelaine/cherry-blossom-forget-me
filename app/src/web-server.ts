@@ -185,6 +185,13 @@ export function startWebServer(options: {
         ["/alpine.js", "text/javascript", alpine],
         ["/pico.css", "text/css", pico],
     ]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
+    for (const name of ["Ubuntu-Light.ttf", "Ubuntu-Regular.ttf", "Ubuntu-Medium.ttf", "Ubuntu-Bold.ttf"]) {
+        const font = readFileSync(new URL("./assets/fonts/" + name, import.meta.url));
+        app.get("/fonts/" + name, c => {
+            c.header("Content-Type", "font/ttf");
+            return c.body(new Uint8Array(font));
+        });
+    }
     app.get("/health", c => reply(c, 200, { ready: true }));
     app.use("*", async (c, next) => {
         const supplied = Buffer.from(c.req.header("x-session-token") ?? "");
@@ -299,7 +306,7 @@ export function startWebServer(options: {
         run = { state: "running", log: "Starting deployment...\n", started: new Date().toISOString() };
         worker = spawn(process.execPath, [options.workerScript ?? fileURLToPath(new URL("./install.js", import.meta.url)), "--deploy"], {
             stdio: ["ignore", "pipe", "pipe"], detached: true, windowsHide: true,
-            env: { ...process.env, SUITECONTAINER_CONFIG: workerConfig, SUITECONTAINER_AUTH: workerAuth,
+            env: { ...process.env, FORCE_COLOR: "1", SUITECONTAINER_CONFIG: workerConfig, SUITECONTAINER_AUTH: workerAuth,
                 SUITECONTAINER_PUBLIC_KEY: ready.cert.publicPath!, SUITECONTAINER_PRIVATE_KEY: ready.cert.privatePath!,
                 SUITECONTAINER_NONINTERACTIVE: "1", SUITECONTAINER_DEPLOY_PASSKEY: passkey },
         });
