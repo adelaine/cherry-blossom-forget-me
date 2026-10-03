@@ -24,7 +24,7 @@ export const deploymentPage = {
 <p><small>The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish, and running SFTP keeps the app open. Use Stop app to stop it sooner, or run the launcher again to reopen it.</small></p></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
 <div class="setup-sections">
-<article><details class="setup-section" id="credentials-section" open><summary><h2>Credentials</h2></summary><ol class="credential-steps" role="list"><li><h3>GitLab token</h3><p id="token-state" x-text="view.token_state.text"></p><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></li>
+<article><details class="setup-section" id="credentials-section" open><summary><h2>Credentials</h2></summary><ol class="credential-steps" role="list"><li><h3>GitLab token</h3><blockquote class="status-message" id="token-state" x-text="view.token_state.text"></blockquote><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></li>
 <li><h3>Certificate paths</h3><details id="cert-details"><summary>View file paths</summary><p>Paths refer to files on the computer running the launcher. Changing external paths may require relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
 <p>Generating a new pair replaces the certificates saved by this app and clears the saved certificate ID. Old certificates saved by this app will not be preserved. Files stored elsewhere are not changed. Register the new public certificate on your runbox before deploying.</p>
 <fieldset class="grid" aria-label="Certificate actions"><button class="secondary outline" id="generate" :disabled="view.generate.disabled" @click="clickgenerate">Generate certificates</button>
@@ -45,7 +45,7 @@ export const deploymentPage = {
 <article><details class="setup-section" id="sftp-section"><summary><h2>SFTP</h2></summary>
 <p>Share files from your laptop with NetSuite through the runbox. Start SFTP when needed; it does not start automatically.</p>
 <fieldset class="grid" aria-label="SFTP actions"><button id="sftp-start" disabled :disabled="view.sftp_start.disabled" @click="clicksftp_start">Start SFTP</button><button id="sftp-stop" class="secondary outline" disabled :disabled="view.sftp_stop.disabled" @click="clicksftp_stop">Stop SFTP</button><button id="sftp-save" class="secondary" disabled :disabled="view.sftp_save.disabled" @click="clicksftp_save">Save settings</button></fieldset>
-<p id="sftp-message" role="status" x-text="view.sftp_message.text"></p>
+<blockquote class="status-message" id="sftp-message" role="status" x-text="view.sftp_message.text"></blockquote>
 <details><summary>SFTP settings</summary>
 <div class="grid"><div><label for="sftp-user">User</label><input id="sftp-user" autocomplete="off" spellcheck="false" :disabled="view.sftp_user.disabled" @input="inputsftp_user"></div>
 <div><label for="sftp-port">Port</label><input id="sftp-port" type="number" min="1" max="65535" step="1" :disabled="view.sftp_port.disabled" @input="inputsftp_port"></div></div>
@@ -66,7 +66,7 @@ export const deploymentPage = {
 </details></article>
 </div>
 <article><h2>Deployment</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset class="grid" aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy</button>
-<button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><p id="run-state" role="status" x-text="view.run_state.text">Loading…</p><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
+<button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><blockquote class="status-message" id="run-state" role="status" x-text="view.run_state.text">Loading…</blockquote><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
 </main></body></html>`,
     style: `${ansiStyles}
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Light.ttf') format('truetype');font-style:normal;font-weight:300;font-display:swap}
@@ -101,7 +101,8 @@ details[open]>summary::before{transform:rotate(90deg)}
 :is(input:not([type="checkbox"]),textarea):enabled{background-color:light-dark(#fff,#111)}
 @media(max-width:575px){article{padding:1rem}.credential-steps>li{padding-inline-start:2.5rem}}
 [x-cloak],[hidden]{display:none!important}
-main p:empty{display:none}
+main :is(p,blockquote):empty{display:none}
+blockquote.status-message{--pico-primary:light-dark(#9236a4,#cd68e0);--pico-blockquote-border-color:var(--pico-primary);margin:0 0 var(--pico-typography-spacing-vertical);padding:0.25rem 1.5rem;font-size:var(--pico-font-size);color:var(--pico-primary);background-color:color-mix(in srgb,var(--pico-primary) 8%,transparent)}
 textarea{font-family:var(--pico-font-family-monospace)}
 .sftp-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sftp-connection-grid>div{min-width:0}
@@ -132,7 +133,7 @@ document.addEventListener('alpine:init', () => {
       // Pico styles semantic elements. Alpine owns control availability and status.
       view: Object.fromEntries([...document.querySelectorAll('main [id]')].map(element => [
         element.id.replaceAll('-', '_'),
-        { hidden: element.hidden, disabled: !!element.disabled, text: element.tagName === 'P' ? element.textContent : '' },
+        { hidden: element.hidden, disabled: !!element.disabled, text: ['P', 'BLOCKQUOTE'].includes(element.tagName) ? element.textContent : '' },
       ])),
       ...Object.fromEntries([
         ['change', 'theme-toggle'],
