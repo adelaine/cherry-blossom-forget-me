@@ -34,7 +34,7 @@ export const deploymentPage = {
 <label for="id">Certificate ID assigned by NetSuite</label><input id="id" :disabled="view.id.disabled" @input="inputid"></li></ol><fieldset><button id="credentials" :disabled="view.credentials.disabled" @click="clickcredentials">Save credentials</button></fieldset><p id="credential-message" role="status" x-text="view.credential_message.text"></p></details></article>
 <article><details class="setup-section" id="settings-section" open><summary><h2>Settings</h2></summary><p>Use Current VM above to set your first runbox address. Keep the account ID unless your runbox uses a different account. Additional runboxes can be entered in <code>vms</code> below.</p>
 <label for="config">Configuration JSON</label><textarea id="config" spellcheck="false" rows="22" :disabled="view.config.disabled" @input="inputconfig"></textarea><fieldset><button id="save" :disabled="view.save.disabled" @click="clicksave">Save settings</button></fieldset><p id="settings-message" role="status" x-text="view.settings_message.text"></p></details></article>
-<article><details class="setup-section" id="sql-section" open><summary><h2>SQL</h2></summary>
+<article><details class="setup-section" id="sql-section"><summary><h2>SQL</h2></summary>
 <div class="grid"><div><label for="sql-account">User</label><input id="sql-account" autocomplete="off" spellcheck="false" :disabled="view.sql_account.disabled" @input="inputsql_account"></div>
 <div><label for="sql-database">Service Name</label><input id="sql-database" autocomplete="off" spellcheck="false" :disabled="view.sql_database.disabled" @input="inputsql_database"></div></div>
 <div class="grid"><div><label for="sql-password">Password</label><input id="sql-password" type="password" autocomplete="off" :disabled="view.sql_password.disabled" @input="inputsql_password"></div>
@@ -42,7 +42,7 @@ export const deploymentPage = {
 <p>SQL runs on Current VM. Enter your SQL password, or answer the hint to unlock the saved password. Entering one clears the other.</p><p id="sql-unlock-availability" hidden :hidden="view.sql_unlock_availability.hidden" x-text="view.sql_unlock_availability.text"></p>
 <label for="sql-statement">SQL statement</label><textarea id="sql-statement" rows="8" spellcheck="false" placeholder="SELECT * FROM your_table;" :disabled="view.sql_statement.disabled" @input="inputsql_statement"></textarea>
 <fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></article>
-<article><details class="setup-section" id="sftp-section" open><summary><h2>SFTP</h2></summary>
+<article><details class="setup-section" id="sftp-section"><summary><h2>SFTP</h2></summary>
 <p>Share files from your laptop with NetSuite through the runbox. Start SFTP when needed; it does not start automatically.</p>
 <fieldset class="grid" aria-label="SFTP actions"><button id="sftp-start" disabled :disabled="view.sftp_start.disabled" @click="clicksftp_start">Start SFTP</button><button id="sftp-stop" class="secondary outline" disabled :disabled="view.sftp_stop.disabled" @click="clicksftp_stop">Stop SFTP</button><button id="sftp-save" class="secondary" disabled :disabled="view.sftp_save.disabled" @click="clicksftp_save">Save settings</button></fieldset>
 <p id="sftp-message" role="status" x-text="view.sftp_message.text"></p>
@@ -54,13 +54,14 @@ export const deploymentPage = {
 </details>
 <details open><summary>NetSuite connection fields</summary>
 <p>Use these saved settings after SFTP is running. Internal SFTP addresses must be allowed on the runbox.</p>
-<div class="sftp-connection-grid">
-<div><label for="sftp-netsuite-url">URL</label><input id="sftp-netsuite-url" disabled value="localhost"></div>
-<div class="sftp-connection-key"><label for="sftp-host-key">Host key</label><textarea id="sftp-host-key" disabled spellcheck="false" rows="5" aria-describedby="sftp-host-key-help"></textarea></div>
-<div class="sftp-connection-user"><label for="sftp-netsuite-user">Username</label><input id="sftp-netsuite-user" disabled></div>
-<div class="sftp-connection-port"><label for="sftp-netsuite-port">Port</label><input id="sftp-netsuite-port" disabled></div>
-<div class="sftp-connection-password"><label for="sftp-netsuite-password">Password</label><input id="sftp-netsuite-password" type="text" disabled value="use the password saved above"></div>
+<div class="grid sftp-connection-grid">
+<div><div class="sftp-value-heading"><span id="sftp-url-label">URL</span><button id="copy-sftp-url" type="button" class="secondary outline" aria-label="Copy URL" :disabled="view.copy_sftp_url.disabled" x-text="view.copy_sftp_url.text" @click="clickcopy_sftp_url">Copy</button></div><div id="sftp-netsuite-url" class="sftp-connection-value" tabindex="0" aria-labelledby="sftp-url-label">localhost</div></div>
+<div class="sftp-connection-key"><div class="sftp-value-heading"><span id="sftp-key-label">Host key</span><button id="copy-sftp-key" type="button" class="secondary outline" aria-label="Copy host key" :disabled="view.copy_sftp_key.disabled" x-text="view.copy_sftp_key.text" @click="clickcopy_sftp_key">Copy</button></div><div id="sftp-host-key" class="sftp-connection-value" tabindex="0" aria-labelledby="sftp-key-label"></div></div>
+<div class="sftp-connection-user"><div class="sftp-value-heading"><span id="sftp-user-label">Username</span><button id="copy-sftp-user" type="button" class="secondary outline" aria-label="Copy username" :disabled="view.copy_sftp_user.disabled" x-text="view.copy_sftp_user.text" @click="clickcopy_sftp_user">Copy</button></div><div id="sftp-netsuite-user" class="sftp-connection-value" tabindex="0" aria-labelledby="sftp-user-label"></div></div>
+<div class="sftp-connection-port"><div class="sftp-value-heading"><span id="sftp-port-label">Port</span><button id="copy-sftp-port" type="button" class="secondary outline" aria-label="Copy port" :disabled="view.copy_sftp_port.disabled" x-text="view.copy_sftp_port.text" @click="clickcopy_sftp_port">Copy</button></div><div id="sftp-netsuite-port" class="sftp-connection-value" tabindex="0" aria-labelledby="sftp-port-label"></div></div>
+<div class="sftp-connection-password"><div class="sftp-value-heading"><span id="sftp-password-label">Password</span></div><div id="sftp-netsuite-password" class="sftp-connection-value" tabindex="0" aria-labelledby="sftp-password-label">use the password saved above</div></div>
 </div>
+<p id="sftp-copy-message" role="status" x-text="view.sftp_copy_message.text"></p>
 </details>
 </details></article>
 </div>
@@ -102,10 +103,13 @@ details[open]>summary::before{transform:rotate(90deg)}
 [x-cloak],[hidden]{display:none!important}
 main p:empty{display:none}
 textarea{font-family:var(--pico-font-family-monospace)}
-.sftp-connection-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:var(--pico-grid-column-gap,1rem)}
+.sftp-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sftp-connection-grid>div{min-width:0}
 .sftp-connection-key{grid-column:2;grid-row:1/span 2;display:flex;flex-direction:column}
-.sftp-connection-key textarea{flex:1;min-height:0;resize:none}
+.sftp-value-heading{display:flex;align-items:center;justify-content:space-between;gap:var(--pico-spacing);min-height:calc(var(--pico-spacing)*2);margin-bottom:calc(var(--pico-spacing)*0.375)}
+.sftp-value-heading button{--pico-form-element-spacing-vertical:calc(var(--pico-spacing)*0.125);--pico-form-element-spacing-horizontal:calc(var(--pico-spacing)*0.75);margin:0;font-size:0.8em}
+.sftp-connection-value{padding:var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);border:var(--pico-border-width) solid var(--pico-form-element-border-color);border-radius:var(--pico-border-radius);background:var(--pico-form-element-background-color);color:var(--pico-form-element-color);opacity:var(--pico-form-element-disabled-opacity);cursor:text;overflow-wrap:anywhere}
+.sftp-connection-key .sftp-connection-value{flex:1;min-height:0;max-height:calc(var(--pico-spacing)*12);overflow:auto;font-family:var(--pico-font-family-monospace)}
 .sftp-connection-user{grid-column:1;grid-row:2}
 .sftp-connection-port{grid-column:2;grid-row:3}
 .sftp-connection-password{grid-column:1;grid-row:3}
@@ -133,7 +137,7 @@ document.addEventListener('alpine:init', () => {
       ...Object.fromEntries([
         ['change', 'theme-toggle'],
         ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path'].map(id => ['input', id]),
-        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save'].map(id => ['click', id]),
+        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port'].map(id => ['click', id]),
       ].map(([event, id]) => {
         const name = event + id.replaceAll('-', '_');
         return [name, () => handlers[name]()];
@@ -241,9 +245,13 @@ document.addEventListener('alpine:init', () => {
           view.sftp_save.disabled = !sftp || busy || active || submitting;
           view.sftp_stop.disabled = !sftp || submitting || !active && !['starting','running'].includes(sftp.tunnel?.state);
           view.sftp_password_help.text = sftp?.passwordPresent ? 'A password is saved. Leave blank to use existing password.' : 'Enter a password before starting SFTP.';
-          $('sftp-netsuite-user').value = sftp?.username || '';
-          $('sftp-netsuite-port').value = sftp ? String(sftp.port) : '';
-          $('sftp-host-key').value = sftp?.hostKey || '';
+          for (const [id, value] of [['sftp-netsuite-user',sftp?.username || ''],['sftp-netsuite-port',sftp ? String(sftp.port) : ''],['sftp-host-key',sftp?.hostKey || '']]) {
+            if ($(id).textContent !== value) $(id).textContent = value;
+          }
+          for (const [key, target] of [['url','sftp-netsuite-url'],['key','sftp-host-key'],['user','sftp-netsuite-user'],['port','sftp-netsuite-port']]) {
+            const button = view['copy_sftp_' + key];
+            button.text ||= 'Copy'; button.disabled = !$(target).textContent;
+          }
           const status = sftp ? ({stopped:'SFTP is stopped.',starting:'SFTP is starting…',running:'SFTP is running.',failed:'SFTP failed.'})[sftp.state] : 'Loading SFTP settings…';
           const tunnel = sftp?.tunnel;
           const tunnelMessage = tunnel?.error || (tunnel?.state === 'starting' ? 'Connecting the runbox tunnel…' : sftp?.state === 'running' && tunnel?.state !== 'running' ? 'The runbox tunnel is not connected.' : '');
@@ -342,6 +350,18 @@ document.addEventListener('alpine:init', () => {
           } catch { view.credential_message.text = 'Fix the configuration JSON in Settings before changing Current VM.'; view.deploy.disabled = true; }
         });
         for (const key of ['public','private','id','token']) listen(key, 'input', () => { actionError = ''; credentialEditing = true; view.credential_message.text = 'Credentials changed. Click Save credentials before deploying.'; view.deploy.disabled = true; });
+        for (const [key, target] of [['url','sftp-netsuite-url'],['key','sftp-host-key'],['user','sftp-netsuite-user'],['port','sftp-netsuite-port']]) {
+          let reset;
+          listen('copy-sftp-' + key, 'click', async () => {
+            view.sftp_copy_message.text = '';
+            try {
+              await navigator.clipboard.writeText($(target).textContent);
+              const button = view['copy_sftp_' + key];
+              button.text = 'Copied'; clearTimeout(reset);
+              reset = setTimeout(() => { button.text = 'Copy'; }, 1500);
+            } catch { view.sftp_copy_message.text = 'Could not copy. Select the value and copy it manually.'; }
+          });
+        }
         for (const key of ['sftp-user','sftp-port','sftp-password','sftp-path']) listen(key, 'input', () => {
           sftpEditing = true; sftpRequestError = ''; sftpNotice = '';
           if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting);
