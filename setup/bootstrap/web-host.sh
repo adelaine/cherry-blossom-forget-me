@@ -51,10 +51,15 @@ reuse_web_app() {
 
 start_web_app() {
   local requests kind name path launch_mounts mount
-  local ssh_key="${SUITECONTAINER_SSH_KEY:-$HOME/.ssh/id_ed25519}"
-  if [[ ! -f "$ssh_key" && -z "${SUITECONTAINER_SSH_KEY:-}" ]]; then ssh_key="$HOME/.ssh/id_rsa"; fi
-  local ssh_known_hosts="${SUITECONTAINER_SSH_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}"
-  local ssh_environment=(--env "SUITECONTAINER_SSH_KEY=$ssh_key" --env "SUITECONTAINER_SSH_KNOWN_HOSTS=$ssh_known_hosts")
+  local ssh_target ssh_resolved=''
+  ssh_target="$(podman run --rm --cgroups=disabled \
+    --mount "type=bind,src=$project_dir,dst=/project,ro=true" suitecloud-workspace --web-ssh-target)" || return $?
+  if [[ -n "$ssh_target" ]] && command -v ssh >/dev/null; then
+    ssh_resolved="$(ssh -G -T "nsbuild@$ssh_target" 2>/dev/null)" || ssh_resolved=''
+  fi
+  local ssh_environment=(--env "SUITECONTAINER_SSH_TARGET=$ssh_target" --env "SUITECONTAINER_SSH_RESOLVED=$ssh_resolved" --env "SUITECONTAINER_SSH_HOME=$HOME")
+  [[ -n "${SUITECONTAINER_SSH_KEY:-}" ]] && ssh_environment+=(--env "SUITECONTAINER_SSH_KEY=$SUITECONTAINER_SSH_KEY")
+  [[ -n "${SUITECONTAINER_SSH_KNOWN_HOSTS:-}" ]] && ssh_environment+=(--env "SUITECONTAINER_SSH_KNOWN_HOSTS=$SUITECONTAINER_SSH_KNOWN_HOSTS")
   local staged=(--mount "type=bind,src=$project_dir,dst=/project")
   requests="$(podman run --rm --cgroups=disabled \
     --mount "type=bind,src=$project_dir,dst=/project,ro=true" \

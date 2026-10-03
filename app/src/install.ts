@@ -10,11 +10,12 @@ import {
 } from "./step-certificates.ts";
 import { prepareToken, removeToken } from "./step-token.ts";
 import { launchMounts, prepareConfiguration } from "./step-launch.ts";
-import { prepareWebMounts, webPathRequests } from "./web-mounts.ts";
+import { prepareWebMounts, webPathRequests, webSshTarget } from "./web-mounts.ts";
 import { startWebServer } from "./web-server.ts";
 
 export function main(args: string[] = process.argv.slice(2)): number {
     if (args[0] === "--serve") { startWebServer(); return 0; }
+    if (args[0] === "--web-ssh-target") { console.log(webSshTarget("/project")); return 0; }
     if (args[0] === "--web-mounts" || args[0] === "--web-paths") {
         const hostRoot = process.env.SUITECONTAINER_HOST_ROOT;
         if (!hostRoot) throw new Error("The launcher must supply SUITECONTAINER_HOST_ROOT.");

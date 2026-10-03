@@ -37,8 +37,13 @@ export class SftpService {
         if (!auth.sftp?.password) throw new Error("Enter an SFTP password before starting.");
         if (this.status(auth).relaunch) throw new Error("Folder saved. Stop the app and relaunch to mount this local folder before starting SFTP.");
         if (!existsSync("/srv/sftp/files")) throw new Error("The local folder is unavailable. Check its path and relaunch.");
-        if (!existsSync("/config/ssh/key") || !existsSync("/config/ssh/known_hosts"))
-            throw new Error("Relaunch SuiteContainer to mount your SSH key and known_hosts file.");
+        const ssh = this.record.ssh;
+        if (!ssh || ssh.target !== runboxHost) throw new Error("Relaunch SuiteContainer to detect SSH settings for the current runbox.");
+        if (ssh.error) throw new Error(ssh.error);
+        if (!ssh.identities.length || !ssh.identities.some(file => existsSync(file.path)))
+            throw new Error("No SSH private key was found for this runbox. Check laptop SSH access and relaunch SuiteContainer.");
+        if (!ssh.knownHosts.length || !ssh.knownHosts.every(file => existsSync(file.path)))
+            throw new Error("No SSH trust file was found for this runbox. Connect to it from your laptop, verify its host key, then relaunch SuiteContainer.");
         if (!/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(runboxHost)) throw new Error("Set Current VM before starting the SFTP tunnel.");
         const generation = ++this.generation;
         this.state = "starting"; this.tunnelState = "starting"; this.error = "";
@@ -76,23 +81,33 @@ export class SftpService {
             if (!existsSync(agentSocket)) throw new Error("The SSH authentication agent did not become ready.");
             // Load the read-only mounted key into memory. No private-key copy is
             // created, and Windows mount permissions do not weaken SSH checking.
-            const privateKey = readFileSync("/config/ssh/key");
-            let added;
-            try { added = spawnSync("ssh-add", ["-"], { input: privateKey, env: { ...process.env, SSH_AUTH_SOCK: agentSocket },
-                stdio: ["pipe", "ignore", "pipe"], timeout: 5000 }); }
-            finally { privateKey.fill(0); }
-            if (added.error || added.status !== 0) throw new Error("Cannot use the mounted SSH key. Check that it is a usable key without a passphrase.");
+            let loaded = 0;
+            for (const file of ssh.identities) {
+                ensureCurrent();
+                if (!existsSync(file.path)) continue;
+                const privateKey = readFileSync(file.path);
+                try {
+                    const added = spawnSync("ssh-add", ["-"], { input: privateKey,
+                        env: { ...process.env, SSH_AUTH_SOCK: agentSocket, SSH_ASKPASS_REQUIRE: "never" },
+                        stdio: ["pipe", "ignore", "pipe"], timeout: 5000 });
+                    if (!added.error && added.status === 0) ++loaded;
+                } finally { privateKey.fill(0); }
+            }
+            if (!loaded) throw new Error("The detected SSH keys need a passphrase, laptop agent, or hardware device. That authentication is not supported inside SuiteContainer yet.");
+            const options = ssh.certificates.flatMap(file => ["-o", `CertificateFile=${file.path}`]);
+            if (ssh.hostKeyAlias) options.push("-o", `HostKeyAlias=${ssh.hostKeyAlias}`);
             const tunnel = spawn("ssh", ["-F", "/dev/null", "-N", "-T", "-v", "-o", "BatchMode=yes",
                 "-o", "IdentityFile=none", "-o", `IdentityAgent=${agentSocket}`, "-o", "StrictHostKeyChecking=yes",
-                "-o", "UserKnownHostsFile=/config/ssh/known_hosts", "-o", "GlobalKnownHostsFile=/dev/null",
+                "-o", `UserKnownHostsFile=${ssh.knownHosts.map(file => file.path).join(" ")}`, "-o", "GlobalKnownHostsFile=/dev/null",
                 "-o", "ExitOnForwardFailure=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30",
-                "-o", "ServerAliveCountMax=3", "-R", `127.0.0.1:${auth.sftp.port}:127.0.0.1:8000`, `nsbuild@${runboxHost}`],
+                "-o", "ServerAliveCountMax=3", ...options, "-p", String(ssh.port), "-l", ssh.user,
+                "-R", `127.0.0.1:${auth.sftp.port}:127.0.0.1:8000`, ssh.hostname],
                 { stdio: ["ignore", "ignore", "pipe"] });
             this.tunnel = tunnel;
             let stderr = "";
             const failure = () => /Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/.test(stderr)
                 ? "The runbox SSH host key is not trusted. Verify it on your laptop and relaunch SuiteContainer."
-                : /Permission denied/.test(stderr) ? "The mounted SSH key cannot log in to the runbox as nsbuild."
+                : /Permission denied/.test(stderr) ? "The detected SSH keys cannot log in to the runbox. Check laptop SSH access and retry."
                 : /remote port forwarding failed/.test(stderr) ? "Runbox port is already in use or SSH forwarding is denied. Stop the existing tunnel or choose another port."
                 : "Cannot connect the SFTP tunnel. Check runbox access and retry.";
             await new Promise<void>((resolveReady, reject) => {

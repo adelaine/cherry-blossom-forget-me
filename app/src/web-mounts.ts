@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, posix, win32 } from "node:path";
 import type { Auth } from "./step-auth.ts";
+import { hostSshSettings, type SshSettings } from "./web-ssh.ts";
 
 export type MountRecord = {
     hostRoot: string;
@@ -8,9 +9,15 @@ export type MountRecord = {
     local: Record<string, string>;
     certificates: Record<string, string>;
     sftp?: string;
-    sshKey?: string;
-    sshKnownHosts?: string;
+    ssh?: SshSettings;
 };
+
+export function webSshTarget(projectRoot: string): string {
+    try {
+        const target = JSON.parse(readFileSync(join(projectRoot, "suitecontainer.config.json"), "utf8"))?.vms?.[0]?.url;
+        return typeof target === "string" && /^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(target) ? target : "";
+    } catch { return ""; }
+}
 
 export function hostPath(record: MountRecord, path: string): string {
     const paths = record.platform === "win32" ? win32 : posix;
@@ -38,8 +45,8 @@ export function webPathRequests(projectRoot: string, hostRoot: string, platform:
         seen.add(`${kind}/${name}`);
         result.push(`${kind}\t${name}\t${absolute}`);
     };
-    if (process.env.SUITECONTAINER_SSH_KEY) add("ssh", "key", process.env.SUITECONTAINER_SSH_KEY);
-    if (process.env.SUITECONTAINER_SSH_KNOWN_HOSTS) add("ssh", "known_hosts", process.env.SUITECONTAINER_SSH_KNOWN_HOSTS);
+    const ssh = hostSshSettings(hostRoot, platform);
+    for (const file of [...ssh.identities, ...ssh.knownHosts, ...ssh.certificates]) add("ssh", posix.basename(file.path), file.source);
     try {
         const config = JSON.parse(readFileSync(join(projectRoot, "suitecontainer.config.json"), "utf8"));
         for (const repo of Array.isArray(config?.suiteapps) ? config.suiteapps : []) {
@@ -70,14 +77,15 @@ export function prepareWebMounts(projectRoot: string, hostRoot: string, platform
     mount("suitecontainer.config.json", "/config/suitecontainer.config.json");
     mount("credentials", "/config/credentials");
     mount("repos", "/workspace");
-    if (process.env.SUITECONTAINER_SSH_KEY && existsSync("/ssh/key")) {
-        mount(process.env.SUITECONTAINER_SSH_KEY, "/config/ssh/key", true);
-        record.sshKey = hostPath(record, process.env.SUITECONTAINER_SSH_KEY);
-    }
-    if (process.env.SUITECONTAINER_SSH_KNOWN_HOSTS && existsSync("/ssh/known_hosts")) {
-        mount(process.env.SUITECONTAINER_SSH_KNOWN_HOSTS, "/config/ssh/known_hosts", true);
-        record.sshKnownHosts = hostPath(record, process.env.SUITECONTAINER_SSH_KNOWN_HOSTS);
-    }
+    const ssh = hostSshSettings(hostRoot, platform);
+    const mountSshFiles = (files: SshSettings["identities"]) => files.filter(file => {
+        const staged = `/ssh/${posix.basename(file.path)}`;
+        if (!existsSync(staged) || !statSync(staged).isFile()) return false;
+        mount(file.source, file.path, true);
+        return true;
+    });
+    record.ssh = { ...ssh, identities: mountSshFiles(ssh.identities),
+        knownHosts: mountSshFiles(ssh.knownHosts), certificates: mountSshFiles(ssh.certificates) };
     // Broken or incomplete settings must still reach the editor.
     let config: { suiteapps?: { directory?: string; localPath?: string }[] } = {};
     let auth: Auth = {};

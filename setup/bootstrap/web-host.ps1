@@ -49,11 +49,21 @@ function Open-SuiteContainerPage {
 }
 
 function Start-SuiteContainerWeb {
-    $sshHome = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.ssh'
-    $sshKey = if ($env:SUITECONTAINER_SSH_KEY) { $env:SUITECONTAINER_SSH_KEY } elseif (Test-Path -LiteralPath (Join-Path $sshHome 'id_ed25519')) { Join-Path $sshHome 'id_ed25519' } else { Join-Path $sshHome 'id_rsa' }
-    $sshKnownHosts = if ($env:SUITECONTAINER_SSH_KNOWN_HOSTS) { $env:SUITECONTAINER_SSH_KNOWN_HOSTS } else { Join-Path $sshHome 'known_hosts' }
-    $sshEnvironment = @('--env', "SUITECONTAINER_SSH_KEY=$sshKey", '--env', "SUITECONTAINER_SSH_KNOWN_HOSTS=$sshKnownHosts")
     $base = @('--mount', "type=bind,src=$projectDir,dst=/project,ro=true", '--env', "SUITECONTAINER_HOST_ROOT=$projectDir", '--env', 'SUITECONTAINER_HOST_PLATFORM=win32')
+    $sshTarget = (@(& podman run --rm --cgroups=disabled @base suitecloud-workspace --web-ssh-target) -join '').Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read the runbox SSH target.' }
+    $sshResolved = ''
+    if ($sshTarget -and (Get-Command ssh -ErrorAction SilentlyContinue)) {
+        try {
+            $resolution = @(& ssh -G -T "nsbuild@$sshTarget" 2>$null)
+            if ($LASTEXITCODE -eq 0) { $sshResolved = $resolution -join "`n" }
+        } catch { $sshResolved = '' }
+    }
+    $sshEnvironment = @('--env', "SUITECONTAINER_SSH_TARGET=$sshTarget", '--env', "SUITECONTAINER_SSH_RESOLVED=$sshResolved",
+        '--env', "SUITECONTAINER_SSH_HOME=$([Environment]::GetFolderPath('UserProfile'))", '--env', "SUITECONTAINER_SSH_PROGRAMDATA=$env:ProgramData")
+    foreach ($name in @('SUITECONTAINER_SSH_KEY', 'SUITECONTAINER_SSH_KNOWN_HOSTS')) {
+        if ([Environment]::GetEnvironmentVariable($name)) { $sshEnvironment += @('--env', "$name=$([Environment]::GetEnvironmentVariable($name))") }
+    }
     $requests = @(& podman run --rm --cgroups=disabled @base @sshEnvironment suitecloud-workspace --web-paths)
     if ($LASTEXITCODE -ne 0) { throw 'Could not read container mount settings.' }
     $staged = @('--mount', "type=bind,src=$projectDir,dst=/project")
