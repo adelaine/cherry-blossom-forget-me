@@ -136,8 +136,11 @@ export function startWebServer(options: {
         const cert = certificateState(auth);
         const ready = readiness(text);
         let sqlDefaults = { ...SQL_DEFAULTS };
+        let deploymentStarted = false;
         try {
-            const database = JSON.parse(text)?.vms?.[0]?.database;
+            const config = JSON.parse(text);
+            deploymentStarted = config?.status?.["deploy-start-ok"] === 1;
+            const database = config?.vms?.[0]?.database;
             sqlDefaults = {
                 user: typeof database?.user === "string" ? database.user : SQL_DEFAULTS.user,
                 service: typeof database?.service === "string" ? database.service : SQL_DEFAULTS.service,
@@ -151,6 +154,7 @@ export function startWebServer(options: {
         return {
             config: text, ready: ready.ready && !busy(), error: credentialError || ready.error,
             credentialError, tokenPresent: !!auth["gitlab-token"]?.trim(),
+            deploymentStarted,
             certificates: {
                 public: /[\r\n]/.test(auth["suitecloud-certificates"]?.public ?? "") ? "" : auth["suitecloud-certificates"]?.public ?? "",
                 private: /[\r\n]/.test(auth["suitecloud-certificates"]?.private ?? "") ? "" : auth["suitecloud-certificates"]?.private ?? "",
@@ -297,6 +301,9 @@ export function startWebServer(options: {
         if (c.req.path === "/api/settings") { return reply(c, 200, status()); }
         const ready = readiness(input.config);
         if (!ready.ready || !ready.config || !ready.auth || !ready.cert) { return reply(c, 400, { error: ready.error }); }
+        value.status = { ...value.status, "deploy-start-ok": 1 };
+        writeFileSync(configPath, JSON.stringify(value, null, 4) + "\n");
+        ready.config.status = value.status;
         snapshot = mkdtempSync(join(tmpdir(), "suitecontainer-run-"));
         const workerConfig = join(snapshot, "config.json");
         const workerAuth = join(snapshot, "auth.json");

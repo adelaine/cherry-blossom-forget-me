@@ -7,6 +7,7 @@ export type Config = {
     suiteapps: SuiteApp[];
     certificates?: { public: string; private: string; id: string };
     vms: Vm[];
+    status?: { "deploy-start-ok"?: 0 | 1 };
 };
 
 function invalidConfig(message: string): never {
@@ -77,6 +78,11 @@ export function validateConfig(
         invalidConfig('The file needs a "suiteapps" list.');
     }
     const config = value as Config;
+    if (config.status !== undefined &&
+        (!config.status || typeof config.status !== "object" || Array.isArray(config.status) ||
+            (config.status["deploy-start-ok"] !== undefined && ![0, 1].includes(config.status["deploy-start-ok"])))) {
+        invalidConfig("Set status.deploy-start-ok to 0 or 1.");
+    }
     if (config.suiteapps.length > 0) {
         if (!Array.isArray(config.vms) || config.vms.length === 0)
             invalidConfig('The file needs a nonempty "vms" list.');
