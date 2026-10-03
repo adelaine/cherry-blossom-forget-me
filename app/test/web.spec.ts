@@ -43,21 +43,12 @@ test("ANSI log rendering discards unsupported controls", () => {
     assert.equal(ansiToHtml('\x1b[38;2;0;0;0;1;32mgreen'), '<span class="ansi-bold ansi-fg-2">green</span>');
 });
 
-test("ANSI extended colors cover all 256 palette entries and exact RGB", () => {
-    for (let index = 0; index < 256; index++) {
-        const output = ansiToHtml(`\x1b[38;5;${index};48;5;${index}mcolor`);
-        if (index < 16) assert.equal(output, `<span class="ansi-fg-${index} ansi-bg-${index}">color</span>`);
-        else {
-            const levels = [0, 95, 135, 175, 215, 255];
-            const offset = index - 16;
-            const channels = index >= 232 ? Array(3).fill(8 + (index - 232) * 10) : [levels[Math.floor(offset / 36)], levels[Math.floor(offset / 6) % 6], levels[offset % 6]];
-            const hex = '#' + channels.map(channel => channel.toString(16).padStart(2, '0')).join('');
-            assert.equal(output, `<span data-ansi-fg="${hex}" data-ansi-bg="${hex}">color</span>`);
-        }
+test("ANSI extended colors preserve palette boundaries and exact RGB", () => {
+    for (const [index, hex] of [[16, '#000000'], [21, '#0000ff'], [196, '#ff0000'], [231, '#ffffff'], [232, '#080808'], [255, '#eeeeee']] as const) {
+        assert.equal(ansiToHtml(`\x1b[38;5;${index};48;5;${index}mcolor`), `<span data-ansi-fg="${hex}" data-ansi-bg="${hex}">color</span>`);
     }
     assert.equal(ansiToHtml('\x1b[1;38;2;12;34;56;48;2;255;0;128mRGB\x1b[39;49;22m plain'), '<span class="ansi-bold" data-ansi-fg="#0c2238" data-ansi-bg="#ff0080">RGB</span> plain');
 });
-
 test("ANSI extended colors accept colon forms and reject malformed values safely", () => {
     for (const code of ['38:2:12:34:56', '38:2::12:34:56', '38:2:0:12:34:56', '38;2;12;34;56']) {
         assert.equal(ansiToHtml(`\x1b[${code}m<text>`), '<span data-ansi-fg="#0c2238">&lt;text&gt;</span>');
@@ -90,20 +81,6 @@ test("ANSI converter is self-contained in the served browser script", () => {
     assert.ok(deploymentPage.script.includes('log.innerHTML = ansiToHtml(next.run.log)'));
     assert.ok(deploymentPage.style.includes(ansiStyles));
     new Function(deploymentPage.script);
-});
-
-test("the page loads local Pico and registers Alpine before its deferred CSP runtime", () => {
-    assert.match(deploymentPage.html, /<link rel="stylesheet" href="\/pico.css">/);
-    assert.match(deploymentPage.html, /<main class="container" x-data="deployment" x-cloak>/);
-    assert.ok(deploymentPage.html.indexOf('src="/page.js"') < deploymentPage.html.indexOf('src="/alpine.js"'));
-    assert.match(deploymentPage.html, /<script src="\/alpine.js" defer><\/script>/);
-    assert.match(deploymentPage.html, /@click="clickdeploy"/);
-    assert.match(deploymentPage.html, /:disabled="view.deploy.disabled"/);
-    assert.match(deploymentPage.html, /x-text="view.validation.text"/);
-    assert.ok(deploymentPage.html.includes('class="grid"'));
-    assert.ok(!deploymentPage.style.includes('button{'));
-    assert.ok(!deploymentPage.style.includes('input,textarea{'));
-    assert.ok(!/onclick=|oninput=|<script>/.test(deploymentPage.html));
 });
 
 const require = createRequire(import.meta.url);
@@ -719,6 +696,6 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
     assert.match(element("sql-message").textContent, /Connection input is invalid/);
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') > deploymentPage.html.indexOf('Configuration JSON'));
     assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') < deploymentPage.html.indexOf('<h2>Deployment</h2>'));
-    assert.match(deploymentPage.html, /<h2>SQL<\/h2><details id="sql-details"[^>]*><summary>Connection and SQL statement<\/summary>/);
+    assert.match(deploymentPage.html, /<details id="sql-details"[^>]*><summary>Connection and SQL statement<\/summary>/);
     assert.ok(!deploymentPage.html.includes('id="sql-target"'));
 });

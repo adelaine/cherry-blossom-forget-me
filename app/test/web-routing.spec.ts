@@ -72,7 +72,13 @@ test("public browser assets are local, use standard Pico and retain restrictive 
         const html = await response.text();
         assert.match(html, /href="\/pico\.css"/);
         assert.match(html, /src="\/alpine\.js"/);
-        assert.match(html, /x-data=/);
+        assert.match(html, /x-data="deployment" x-cloak/);
+        assert.match(html, /<script src="\/alpine.js" defer><\/script>/);
+        assert.ok(html.indexOf('src="/page.js"') < html.indexOf('src="/alpine.js"'));
+        assert.match(html, /@click="clickdeploy"/);
+        assert.match(html, /:disabled="view.deploy.disabled"/);
+        assert.match(html, /x-text="view.validation.text"/);
+        assert.ok(!/onclick=|oninput=|<script>/.test(html));
     } finally { await app.close(); }
 });
 

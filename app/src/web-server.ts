@@ -137,6 +137,7 @@ export function startWebServer(options: {
         const ready = readiness(text);
         let sqlDefaults = { ...SQL_DEFAULTS };
         let deploymentStarted = false;
+        let relaunch = false;
         let theme: "light" | "dark" | undefined;
         try {
             const savedTheme = JSON.parse(readFileSync(configPath, "utf8"))?.status?.theme;
@@ -150,12 +151,8 @@ export function startWebServer(options: {
                 user: typeof database?.user === "string" ? database.user : SQL_DEFAULTS.user,
                 service: typeof database?.service === "string" ? database.service : SQL_DEFAULTS.service,
             };
+            if (Array.isArray(config.suiteapps)) relaunch = mountChanges(config, auth, record, generatedCertificates);
         } catch { /* Configuration validation explains malformed JSON. */ }
-        let relaunch = false;
-        try {
-            const value = JSON.parse(text);
-            if (Array.isArray(value.suiteapps)) relaunch = mountChanges(value, auth, record, generatedCertificates);
-        } catch { /* validation explains this */ }
         return {
             config: text, ready: ready.ready && !busy(), error: credentialError || ready.error,
             credentialError, tokenPresent: !!auth["gitlab-token"]?.trim(),
@@ -250,12 +247,11 @@ export function startWebServer(options: {
         c.set("input", input as Record<string, unknown>);
         await next();
     });
-    app.post("/api/heartbeat", async c => {
-        const input = c.get("input");
+    app.post("/api/heartbeat", c => {
         heartbeatDeadline.heartbeat();
         return reply(c, 200, { alive: true });
     });
-    app.post("/api/check", async c => {
+    app.post("/api/check", c => {
         const input = c.get("input");
         if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
         return reply(c, 200, status(input.config));
@@ -309,7 +305,7 @@ export function startWebServer(options: {
         });
         return reply(c, 202, status(input.config));
     });
-    app.on("POST", ["/api/settings", "/api/deploy"], async c => {
+    app.on("POST", ["/api/settings", "/api/deploy"], c => {
         const input = c.get("input");
         if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
         const value = JSON.parse(input.config);
@@ -349,7 +345,7 @@ export function startWebServer(options: {
         });
         return reply(c, 202, status());
     });
-    app.post("/api/credentials", async c => {
+    app.post("/api/credentials", c => {
         const input = c.get("input");
         let settings: string | undefined;
         if (input.config !== undefined) {

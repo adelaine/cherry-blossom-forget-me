@@ -5,6 +5,8 @@ import { deploymentPage } from "../src/web-page.ts";
 // onto the small DOM doubles used by the behavioral tests. Real browser tests
 // separately verify Alpine's CSP evaluator and the served page together.
 export function initializeBrowser(context: any): void {
+    context.document.documentElement ??= { dataset: {} };
+    context.matchMedia ??= () => ({ matches: false, addEventListener() {} });
     let initialize: (() => void) | undefined;
     let component: any;
     const addEventListener = context.document.addEventListener;
@@ -20,6 +22,7 @@ export function initializeBrowser(context: any): void {
         element.id = id;
         element.tagName = tag!.toUpperCase();
         element.hidden = /\shidden(?:\s|$)/.test(attributes!);
+        if (tag === "details") element.open = /\sopen(?:\s|$)/.test(attributes!);
         element.disabled = /\sdisabled(?:\s|$)/.test(attributes!);
         element.textContent = id === "run-state" ? "Loading…" : "";
         pageElements.push(element);
@@ -45,7 +48,7 @@ export function initializeBrowser(context: any): void {
             const key = property === "textContent" ? "text" : property;
             Object.defineProperty(element, property, { configurable: true, get: () => values[key], set: value => { values[key] = value; } });
         }
-        for (const event of attributes!.matchAll(/@(input|click)="([^"]+)"/g)) {
+        for (const event of attributes!.matchAll(/@(input|click|change)="([^"]+)"/g)) {
             element[event[1]!] = () => component[event[2]!].call(component);
         }
     }

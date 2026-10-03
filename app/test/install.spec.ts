@@ -14,13 +14,13 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve, sep } from "node:path";
 import test from "node:test";
 import {
+    readConfig,
     gitlabHttpsUrl,
     validBranch,
     validateConfig,
 } from "../src/step-config.ts";
 import { prepareToken, readToken } from "../src/step-token.ts";
 import { readAuth } from "../src/step-auth.ts";
-import { readConfig } from "../src/step-config.ts";
 import {
     prepareCertificates,
     verifyCertificates,

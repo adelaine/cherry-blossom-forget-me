@@ -161,10 +161,13 @@ document.addEventListener('alpine:init', () => {
           log.innerHTML = ansiToHtml(next.run.log);
           applyAnsiColors(log);
           if (bottom) log.scrollTop = log.scrollHeight;
-          try { const vm = JSON.parse($('config').value).vms?.[0]?.url; $('vm').value = vm || ''; const safe = typeof vm === 'string' && /^(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+$/.test(vm) && vm.endsWith('.netsuite.com'); view.runbox_link.hidden = !safe; if (safe) $('runbox-link').href = 'https://' + vm + '/devhome'; } catch { view.runbox_link.hidden = true; }
+          try { $('vm').value = JSON.parse($('config').value).vms?.[0]?.url || ''; } catch { /* Keep the Current VM value until the JSON is valid. */ }
+          const host = currentVmHost();
+          view.runbox_link.hidden = !host;
+          if (host) $('runbox-link').href = 'https://' + host + '/devhome';
           renderSql(next, busy);
         }
-        function sqlTargetHost() {
+        function currentVmHost() {
           try {
             const host = JSON.parse($('config').value).vms?.[0]?.url;
             return typeof host === 'string' && /^(?:[A-Za-z0-9-]+\\.)+[A-Za-z0-9-]+$/.test(host) && host.endsWith('.netsuite.com') ? host : '';
@@ -173,7 +176,7 @@ document.addEventListener('alpine:init', () => {
         function renderSql(next, busy) {
           if (connectionFailed) return;
           if (next.sql) {
-            const host = sqlTargetHost();
+            const host = currentVmHost();
             if (!sqlDefaultsApplied || sqlDefaultsHost !== host) { sqlAccountEdited = false; sqlDatabaseEdited = false; }
             if (!sqlAccountEdited) $('sql-account').value = next.sql.defaults.user;
             if (!sqlDatabaseEdited) $('sql-database').value = next.sql.defaults.service;
@@ -188,7 +191,7 @@ document.addEventListener('alpine:init', () => {
           view.sql_unlock_availability.text = 'No saved SQL password is available to unlock. Enter your SQL password above.';
           const passwordEntered = !!$('sql-password').value;
           const unlockEntered = !!$('sql-unlock').value && !!next.sql?.hasDefaultPassword;
-          view.sql_run.disabled = busy || !sqlTargetHost() || !$('sql-account').value.trim() || !$('sql-database').value.trim() || passwordEntered === unlockEntered || !$('sql-statement').value.trim();
+          view.sql_run.disabled = busy || !currentVmHost() || !$('sql-account').value.trim() || !$('sql-database').value.trim() || passwordEntered === unlockEntered || !$('sql-statement').value.trim();
           if (next.sql) {
             const detail = next.sql.host ? ' (' + next.sql.host + '/' + next.sql.database + ')' : '';
             if (sqlRequestError) view.sql_message.text = sqlRequestError;
