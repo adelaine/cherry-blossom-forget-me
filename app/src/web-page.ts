@@ -1,6 +1,19 @@
 import { ansiToHtml, ansiStyles, applyAnsiColors } from "./ansi.ts";
 import { ACTIVITY_GRACE_MS, HEARTBEAT_INTERVAL_MS } from "./web-inactivity.ts";
 
+const lightTheme = `
+--pico-background-color:#e9e7e2;
+--pico-color:#343d48;
+--pico-muted-color:#626b74;
+--pico-primary:#1679ad;
+--pico-primary-background:#1679ad;
+--pico-primary-border:#1679ad;
+--pico-card-background-color:#f6f3ee;
+--pico-card-border-color:#d7d5cf;
+--pico-card-box-shadow:none;
+--suite-mark-gradient:linear-gradient(to right,#b354a5,#7658bf,#367bc4);
+`;
+
 export const deploymentPage = {
     html: `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
@@ -31,7 +44,7 @@ export const deploymentPage = {
 <fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></article>
 </div>
 <article><h2>Deployment</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset class="grid" aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy</button>
-<button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><p id="run-state" role="status" x-text="view.run_state.text">Loading…</p><pre data-theme="dark" id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
+<button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><p id="run-state" role="status" x-text="view.run_state.text">Loading…</p><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
 </main></body></html>`,
     style: `${ansiStyles}
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Light.ttf') format('truetype');font-style:normal;font-weight:300;font-display:swap}
@@ -39,16 +52,19 @@ export const deploymentPage = {
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Medium.ttf') format('truetype');font-style:normal;font-weight:500;font-display:swap}
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Bold.ttf') format('truetype');font-style:normal;font-weight:700;font-display:swap}
 :root{--pico-font-family-sans-serif:Ubuntu,system-ui,Helvetica,sans-serif,var(--pico-font-family-emoji);--pico-font-weight:300}
+:root[data-theme="light"]{${lightTheme}}
+@media(prefers-color-scheme:light){:root:not([data-theme]){${lightTheme}}}
+body{background:var(--pico-background-color)}
 h1,h2,h3,h4,h5,h6{--pico-font-weight:400}
-mark{--pico-mark-gradient:linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
+mark{--pico-mark-gradient:var(--suite-mark-gradient,linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05)));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
 button{--pico-border-radius:2rem}
 .theme-toggle{display:flex;align-items:center;gap:0.5rem;width:fit-content;margin-inline-start:auto;font-family:system-ui,"Segoe UI",sans-serif,var(--pico-font-family-emoji)}
 .theme-toggle input{margin:0}
-article{margin:2rem auto;padding:2rem}
+article{margin:2rem auto;padding:1.5rem}
 .credential-steps{list-style:none;padding:0;counter-reset:credential-step}
 .credential-steps>li{position:relative;counter-increment:credential-step;padding-inline-start:3rem;padding-block-end:1.5rem}
 .credential-steps>li::before{content:counter(credential-step);position:absolute;inset-inline-start:0;inset-block-start:0;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;background:var(--pico-secondary-background);color:var(--pico-secondary-inverse);font-weight:500}
-.credential-steps>li:not(:last-child)::after{content:"";position:absolute;inset-inline-start:1rem;inset-block:2.25rem 0.25rem;width:0;border-inline-start:1px solid var(--pico-muted-border-color)}
+.credential-steps>li:not(:last-child)::after{content:"";position:absolute;inset-inline-start:1rem;inset-block:2.25rem 0.25rem;width:0;border-inline-start:1px solid var(--pico-secondary-border-color)}
 details>summary{--pico-primary:light-dark(#876400,#c79400);--pico-accordion-close-summary-color:var(--pico-primary);--pico-accordion-open-summary-color:var(--pico-primary);--pico-accordion-active-summary-color:var(--pico-primary);display:flex;align-items:center;gap:0.75rem;font-weight:500}
 details>summary::after{display:none}
 details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
@@ -65,7 +81,14 @@ details[open]>summary::before{transform:rotate(90deg)}
 [x-cloak],[hidden]{display:none!important}
 main p:empty{display:none}
 textarea{font-family:var(--pico-font-family-monospace)}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:22rem;overflow:auto}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;max-height:32rem;overflow:auto;line-height:1.55;background-color:light-dark(#f0eee8,#000);color:light-dark(#343d48,#c8cdd6);color-scheme:inherit;border:1px solid light-dark(#d7d5cf,transparent)}
+pre#log{min-height:24rem;}
+pre :is(.ansi-fg-2,.ansi-fg-10){color:light-dark(#008447,#38d98a)}
+pre :is(.ansi-fg-3,.ansi-fg-11){color:light-dark(#946200,#f1ca53)}
+pre :is(.ansi-fg-4,.ansi-fg-12){color:light-dark(#1b65c9,#69a9ff)}
+pre :is(.ansi-fg-5,.ansi-fg-13){color:light-dark(#8545b7,#ca91ff)}
+pre :is(.ansi-fg-6,.ansi-fg-14){color:light-dark(#007f9b,#40d2ef)}
+pre :is(.ansi-fg-7,.ansi-fg-15){color:light-dark(#343d48,#c8cdd6)}
 `,
     script: `const ansiToHtml = ${ansiToHtml.toString()};
 const applyAnsiColors = ${applyAnsiColors.toString()};
