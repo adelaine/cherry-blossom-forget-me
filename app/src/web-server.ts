@@ -19,6 +19,7 @@ import { SQL_DEFAULTS, SQL_PASSWORD_HINT, SQL_PASSWORD_SALT } from "./sql-settin
 import { decryptSqlPassword } from "./sql-password-crypto.ts";
 import { HeartbeatDeadline } from "./web-inactivity.ts";
 import { SftpService } from "./sftp-server.ts";
+import { RemoteSftpService } from "./sftp-remote.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
@@ -75,7 +76,14 @@ export function startWebServer(options: {
     const session = randomBytes(32).toString("hex");
     const passkey = randomBytes(32).toString("hex");
     const record: MountRecord = JSON.parse(readFileSync(join(credentials, "web-mounts.json"), "utf8"));
-    const sftpService = new SftpService(credentials, record);
+    const sftpService = (process.env.SUITECONTAINER_HOST_FQDN || "").toLowerCase().endsWith(".vm.eng.netsuite.com")
+        ? new RemoteSftpService(credentials, record) : new SftpService(credentials, record);
+    const sftpTarget = () => {
+        try {
+            const host = JSON.parse(readFileSync(configPath, "utf8"))?.vms?.[0]?.url;
+            return typeof host === "string" ? host : "";
+        } catch { return ""; }
+    };
     let run: Run = { state: "idle", log: "" };
     let sqlRun: { state: Run["state"]; output: string; host?: string; database?: string } = { state: "idle", output: "" };
     let sqlWorker: ChildProcess | undefined;
@@ -133,6 +141,7 @@ export function startWebServer(options: {
         } catch (error) { return { ready: false, error: message(error) }; }
     };
     const status = (text = readFileSync(configPath, "utf8")) => {
+        if (sftpService instanceof RemoteSftpService) sftpService.setTarget(sftpTarget());
         let auth: Auth = {};
         let credentialError = "";
         try { auth = readAuth(authPath); } catch (error) { credentialError = message(error); }
@@ -279,7 +288,22 @@ export function startWebServer(options: {
     });
     app.post("/api/sftp", async c => {
         const input = c.get("input");
-        if (!["save", "start", "stop"].includes(String(input.action))) throw new Error("Choose Start SFTP, Stop SFTP, or Save settings.");
+        if (!["save", "start", "stop", "probe", "recreate"].includes(String(input.action))) throw new Error("Choose an SFTP action.");
+        if (sftpService instanceof RemoteSftpService) {
+            sftpService.setTarget(sftpTarget());
+            if (input.action === "probe") {
+                void sftpService.probe(sftpTarget());
+                return reply(c, 200, status());
+            }
+            if (input.action === "stop") {
+                const remote = sftpService.status(readAuth(authPath));
+                if (!remote.canStop) throw new Error("This session has no target SFTP container available to stop.");
+                void sftpService.stop();
+                return reply(c, 200, status());
+            }
+            if (input.action === "recreate" && (input.confirmReplace !== true || !sftpService.status(readAuth(authPath)).recreateAvailable))
+                throw new Error("Confirm replacement of the existing SFTP container before recreating it.");
+        } else if (input.action === "probe" || input.action === "recreate") throw new Error("This SFTP action requires scrumbox mode.");
         if (input.action === "stop") { sftpService.stop(); return reply(c, 200, status()); }
         if (sftpService.active) throw new Error("Stop SFTP before changing its settings.");
         const auth = readAuth(authPath);
@@ -294,9 +318,11 @@ export function startWebServer(options: {
         finally { rmSync(temporary, { force: true }); }
         writeFileSync(authPath, JSON.stringify(next, null, 4) + "\n", { mode: 0o600 });
         secrets.add(next.sftp!.password);
-        if (input.action === "start") {
-            const host = JSON.parse(readFileSync(configPath, "utf8"))?.vms?.[0]?.url;
-            await sftpService.start(next, typeof host === "string" ? host : "");
+        if (input.action === "start" || input.action === "recreate") {
+            if (sftpService instanceof RemoteSftpService) {
+                if (!next.sftp!.password) throw new Error("Enter an SFTP password before starting.");
+                void sftpService.start(next, sftpTarget(), input.action === "recreate");
+            } else await sftpService.start(next, sftpTarget());
         }
         return reply(c, 200, status());
     });
@@ -423,7 +449,7 @@ export function startWebServer(options: {
     const stopApp = () => {
         if (stopping) return;
         stopping = true;
-        sftpService.stop();
+        sftpService.dispose();
         server.close(options.onStop ?? (() => process.exit(0)));
     };
     const inactivityTimer = setInterval(() => {
@@ -431,7 +457,7 @@ export function startWebServer(options: {
     }, options.inactivityCheckMs ?? 1000);
     inactivityTimer.unref();
     server.once("close", () => clearInterval(inactivityTimer));
-    server.once("close", () => sftpService.stop());
+    server.once("close", () => sftpService.dispose());
     server.requestTimeout = 15_000;
     server.once("close", () => sqlWorker?.kill("SIGKILL"));
     server.on("error", error => { console.error(message(error)); process.exitCode = 1; });
@@ -441,7 +467,7 @@ export function startWebServer(options: {
     });
     const shutdown = () => {
         stopping = true;
-        sftpService.stop();
+        sftpService.dispose();
         sqlWorker?.kill("SIGKILL");
         if (worker?.pid) { try { process.kill(-worker.pid, "SIGTERM"); } catch { worker.kill("SIGTERM"); } }
         server.close();

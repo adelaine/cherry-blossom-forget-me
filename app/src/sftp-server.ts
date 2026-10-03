@@ -18,6 +18,7 @@ export class SftpService {
     private generation = 0;
     constructor(private credentials: string, private record: MountRecord, private enabled = process.env.SUITECONTAINER_SFTP === "1") {}
     get active(): boolean { return this.state === "starting" || this.state === "running"; }
+    dispose(): void { this.stop(); }
     status(auth: Auth) {
         const settings = auth.sftp ?? { username: "suitecontainer", port: 8000, password: "" };
         const path = settings.path || "";

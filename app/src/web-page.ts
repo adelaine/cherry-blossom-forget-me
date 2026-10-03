@@ -43,14 +43,16 @@ export const deploymentPage = {
 <label for="sql-statement">SQL statement</label><textarea id="sql-statement" rows="8" spellcheck="false" placeholder="SELECT * FROM your_table;" :disabled="view.sql_statement.disabled" @input="inputsql_statement"></textarea>
 <fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></article>
 <article><details class="setup-section" id="sftp-section"><summary><h2>SFTP</h2></summary>
-<p>Share files from your laptop with NetSuite through the runbox. Start SFTP when needed; it does not start automatically.</p>
+<p id="sftp-description" x-text="view.sftp_description.text">Share files from your laptop with NetSuite through the runbox. Start SFTP when needed; it does not start automatically.</p>
 <fieldset class="grid" aria-label="SFTP actions"><button id="sftp-start" disabled :disabled="view.sftp_start.disabled" @click="clicksftp_start">Start SFTP</button><button id="sftp-stop" class="secondary outline" disabled :disabled="view.sftp_stop.disabled" @click="clicksftp_stop">Stop SFTP</button><button id="sftp-save" class="secondary" disabled :disabled="view.sftp_save.disabled" @click="clicksftp_save">Save settings</button></fieldset>
+<button id="sftp-recreate" hidden :hidden="view.sftp_recreate.hidden" :disabled="view.sftp_recreate.disabled" @click="clicksftp_recreate">Recreate SFTP</button>
 <blockquote class="status-message" id="sftp-message" role="status" x-text="view.sftp_message.text"></blockquote>
+<p id="sftp-upload" hidden :hidden="view.sftp_upload.hidden">Upload files directly to <strong id="sftp-upload-url"></strong>.</p>
 <details><summary>SFTP settings</summary>
 <div class="grid"><div><label for="sftp-user">User</label><input id="sftp-user" autocomplete="off" spellcheck="false" :disabled="view.sftp_user.disabled" @input="inputsftp_user"></div>
 <div><label for="sftp-port">Port</label><input id="sftp-port" type="number" min="1" max="65535" step="1" :disabled="view.sftp_port.disabled" @input="inputsftp_port"></div></div>
 <div class="grid"><div><label for="sftp-password">Password</label><input id="sftp-password" type="password" autocomplete="new-password" aria-describedby="sftp-password-help" :disabled="view.sftp_password.disabled" @input="inputsftp_password"><p id="sftp-password-help" x-text="view.sftp_password_help.text"></p></div>
-<div><label for="sftp-path">Absolute path to local folder</label><input id="sftp-path" spellcheck="false" aria-describedby="sftp-path-help" :disabled="view.sftp_path.disabled" @input="inputsftp_path"><p id="sftp-path-help">Leave blank to use the default folder <strong>sftp-files</strong>. Changing this value requires a restart.</p></div></div>
+<div id="sftp-folder" :hidden="view.sftp_folder.hidden"><label for="sftp-path">Absolute path to local folder</label><input id="sftp-path" spellcheck="false" aria-describedby="sftp-path-help" :disabled="view.sftp_path.disabled" @input="inputsftp_path"><p id="sftp-path-help">Leave blank to use the default folder <strong>sftp-files</strong>. Changing this value requires a restart.</p></div></div>
 </details>
 <details><summary>NetSuite connection fields</summary>
 <p>Use these saved settings after SFTP is running. Internal SFTP addresses must be allowed on the runbox.</p>
@@ -138,7 +140,7 @@ document.addEventListener('alpine:init', () => {
       ...Object.fromEntries([
         ['change', 'theme-toggle'],
         ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path'].map(id => ['input', id]),
-        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port'].map(id => ['click', id]),
+        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','sftp-recreate','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port'].map(id => ['click', id]),
       ].map(([event, id]) => {
         const name = event + id.replaceAll('-', '_');
         return [name, () => handlers[name]()];
@@ -158,6 +160,7 @@ document.addEventListener('alpine:init', () => {
         let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false, actionError = '';
         let themeSaving = false;
         let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '', actionBusy = false;
+        let sftpProbeTarget = '', sftpProbePending = false;
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
         function applyTheme(theme) {
           if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
@@ -234,28 +237,46 @@ document.addEventListener('alpine:init', () => {
         function renderSftp(next, busy) {
           if (connectionFailed) return;
           const sftp = next.sftp;
-          const active = ['starting','running'].includes(sftp?.state);
+          const remote = sftp?.mode === 'remote';
+          if (remote && sftp.target !== sftpProbeTarget && sftp.probe !== 'idle') sftpProbeTarget = sftp.target;
+          const active = remote ? sftp.state === 'starting' || sftp.probe === 'checking' : ['starting','running'].includes(sftp?.state);
           const submitting = sftpSubmitting || actionBusy || sqlSubmitting || themeSaving;
+          view.sftp_description.text = remote ? 'Run SFTP on the deployment target and upload files directly to it. Start checks existing access before creating a container.' : 'Share files from your laptop with NetSuite through the runbox. Start SFTP when needed; it does not start automatically.';
+          view.sftp_folder.hidden = remote;
+          view.sftp_recreate.hidden = !remote || !sftp.recreateAvailable;
+          view.sftp_recreate.disabled = busy || active || submitting;
+          view.sftp_upload.hidden = !remote || !sftp.uploadUrl;
+          $('sftp-upload-url').textContent = sftp?.uploadUrl || '';
+          if (remote && sftp.target && sftp.probe === 'idle' && !sftpProbePending && sftpProbeTarget !== sftp.target) {
+            sftpProbeTarget = sftp.target; sftpProbePending = true;
+            // Let the page render before starting any target network operation.
+            setTimeout(async () => {
+              try { render(await api('sftp', {action:'probe'})); }
+              catch (error) { sftpRequestError = error.message; }
+              finally { sftpProbePending = false; }
+            }, 0);
+          }
           if (!sftpEditing && sftp) {
             $('sftp-user').value = sftp.username;
             $('sftp-port').value = sftp.port;
             $('sftp-path').value = sftp.path || '';
           }
           for (const id of ['sftp-user','sftp-port','sftp-password','sftp-path']) view[id.replaceAll('-', '_')].disabled = !sftp || busy || active || submitting;
-          view.sftp_start.disabled = !sftp || busy || active || submitting || sftp.relaunch;
+          view.sftp_start.disabled = !sftp || busy || active || submitting || sftp.relaunch || remote && !sftp.canStart;
           view.sftp_save.disabled = !sftp || busy || active || submitting;
-          view.sftp_stop.disabled = !sftp || submitting || !active && !['starting','running'].includes(sftp.tunnel?.state);
+          view.sftp_stop.disabled = !sftp || submitting || (remote ? !sftp.canStop : !active && !['starting','running'].includes(sftp.tunnel?.state));
           view.sftp_password_help.text = sftp?.passwordPresent ? 'A password is saved. Leave blank to use existing password.' : 'Enter a password before starting SFTP.';
-          for (const [id, value] of [['sftp-netsuite-user',sftp?.username || ''],['sftp-netsuite-port',sftp ? String(sftp.port) : ''],['sftp-host-key',sftp?.hostKey || '']]) {
+          const connection = remote ? sftp.connection : sftp;
+          for (const [id, value] of [['sftp-netsuite-url',remote && !connection ? '' : 'localhost'],['sftp-netsuite-user',connection?.username || ''],['sftp-netsuite-port',connection ? String(connection.port) : ''],['sftp-host-key',connection?.hostKey || '']]) {
             if ($(id).textContent !== value) $(id).textContent = value;
           }
           for (const [key, target] of [['url','sftp-netsuite-url'],['key','sftp-host-key'],['user','sftp-netsuite-user'],['port','sftp-netsuite-port']]) {
             const button = view['copy_sftp_' + key];
             button.text ||= 'Copy'; button.disabled = !$(target).textContent;
           }
-          const status = sftp ? ({stopped:'SFTP is stopped.',starting:'SFTP is starting…',running:'SFTP is running.',failed:'SFTP failed.'})[sftp.state] : 'Loading SFTP settings…';
-          const tunnel = sftp?.tunnel;
-          const tunnelMessage = tunnel?.error || (tunnel?.state === 'starting' ? 'Connecting the runbox tunnel…' : sftp?.state === 'running' && tunnel?.state !== 'running' ? 'The runbox tunnel is not connected.' : '');
+          const status = remote ? sftp.probe === 'checking' ? 'Checking target SSH access…' : sftp.state === 'starting' ? 'SFTP operation is in progress…' : sftp.connection ? 'SFTP access verified.' : sftp.probe === 'ready' && sftp.state !== 'failed' ? 'Target SSH access verified. Click Start SFTP to check SFTP access.' : sftp.probe === 'idle' ? 'Waiting to check target SSH access…' : 'SFTP access could not be verified.' : sftp ? ({stopped:'SFTP is stopped.',starting:'SFTP is starting…',running:'SFTP is running.',failed:'SFTP failed.'})[sftp.state] : 'Loading SFTP settings…';
+          const tunnel = remote ? undefined : sftp?.tunnel;
+          const tunnelMessage = remote ? '' : tunnel?.error || (tunnel?.state === 'starting' ? 'Connecting the runbox tunnel…' : sftp?.state === 'running' && tunnel?.state !== 'running' ? 'The runbox tunnel is not connected.' : '');
           view.sftp_message.text = [status, sftpRequestError || sftp?.error || sftpNotice || (sftpEditing ? 'SFTP settings changed. Save settings or click Start SFTP.' : ''), tunnelMessage, sftp?.relaunch ? 'Relaunch required. Stop the app and start the launcher again to mount the selected folder.' : ''].filter(Boolean).join(' ');
         }
         function currentVmHost() {
@@ -367,12 +388,13 @@ document.addEventListener('alpine:init', () => {
           sftpEditing = true; sftpRequestError = ''; sftpNotice = '';
           if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting);
         });
-        for (const operation of ['start','stop','save']) listen('sftp-' + operation, 'click', async () => {
+        for (const operation of ['start','stop','save','recreate']) listen('sftp-' + operation, 'click', async () => {
           if (sftpSubmitting || actionBusy || sqlSubmitting || themeSaving || !state?.sftp) return;
+          if (operation === 'recreate' && !confirm('Recreate the target SFTP container with these credentials? This replaces the existing container named sftp and discards files inside it.')) return;
           sftpSubmitting = true; sftpRequestError = ''; sftpNotice = '';
           render(state);
           try {
-            const data = operation === 'stop' ? {action:operation} : {action:operation,username:$('sftp-user').value.trim(),port:Number($('sftp-port').value),path:$('sftp-path').value.trim(),...($('sftp-password').value ? {password:$('sftp-password').value} : {})};
+            const data = operation === 'stop' ? {action:operation} : {action:operation,confirmReplace:operation === 'recreate',username:$('sftp-user').value.trim(),port:Number($('sftp-port').value),path:$('sftp-path').value.trim(),...($('sftp-password').value ? {password:$('sftp-password').value} : {})};
             const next = await api('sftp', data);
             if (operation !== 'stop') { sftpEditing = false; $('sftp-password').value = ''; }
             sftpNotice = operation === 'save' ? 'SFTP settings saved.' : '';
