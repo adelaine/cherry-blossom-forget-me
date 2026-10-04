@@ -160,7 +160,7 @@ document.addEventListener('alpine:init', () => {
         let state, editing = false, stopped = false, checking, credentialEditing = false, changingToken = false, sqlSubmitting = false, sqlDefaultsApplied = false, sqlDefaultsHost, sqlAccountEdited = false, sqlDatabaseEdited = false, sqlRequestError = '';
         let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false, actionError = '';
         let selectedTheme, themeSave;
-        let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '', actionBusy = false;
+        let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '';
         let sftpProbeTarget = '', sftpProbePending = false;
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
         function applyTheme(theme) {
@@ -209,7 +209,7 @@ document.addEventListener('alpine:init', () => {
             collapseSetupSections();
           }
           if (!editing) $('config').value = next.config;
-          const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting || sftpSubmitting;
+          const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
           if (!credentialEditing) for (const key of ['public','private','id']) $(key).value = next.certificates[key] || '';
           view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token is saved. Paste it below and click Save credentials. A token is needed for SuiteApps copied from GitLab.';
           view.token_entry.hidden = next.tokenPresent && !changingToken;
@@ -233,19 +233,19 @@ document.addEventListener('alpine:init', () => {
           view.scrumbox_link.hidden = !host;
           if (host) $('scrumbox-link').href = 'https://' + host + '/devhome';
           renderSql(next, busy);
-          renderSftp(next, busy);
+          renderSftp(next);
         }
-        function renderSftp(next, busy) {
+        function renderSftp(next) {
           if (connectionFailed) return;
           const sftp = next.sftp;
           const remote = sftp?.mode === 'remote';
           if (remote && sftp.target !== sftpProbeTarget && sftp.probe !== 'idle') sftpProbeTarget = sftp.target;
           const active = remote ? sftp.state === 'starting' || sftp.probe === 'checking' : ['starting','running'].includes(sftp?.state);
-          const submitting = sftpSubmitting || actionBusy || sqlSubmitting;
+          const submitting = sftpSubmitting;
           view.sftp_description.text = remote ? 'Run SFTP on the deployment target and upload files directly to it.' : 'Enable file sharing from your laptop.';
           view.sftp_folder.hidden = remote;
           view.sftp_recreate.hidden = !remote || !sftp.recreateAvailable;
-          view.sftp_recreate.disabled = busy || active || submitting;
+          view.sftp_recreate.disabled = active || submitting;
           view.sftp_upload.hidden = !remote || !sftp.uploadUrl;
           $('sftp-upload-url').textContent = sftp?.uploadUrl || '';
           if (remote && sftp.target && sftp.probe === 'idle' && !sftpProbePending && sftpProbeTarget !== sftp.target) {
@@ -262,9 +262,9 @@ document.addEventListener('alpine:init', () => {
             $('sftp-port').value = sftp.port;
             $('sftp-path').value = sftp.path || '';
           }
-          for (const id of ['sftp-user','sftp-port','sftp-password','sftp-path']) view[id.replaceAll('-', '_')].disabled = !sftp || busy || active || submitting;
-          view.sftp_start.disabled = !sftp || busy || active || submitting || sftp.relaunch || remote && !sftp.canStart;
-          view.sftp_save.disabled = !sftp || busy || active || submitting;
+          for (const id of ['sftp-user','sftp-port','sftp-password','sftp-path']) view[id.replaceAll('-', '_')].disabled = !sftp || active || submitting;
+          view.sftp_start.disabled = !sftp || active || submitting || sftp.relaunch || remote && !sftp.canStart;
+          view.sftp_save.disabled = !sftp || active || submitting;
           view.sftp_stop.disabled = !sftp || submitting || (remote ? !sftp.canStop : !active && !['starting','running'].includes(sftp.tunnel?.state));
           view.sftp_password_help.text = sftp?.passwordPresent ? 'A password is saved. Leave blank to use existing password.' : 'Enter a password before starting SFTP.';
           $('sftp-password-help').classList.toggle('status-message', !!sftp?.passwordPresent);
@@ -327,7 +327,7 @@ document.addEventListener('alpine:init', () => {
           lastActivity = Date.now();
           if (expired) void heartbeat();
         }, {capture:true,passive:true});
-        function action(id, fn, messageId = 'validation') { listen(id, 'click', async () => { actionError = ''; actionBusy = true; if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting); view[id.replaceAll('-', '_')].disabled = true; try { await fn(); } catch(error) { if (messageId === 'validation') actionError = error.message; view[messageId.replaceAll('-', '_')].text = error.message; } finally { actionBusy = false; if (!stopped) await refresh(); } }); }
+        function action(id, fn, messageId = 'validation') { listen(id, 'click', async () => { actionError = ''; view[id.replaceAll('-', '_')].disabled = true; try { await fn(); } catch(error) { if (messageId === 'validation') actionError = error.message; view[messageId.replaceAll('-', '_')].text = error.message; } finally { if (!stopped) await refresh(); } }); }
         listen('theme-toggle', 'change', async () => {
           if (stopped || connectionFailed) return;
           const theme = $('theme-toggle').checked ? 'dark' : 'light';
@@ -391,10 +391,10 @@ document.addEventListener('alpine:init', () => {
         }
         for (const key of ['sftp-user','sftp-port','sftp-password','sftp-path']) listen(key, 'input', () => {
           sftpEditing = true; sftpRequestError = ''; sftpNotice = '';
-          if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting);
+          if (state) renderSftp(state);
         });
         for (const operation of ['start','stop','save','recreate']) listen('sftp-' + operation, 'click', async () => {
-          if (sftpSubmitting || actionBusy || sqlSubmitting || !state?.sftp) return;
+          if (sftpSubmitting || !state?.sftp) return;
           if (operation === 'recreate' && !confirm('Recreate the target SFTP container with these credentials? This replaces the existing container named sftp and discards files inside it.')) return;
           sftpSubmitting = true; sftpRequestError = ''; sftpNotice = '';
           render(state);

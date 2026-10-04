@@ -237,7 +237,7 @@ export function startWebServer(options: {
     app.use("/api/*", async (c, next) => {
         if (c.req.method !== "POST") return reply(c, 404, { error: "Page not found." });
         if (stopping) return reply(c, 409, { error: "The app is stopping. Relaunch to continue." });
-        const background = ["/api/check", "/api/heartbeat", "/api/theme"].includes(c.req.path);
+        const background = ["/api/check", "/api/heartbeat", "/api/theme", "/api/sftp"].includes(c.req.path);
         if (busy() && !background) return reply(c, 409, { error: busyMessage() });
         // Count every byte before side effects, including requests without Content-Length.
         const chunks: Uint8Array[] = [];
