@@ -93,7 +93,7 @@ Describe 'Windows SuiteCloud launcher' {
         $deploy | Should -Contain '127.0.0.1::8080'
         Should -Invoke Start-Process -Times 1 -Exactly
     }
-    It 'creates missing files before installation and continues with blank runbox settings' {
+    It 'creates missing files before installation and continues with blank scrumbox settings' {
         Remove-Item -LiteralPath $global:LauncherTest_configPath
         Remove-Item -LiteralPath (Join-Path $global:LauncherTest_root 'credentials/auth.json')
         Invoke-TestLauncher

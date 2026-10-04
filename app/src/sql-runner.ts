@@ -10,7 +10,7 @@ export function validateSqlRequest(input: Record<string, unknown>, config: unkno
     if (!Array.isArray(vms) || typeof input.host !== "string" ||
         !vms.some(vm => vm?.url === input.host) ||
         !/^(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+$/.test(input.host) || !input.host.endsWith(".netsuite.com")) {
-        throw new Error("Select a configured runbox with a valid NetSuite hostname.");
+        throw new Error("Select a configured scrumbox with a valid NetSuite hostname.");
     }
     if (typeof input.account !== "string" || !/^[A-Za-z][A-Za-z0-9_$#]*$/.test(input.account.trim())) {
         throw new Error("Enter the database account (Oracle username).");

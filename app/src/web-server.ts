@@ -40,7 +40,7 @@ function message(error: unknown): string {
     const text = (error instanceof Error ? error.message : String(error))
         .replace(/ Update .* and run the start script again\.$/, "");
     if (text === "credentials/auth.json needs the NetSuite certificate ID.") return "Enter a valid Certificate ID assigned by NetSuite in Credentials and click Save credentials.";
-    if (text === "VM 1 needs an account ID and a NetSuite domain.") return "Enter your runbox domain in Current VM, without https:// or /devhome. Check the first VM's account ID in Settings.";
+    if (text === "VM 1 needs an account ID and a NetSuite domain.") return "Enter your deployment scrumbox domain in Current VM, without https:// or /devhome. Check the first VM's account ID in Settings.";
     if (text === "Certificate files were not mounted. Check their paths in credentials/auth.json.") return "Cannot find both certificate files. Check Certificate paths in Credentials and relaunch if needed, or use Generate certificates to create a new pair.";
     if (text === "The public and private certificate files do not match or cannot be read.") return "The certificate files do not match or cannot be read. Check Certificate paths in Credentials, or generate and register a new pair.";
     return text;
@@ -115,7 +115,7 @@ export function startWebServer(options: {
         let publicPath: string | null = null;
         let privatePath: string | null = null;
         if (certs?.public || certs?.private) {
-            if (!certs.public || !certs.private) error = "Set both certificate paths, or generate a new pair and register it on your runbox.";
+            if (!certs.public || !certs.private) error = "Set both certificate paths, or generate a new pair and register it on your scrumbox.";
             else {
                 publicPath = mountedCredentialPath(certs.public);
                 privatePath = mountedCredentialPath(certs.private);
@@ -123,7 +123,7 @@ export function startWebServer(options: {
                 else { try { verifyCertificates(publicPath, privatePath); } catch (e) { error = message(e); } }
             }
         } else if (mounted) error = "Certificate files already exist. Enter both paths in Certificate paths and save credentials, or generate and register a new pair.";
-        else error = "Click Generate certificates, download and register the public certificate on your runbox, then enter its assigned certificate ID and save credentials.";
+        else error = "Click Generate certificates, download and register the public certificate on your scrumbox, then enter its assigned certificate ID and save credentials.";
         return { hasExisting: mounted || !!certs?.public || !!certs?.private, error, publicPath, privatePath };
     };
     const readiness = (text: string) => {

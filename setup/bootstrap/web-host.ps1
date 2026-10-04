@@ -51,7 +51,7 @@ function Open-SuiteContainerPage {
 function Start-SuiteContainerWeb {
     $base = @('--mount', "type=bind,src=$projectDir,dst=/project,ro=true", '--env', "SUITECONTAINER_HOST_ROOT=$projectDir", '--env', 'SUITECONTAINER_HOST_PLATFORM=win32')
     $sshTarget = (@(& podman run --rm --cgroups=disabled @base suitecloud-workspace --web-ssh-target) -join '').Trim()
-    if ($LASTEXITCODE -ne 0) { throw 'Could not read the runbox SSH target.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read the scrumbox SSH target.' }
     $sshResolved = ''
     if ($sshTarget -and (Get-Command ssh -ErrorAction SilentlyContinue)) {
         try {

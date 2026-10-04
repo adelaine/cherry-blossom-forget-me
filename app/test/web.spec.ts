@@ -233,7 +233,7 @@ test("failed regeneration preserves the active pair and credentials", () => {
     }
 });
 
-test("Current VM preserves accounts and other runboxes, synchronizes JSON edits, and saves with credentials", async () => {
+test("Current VM preserves accounts and other scrumboxes, synchronizes JSON edits, and saves with credentials", async () => {
     const elements = new Map<string, any>();
     const element = (id: string) => {
         if (!elements.has(id)) elements.set(id, { value: "", replaceChildren() {}, querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
@@ -332,7 +332,7 @@ test("certificate generation is explicit, deployment uses snapshots, and a faile
     if (spawnSync("openssl", ["version"], { stdio: "ignore" }).status !== 0) { t.skip("OpenSSL is unavailable"); return; }
     const root = mkdtempSync(join(tmpdir(), "suitecontainer-lifecycle-"));
     mkdirSync(join(root, "credentials"));
-    const config = { suiteapps: [{ directory: "app", url: "https://gitlab.eng.netsuite.com/team/app.git" }], vms: [{ account: "000071", url: "runbox.vm.eng.netsuite.com" }] };
+    const config = { suiteapps: [{ directory: "app", url: "https://gitlab.eng.netsuite.com/team/app.git" }], vms: [{ account: "000071", url: "scrumbox.vm.eng.netsuite.com" }] };
     const configFile = join(root, "suitecontainer.config.json");
     writeFileSync(configFile, JSON.stringify(config));
     writeFileSync(join(root, "credentials/auth.json"), JSON.stringify(emptyAuth));

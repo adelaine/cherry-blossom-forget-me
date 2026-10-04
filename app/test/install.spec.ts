@@ -70,11 +70,11 @@ test("explains fatal TLS alerts without blaming the authentication certificate",
     const message = authenticationError(
         "(internal_error) Received fatal alert: internal_error",
         "absi-nsn",
-        "runbox.vm.eng.netsuite.com",
+        "scrumbox.vm.eng.netsuite.com",
     );
     assert.match(message, /Received fatal alert: internal_error/);
     assert.match(message, /absi-nsn/);
-    assert.match(message, /runbox.vm.eng.netsuite.com/);
+    assert.match(message, /scrumbox.vm.eng.netsuite.com/);
     assert.match(message, /VM url/);
     assert.match(message, /VPN/);
     assert.match(message, /does not identify the cause/);
@@ -85,19 +85,19 @@ test("explains Java trust errors and preserves unknown authentication errors", (
     const trust = authenticationError(
         "PKIX path building failed: unable to find valid certification path",
         "project",
-        "runbox.netsuite.com",
+        "scrumbox.netsuite.com",
     );
     assert.match(trust, /Java trust store/);
     const unknown = authenticationError(
         "Invalid certificate ID",
         "project",
-        "runbox.netsuite.com",
+        "scrumbox.netsuite.com",
     );
     assert.match(unknown, /Invalid certificate ID/);
     assert.match(unknown, /suitecloud-certificates.id/);
     assert.doesNotMatch(unknown, /fatal TLS alert/);
     assert.match(
-        authenticationError("", "project", "runbox.netsuite.com"),
+        authenticationError("", "project", "scrumbox.netsuite.com"),
         /without an error message/,
     );
 });
@@ -107,7 +107,7 @@ const suiteapp = {
     directory: "project",
     branch: "release/1.0",
 };
-const vms = [{ account: "12345", url: "runbox.netsuite.com" }];
+const vms = [{ account: "12345", url: "scrumbox.netsuite.com" }];
 
 test("loads credentials separately and uses the configured GitLab token", () => {
     withCertificateFixture((directory) => {
@@ -117,7 +117,7 @@ test("loads credentials separately and uses the configured GitLab token", () => 
             configPath,
             JSON.stringify({
                 suiteapps: [suiteapp],
-                vms: [{ account: "12345", url: "runbox.netsuite.com" }],
+                vms: [{ account: "12345", url: "scrumbox.netsuite.com" }],
             }),
         );
         writeFileSync(

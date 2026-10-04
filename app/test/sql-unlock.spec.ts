@@ -15,7 +15,7 @@ test("SQL unlock seeds .sql-user once, uses VM database defaults, and permits sa
     const root = mkdtempSync(join(tmpdir(), "suitecontainer-sql-unlock-"));
     const credentials = join(root, "credentials");
     mkdirSync(credentials);
-    const config = { suiteapps: [], vms: [{ account: "000071", url: "runbox.vm.eng.netsuite.com", database: { user: "CONFIG_USER", service: "config.service" } }] };
+    const config = { suiteapps: [], vms: [{ account: "000071", url: "scrumbox.vm.eng.netsuite.com", database: { user: "CONFIG_USER", service: "config.service" } }] };
     const configText = JSON.stringify(config), authText = '{}';
     writeFileSync(join(root, "suitecontainer.config.json"), configText);
     writeFileSync(join(credentials, "auth.json"), authText);
@@ -108,7 +108,7 @@ test("the browser offers separate masked manual and unlock fields and sends only
         if (!elements.has(id)) elements.set(id, { value: "", querySelectorAll: () => [], addEventListener(event: string, handler: Function) { this[event] = handler; } });
         return elements.get(id);
     };
-    const state = { config: '{"vms":[{"url":"runbox.vm.eng.netsuite.com"}]}', certificates: {}, run: { state: "idle", log: "" }, ready: false,
+    const state = { config: '{"vms":[{"url":"scrumbox.vm.eng.netsuite.com"}]}', certificates: {}, run: { state: "idle", log: "" }, ready: false,
         sql: { state: "idle", output: "", defaults: { user: "TEST_USER", service: "test.service" }, passwordHint: "hint", hasDefaultPassword: true } };
     let sent: any;
     const context = { document: { getElementById: element, addEventListener() {} }, location: { hash: "", pathname: "/" }, URLSearchParams, AbortSignal,

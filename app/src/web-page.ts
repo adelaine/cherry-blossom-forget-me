@@ -20,17 +20,17 @@ export const deploymentPage = {
 <body><main class="container" x-data="deployment" x-cloak>
 <label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
-<header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your runbox address, complete credentials, then deploy your SuiteApps.</p></hgroup></header>
+<header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your scrumbox address, your complete credentials, then deploy your SuiteApps.</p></hgroup></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
 <div class="setup-sections">
 <article><details class="setup-section" id="credentials-section" open><summary><h2>Credentials</h2></summary><ol class="credential-steps" role="list"><li><h3>GitLab token</h3><blockquote class="status-message" id="token-state" x-text="view.token_state.text"></blockquote><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></li>
-<li><h3>Certificate paths</h3><details id="cert-details"><summary>View file paths</summary><p>Changing paths may require relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
+<li><h3>Certificate paths</h3><details id="cert-details"><summary>View file paths</summary><p>Changing paths requires relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
 <fieldset class="grid" aria-label="Certificate actions"><button class="secondary outline" id="generate" :disabled="view.generate.disabled" @click="clickgenerate">Generate new certificates</button>
 <button class="secondary" id="download" hidden :hidden="view.download.hidden" :disabled="view.download.disabled" @click="clickdownload">Download public certificate</button></fieldset>
-<p id="cert-message" x-text="view.cert_message.text"></p><div id="registration"><p>Register the public certificate on your runbox: open <strong>Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup</strong>, select SuiteCloud Development Integration and the appropriate entity and role, and upload <strong>public.pem</strong>. Copy the assigned certificate ID below. Keep the private key on this computer.</p><p><a id="runbox-link" hidden target="_blank" rel="noopener noreferrer" :hidden="view.runbox_link.hidden">Open runbox</a> <a href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0422011927.html" target="_blank" rel="noopener noreferrer">NetSuite setup guide</a></p></div>
-</li><li><h3>Current VM</h3><label for="vm">Current VM (runbox domain)</label><input id="vm" aria-describedby="vm-help" placeholder="your-runbox.vm.eng.netsuite.com" :disabled="view.vm.disabled" @input="inputvm"><p id="vm-help"><small>Enter only the domain, without https://. Click Save credentials to update settings.</small></p>
+<p id="cert-message" x-text="view.cert_message.text"></p><div id="registration"><p>Register the public certificate on your scrumbox: open <strong>Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup</strong>, select SuiteCloud Development Integration and the appropriate entity and role, and upload <strong>public.pem</strong>. Copy the assigned certificate ID below. Keep the private key on this computer.</p><p><a id="scrumbox-link" hidden target="_blank" rel="noopener noreferrer" :hidden="view.scrumbox_link.hidden">Open scrumbox</a> <a href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0422011927.html" target="_blank" rel="noopener noreferrer">NetSuite setup guide</a></p></div>
+</li><li><h3>Current VM</h3><label for="vm">Current VM (scrumbox domain)</label><input id="vm" aria-describedby="vm-help" placeholder="your-scrumbox.vm.eng.netsuite.com" :disabled="view.vm.disabled" @input="inputvm"><p id="vm-help"><small>Enter only the domain, without https://. Click Save credentials to update settings.</small></p>
 <label for="id">Certificate ID assigned by NetSuite</label><input id="id" :disabled="view.id.disabled" @input="inputid"></li></ol><fieldset><button id="credentials" :disabled="view.credentials.disabled" @click="clickcredentials">Save credentials</button></fieldset><p id="credential-message" role="status" x-text="view.credential_message.text"></p></details></article>
-<article><details class="setup-section" id="settings-section" open><summary><h2>Settings</h2></summary><p>Check the settings below. Additional runboxes can be entered, however commands will use settings from the first <code>vm</code>.</p>
+<article><details class="setup-section" id="settings-section" open><summary><h2>Settings</h2></summary><p>Check the settings below. Additional scrumboxes may be entered under <code>vms</code>. Settings from the first scrumbox are used.</p>
 <label for="config">Configuration JSON</label><textarea id="config" spellcheck="false" rows="22" :disabled="view.config.disabled" @input="inputconfig"></textarea><fieldset><button id="save" :disabled="view.save.disabled" @click="clicksave">Save settings</button></fieldset><p id="settings-message" role="status" x-text="view.settings_message.text"></p></details></article>
 <article><details class="setup-section" id="sql-section"><summary><h2>SQL</h2></summary>
 <div class="grid"><div><label for="sql-account">User</label><input id="sql-account" autocomplete="off" spellcheck="false" :disabled="view.sql_account.disabled" @input="inputsql_account"></div>
@@ -41,20 +41,20 @@ export const deploymentPage = {
 <label for="sql-statement">SQL statement</label><textarea id="sql-statement" rows="8" spellcheck="false" placeholder="SELECT * FROM your_table;" :disabled="view.sql_statement.disabled" @input="inputsql_statement"></textarea>
 <fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></article>
 <article><details class="setup-section" id="sftp-section"><summary><h2>SFTP</h2></summary>
-<p id="sftp-description" x-text="view.sftp_description.text">Enable file sharing from your laptop.</p>
+<p id="sftp-description" x-text="view.sftp_description.text"></p>
 <fieldset class="grid" aria-label="SFTP actions"><button id="sftp-start" disabled :disabled="view.sftp_start.disabled" @click="clicksftp_start">Start SFTP</button><button id="sftp-stop" class="secondary outline" disabled :disabled="view.sftp_stop.disabled" @click="clicksftp_stop">Stop SFTP</button><button id="sftp-save" class="secondary" disabled :disabled="view.sftp_save.disabled" @click="clicksftp_save">Save settings</button></fieldset>
 <button id="sftp-recreate" hidden :hidden="view.sftp_recreate.hidden" :disabled="view.sftp_recreate.disabled" @click="clicksftp_recreate">Recreate SFTP</button>
 <blockquote class="status-message" id="sftp-message" role="status" x-text="view.sftp_message.text"></blockquote>
 <p id="sftp-upload" hidden :hidden="view.sftp_upload.hidden">Upload files directly to <strong id="sftp-upload-url"></strong>.</p>
 <details><summary>SFTP settings</summary>
-<p><small>These are your own machine settings.</small></p>
+<p>These are your own machine settings.</p>
 <div class="grid"><div><label for="sftp-user">User</label><input id="sftp-user" autocomplete="off" spellcheck="false" :disabled="view.sftp_user.disabled" @input="inputsftp_user"></div>
 <div><label for="sftp-port">Port</label><input id="sftp-port" type="number" min="1" max="65535" step="1" :disabled="view.sftp_port.disabled" @input="inputsftp_port"></div></div>
 <div class="grid"><div><label for="sftp-password">Password</label><input id="sftp-password" type="password" autocomplete="new-password" aria-describedby="sftp-password-help" :disabled="view.sftp_password.disabled" @input="inputsftp_password"><p id="sftp-password-help" x-text="view.sftp_password_help.text"></p></div>
 <div id="sftp-folder" :hidden="view.sftp_folder.hidden"><label for="sftp-path">Absolute path to local folder</label><input id="sftp-path" spellcheck="false" aria-describedby="sftp-path-help" :disabled="view.sftp_path.disabled" @input="inputsftp_path"><p id="sftp-path-help">Leave blank to use the default folder <strong>sftp-files</strong>. Changing this value requires a restart.</p></div></div>
 </details>
 <details><summary>NetSuite connection fields</summary>
-<p>Use these settings for the connectivity plugin in <strong>NetSuite > Format Profile</strong>. Note: Internal SFTP addresses must be allowed on the runbox via <strong>AdminDocs Canary Tool</strong>.</p>
+<p>Use these settings for the connectivity plugin in <strong>NetSuite > Format Profile</strong>. Note: Internal SFTP addresses must be allowed on the deployment scrumbox via <strong>AdminDocs Canary Tool</strong>.</p>
 <div class="grid sftp-connection-grid">
 <div><div class="sftp-value-heading"><span id="sftp-url-label">URL</span><button id="copy-sftp-url" type="button" class="secondary outline" aria-label="Copy URL" :disabled="view.copy_sftp_url.disabled" x-text="view.copy_sftp_url.text" @click="clickcopy_sftp_url">Copy</button></div><div id="sftp-netsuite-url" class="sftp-connection-value" tabindex="0" aria-labelledby="sftp-url-label">localhost</div></div>
 <div class="sftp-connection-key"><div class="sftp-value-heading"><span id="sftp-key-label">Host key</span><button id="copy-sftp-key" type="button" class="secondary outline" aria-label="Copy host key" :disabled="view.copy_sftp_key.disabled" x-text="view.copy_sftp_key.text" @click="clickcopy_sftp_key">Copy</button></div><div id="sftp-host-key" class="sftp-connection-value" tabindex="0" aria-labelledby="sftp-key-label"></div></div>
@@ -104,6 +104,7 @@ details[open]>summary::before{transform:rotate(90deg)}
 @media(max-width:575px){article{padding:1rem}.credential-steps>li{padding-inline-start:2.5rem}}
 [x-cloak],[hidden]{display:none!important}
 main :is(p,blockquote):empty{display:none}
+.status-message{--pico-primary:light-dark(#9236a4,#cd68e0);color:var(--pico-primary)}
 blockquote.status-message{--pico-primary:light-dark(#9236a4,#cd68e0);--pico-blockquote-border-color:var(--pico-primary);margin:0 0 var(--pico-typography-spacing-vertical);padding:0.25rem 1.5rem;color:var(--pico-primary);border-radius:0.25rem;background-color:color-mix(in srgb,var(--pico-primary) 8%,transparent)}
 textarea{font-family:var(--pico-font-family-monospace)}
 .sftp-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -219,7 +220,7 @@ document.addEventListener('alpine:init', () => {
           view.cert_message.text = next.certificates.error;
           view.validation.text = actionError || (busy
             ? next.sql?.preparing ? 'Unlocking the saved SQL password. Please wait.' : next.sql?.state === 'running' || sqlSubmitting ? 'SQL is running. Wait for it to finish before deploying or changing settings.' : 'Deployment is running. Wait for it to finish before changing settings or credentials.'
-            : next.relaunch ? 'Relaunch required. Save your changes, stop this app, and start the launcher again.' : next.error || (credentialEditing ? 'Save your credential changes before deploying.' : editing ? 'Settings are ready. Deploy will save them before starting.' : 'Ready to deploy.'));
+            : next.relaunch ? 'Relaunch required. Save your changes, stop this app, and start the launcher again.' : next.error || (credentialEditing ? 'Save your credential changes before deploying.' : editing ? 'Settings are ready.' : 'Ready to deploy.'));
           view.deploy.disabled = !next.ready || credentialEditing || busy;
           for (const key of ['save','credentials','stop','public','private','id','token','config','vm','change-token']) view[key.replaceAll('-', '_')].disabled = busy;
           view.run_state.text = ({idle:'No deployment started.',running:'Deployment in progress…',succeeded:'Deployment completed.',failed:'Deployment failed. Review the message below, correct settings or credentials, and retry.'})[next.run.state];
@@ -229,8 +230,8 @@ document.addEventListener('alpine:init', () => {
           if (bottom) log.scrollTop = log.scrollHeight;
           try { $('vm').value = JSON.parse($('config').value).vms?.[0]?.url || ''; } catch { /* Keep the Current VM value until the JSON is valid. */ }
           const host = currentVmHost();
-          view.runbox_link.hidden = !host;
-          if (host) $('runbox-link').href = 'https://' + host + '/devhome';
+          view.scrumbox_link.hidden = !host;
+          if (host) $('scrumbox-link').href = 'https://' + host + '/devhome';
           renderSql(next, busy);
           renderSftp(next, busy);
         }
@@ -241,7 +242,7 @@ document.addEventListener('alpine:init', () => {
           if (remote && sftp.target !== sftpProbeTarget && sftp.probe !== 'idle') sftpProbeTarget = sftp.target;
           const active = remote ? sftp.state === 'starting' || sftp.probe === 'checking' : ['starting','running'].includes(sftp?.state);
           const submitting = sftpSubmitting || actionBusy || sqlSubmitting || themeSaving;
-          view.sftp_description.text = remote ? 'Run SFTP on the deployment target and upload files directly to it. Start checks existing access before creating a container.' : 'Share files from your laptop with NetSuite through the runbox. Start SFTP when needed; it does not start automatically.';
+          view.sftp_description.text = remote ? 'Run SFTP on the deployment target and upload files directly to it.' : 'Enable file sharing from your laptop.';
           view.sftp_folder.hidden = remote;
           view.sftp_recreate.hidden = !remote || !sftp.recreateAvailable;
           view.sftp_recreate.disabled = busy || active || submitting;
@@ -266,6 +267,7 @@ document.addEventListener('alpine:init', () => {
           view.sftp_save.disabled = !sftp || busy || active || submitting;
           view.sftp_stop.disabled = !sftp || submitting || (remote ? !sftp.canStop : !active && !['starting','running'].includes(sftp.tunnel?.state));
           view.sftp_password_help.text = sftp?.passwordPresent ? 'A password is saved. Leave blank to use existing password.' : 'Enter a password before starting SFTP.';
+          $('sftp-password-help').classList.toggle('status-message', !!sftp?.passwordPresent);
           const connection = remote ? sftp.connection : sftp;
           for (const [id, value] of [['sftp-netsuite-url',remote && !connection ? '' : 'localhost'],['sftp-netsuite-user',connection?.username || ''],['sftp-netsuite-port',connection ? String(connection.port) : ''],['sftp-host-key',connection?.hostKey || '']]) {
             if ($(id).textContent !== value) $(id).textContent = value;
@@ -276,7 +278,7 @@ document.addEventListener('alpine:init', () => {
           }
           const status = remote ? sftp.probe === 'checking' ? 'Checking target SSH access…' : sftp.state === 'starting' ? 'SFTP operation is in progress…' : sftp.connection ? 'SFTP access verified.' : sftp.probe === 'ready' && sftp.state !== 'failed' ? 'Target SSH access verified. Click Start SFTP to check SFTP access.' : sftp.probe === 'idle' ? 'Waiting to check target SSH access…' : 'SFTP access could not be verified.' : sftp ? ({stopped:'SFTP is stopped.',starting:'SFTP is starting…',running:'SFTP is running.',failed:'SFTP failed.'})[sftp.state] : 'Loading SFTP settings…';
           const tunnel = remote ? undefined : sftp?.tunnel;
-          const tunnelMessage = remote ? '' : tunnel?.error || (tunnel?.state === 'starting' ? 'Connecting the runbox tunnel…' : sftp?.state === 'running' && tunnel?.state !== 'running' ? 'The runbox tunnel is not connected.' : '');
+          const tunnelMessage = remote ? '' : tunnel?.error || (tunnel?.state === 'starting' ? 'Connecting the scrumbox tunnel…' : sftp?.state === 'running' && tunnel?.state !== 'running' ? 'The scrumbox tunnel is not connected.' : '');
           view.sftp_message.text = [status, sftpRequestError || sftp?.error || sftpNotice || (sftpEditing ? 'SFTP settings changed. Save settings or click Start SFTP.' : ''), tunnelMessage, sftp?.relaunch ? 'Relaunch required. Stop the app and start the launcher again to mount the selected folder.' : ''].filter(Boolean).join(' ');
         }
         function currentVmHost() {
@@ -426,7 +428,7 @@ document.addEventListener('alpine:init', () => {
         listen('change-token', 'click', () => { changingToken = true; view.token_entry.hidden = false; view.change_token.hidden = true; $('token').focus(); });
         action('save', async () => { render(await api('settings', {config:$('config').value})); editing = false; view.settings_message.text = 'Settings saved.'; }, 'settings-message');
         action('credentials', async () => { const data = Object.fromEntries(['public','private','id','token'].map(key => [key,$(key).value])); data.config = $('config').value; const next = await api('credentials',data); credentialEditing = false; editing = false; changingToken = false; $('token').value = ''; render(next); view.credential_message.text = 'Credentials and settings saved.'; view.settings_message.text = 'Settings saved.'; }, 'credential-message');
-        action('generate', async () => { if ((state.certificates.hasExisting || credentialEditing) && !confirm('Generate new certificates? Old certificates saved by this app will not be preserved, and the saved certificate ID will be cleared. Files stored elsewhere are not changed. Register the new public certificate on your runbox before deploying.')) return; const next = await api('generate',{replace:true}); for (const key of ['public','private','id']) $(key).value = next.certificates[key] || ''; credentialEditing = !!$('token').value.trim(); render(next); $('cert-details').open = true; view.credential_message.text = 'New certificates saved. Download the public certificate, register it on your runbox, then enter the assigned certificate ID and click Save credentials.'; }, 'credential-message');
+        action('generate', async () => { if ((state.certificates.hasExisting || credentialEditing) && !confirm('Generate new certificates? Old certificates saved by this app will not be preserved, and the saved certificate ID will be cleared. Files stored elsewhere are not changed. Register the new public certificate on your scrumbox before deploying.')) return; const next = await api('generate',{replace:true}); for (const key of ['public','private','id']) $(key).value = next.certificates[key] || ''; credentialEditing = !!$('token').value.trim(); render(next); $('cert-details').open = true; view.credential_message.text = 'New certificates saved. Download the public certificate, register it on your scrumbox, then enter the assigned certificate ID and click Save credentials.'; }, 'credential-message');
         action('deploy', async () => { render(await api('deploy',{config:$('config').value})); editing = false; });
         action('download', async () => { const response = await fetch('/api/certificate',{headers:{'X-Session-Token':session}}); if (!response.ok) throw new Error((await response.json()).error); const url = URL.createObjectURL(await response.blob()); const a = document.createElement('a'); a.href = url; a.download = 'public.pem'; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000); }, 'credential-message');
         action('stop', async () => {

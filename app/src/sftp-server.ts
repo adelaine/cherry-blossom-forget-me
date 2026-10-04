@@ -32,20 +32,20 @@ export class SftpService {
     private fail(message: string): void {
         this.stop(); this.state = "failed"; this.tunnelState = "failed"; this.error = message;
     }
-    async start(auth: Auth, runboxHost: string): Promise<void> {
+    async start(auth: Auth, scrumboxHost: string): Promise<void> {
         if (!this.enabled) throw new Error("Relaunch SuiteContainer with the platform launcher to enable SFTP controls.");
         if (this.active) throw new Error("SFTP is already running or starting.");
         if (!auth.sftp?.password) throw new Error("Enter an SFTP password before starting.");
         if (this.status(auth).relaunch) throw new Error("Folder saved. Stop the app and relaunch to mount this local folder before starting SFTP.");
         if (!existsSync("/srv/sftp/files")) throw new Error("The local folder is unavailable. Check its path and relaunch.");
         const ssh = this.record.ssh;
-        if (!ssh || ssh.target !== runboxHost) throw new Error("Relaunch SuiteContainer to detect SSH settings for the current runbox.");
+        if (!ssh || ssh.target !== scrumboxHost) throw new Error("Relaunch SuiteContainer to detect SSH settings for the current host scrumbox.");
         if (ssh.error) throw new Error(ssh.error);
         if (!ssh.identities.length || !ssh.identities.some(file => existsSync(file.path)))
-            throw new Error("No SSH private key was found for this runbox. Check laptop SSH access and relaunch SuiteContainer.");
+            throw new Error("No SSH private key was found for this host scrumbox. Check laptop SSH access and relaunch SuiteContainer.");
         if (!ssh.knownHosts.length || !ssh.knownHosts.every(file => existsSync(file.path)))
-            throw new Error("No SSH trust file was found for this runbox. Connect to it from your laptop, verify its host key, then relaunch SuiteContainer.");
-        if (!/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(runboxHost)) throw new Error("Set Current VM before starting the SFTP tunnel.");
+            throw new Error("No SSH trust file was found for this host scrumbox. Connect to it from your laptop, verify its host key, then relaunch SuiteContainer.");
+        if (!/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(scrumboxHost)) throw new Error("Set Current VM before starting the SFTP tunnel.");
         const generation = ++this.generation;
         this.state = "starting"; this.tunnelState = "starting"; this.error = "";
         const ensureCurrent = () => { if (generation !== this.generation) throw new Error("SFTP start was cancelled."); };
@@ -107,13 +107,13 @@ export class SftpService {
             this.tunnel = tunnel;
             let stderr = "";
             const failure = () => /Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/.test(stderr)
-                ? "The runbox SSH host key is not trusted. Verify it on your laptop and relaunch SuiteContainer."
-                : /Permission denied/.test(stderr) ? "The detected SSH keys cannot log in to the runbox. Check laptop SSH access and retry."
-                : /remote port forwarding failed/.test(stderr) ? "Runbox port is already in use or SSH forwarding is denied. Stop the existing tunnel or choose another port."
-                : "Cannot connect the SFTP tunnel. Check runbox access and retry.";
+                ? "The deployment scrumbox SSH host key is not trusted. Verify it on your laptop and relaunch SuiteContainer."
+                : /Permission denied/.test(stderr) ? "The detected SSH keys cannot log in to the deployment scrumbox. Check laptop SSH access and retry."
+                : /remote port forwarding failed/.test(stderr) ? "The deployment scrumbox port is already in use or SSH forwarding is denied. Stop the existing tunnel or choose another port."
+                : "Cannot connect the SFTP tunnel. Check deployment scrumbox access and retry.";
             await new Promise<void>((resolveReady, reject) => {
                 let confirmed = false;
-                const timer = setTimeout(() => reject(new Error("The SSH tunnel did not become ready. Check runbox access and retry.")), 20_000);
+                const timer = setTimeout(() => reject(new Error("The SSH tunnel did not become ready. Check deployment scrumbox access and retry.")), 20_000);
                 const rejectStart = (message: string) => { clearTimeout(timer); if (!confirmed) reject(new Error(message)); else if (this.tunnel === tunnel) this.fail(message); };
                 tunnel.on("error", () => rejectStart("SSH could not start inside SuiteContainer."));
                 tunnel.on("exit", () => rejectStart(failure()));

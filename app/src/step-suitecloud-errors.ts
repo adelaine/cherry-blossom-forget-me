@@ -22,11 +22,11 @@ export function authenticationError(
     ];
     if (tlsFailure) {
         lines.push(
-            "1. Check the VM url in suitecontainer.config.json. Use the actual runbox hostname, without https:// or a path.",
+            "1. Check the VM url in suitecontainer.config.json. Use the actual scrumbox hostname, without https:// or a path.",
             `2. Connect to the required VPN and check that https://${domain} opens in your browser. The Podman container must also be able to reach it.`,
             trustFailure
                 ? "3. Java could not validate the server certificate. Check the server certificate chain and install the required company CA certificates in the container's Java trust store."
-                : "3. Check the runbox HTTPS service, any VPN/proxy TLS interception, and compatibility with the container's Java TLS settings. A server or proxy sent a fatal TLS alert; this message alone does not identify the cause.",
+                : "3. Check the scrumbox HTTPS service, any VPN/proxy TLS interception, and compatibility with the container's Java TLS settings. A server or proxy sent a fatal TLS alert; this message alone does not identify the cause.",
             "This TLS error does not establish that your SuiteCloud authentication certificate or certificate ID is wrong.",
         );
     } else {

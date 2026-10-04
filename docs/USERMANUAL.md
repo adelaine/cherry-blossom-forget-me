@@ -2,11 +2,11 @@
 
 SuiteContainer runs the SuiteCloud CLI inside a Podman container and provides a browser interface for credentials, configuration, deployment, and SQL.
 
-The computer or **codebox** runs the container. A **runbox**, listed under `vms`, is a NetSuite deployment target.
+The computer or **codebox** runs the container. A **deployment scrumbox**, listed under `vms`, is a NetSuite deployment target.
 
 ## Starting the app
 
-Follow the [quickstart](../README.md) to run the launcher for your platform. You need network access to the internal container registry, package registry, GitLab repositories, and your runboxes.
+Follow the [quickstart](../README.md) to run the launcher for your platform. You need network access to the internal container registry, package registry, GitLab repositories, and your scrumboxes.
 
 The launcher prepares local configuration files, installs Podman when needed, builds the container image, and starts the deployment page. If the app is already running, the launcher reopens it without rebuilding.
 
@@ -16,10 +16,10 @@ Starting the app does not deploy anything. Deployment begins when you click **De
 
 ## Credentials and certificate registration
 
-1. Set **Current VM** to your runbox domain, without `https://` or `/devhome`.
+1. Set **Current VM** to your scrumbox domain, without `https://` or `/devhome`.
 2. Enter a GitLab token if you use remote repositories. Configurations using only local checkouts do not need a GitLab token.
 3. Supply both existing certificate paths, or click **Generate certificates**.
-4. Download the public certificate and register it on the target runbox under **Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup**. Select SuiteCloud Development Integration and the appropriate entity and role.
+4. Download the public certificate and register it on the target scrumbox under **Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup**. Select SuiteCloud Development Integration and the appropriate entity and role.
 5. Enter the certificate ID assigned by NetSuite and click **Save credentials**.
 
 Credentials are stored separately from deployment settings:
@@ -55,7 +55,7 @@ Example:
     ],
     "vms": [
         {
-            "url": "your-runbox.vm.eng.netsuite.com",
+            "url": "your-scrumbox.vm.eng.netsuite.com",
             "account": "000071",
             "database": {
                 "user": "shared",
@@ -69,7 +69,7 @@ Example:
 - `directory` identifies the SuiteApp's workspace folder and must be unique.
 - `url` identifies a repository on `gitlab.eng.netsuite.com`.
 - `branch` is optional for remote repositories. With a branch specified, an existing clone is fetched, checked out to that branch, and updated with a fast-forward pull.
-- `account` is the NetSuite account ID; `url` in a VM entry is its runbox domain.
+- `account` is the NetSuite account ID; `url` in a VM entry is its scrumbox domain.
 - **Current VM** edits the first entry in `vms`. Deployment uses every listed entry.
 - `database.user` and `database.service` prepopulate the SQL connection fields.
 

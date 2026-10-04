@@ -6,13 +6,13 @@ import { randomUUID } from "node:crypto";
 import { readAuth } from "./step-auth.ts";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const help = `Connect SuiteContainer's SFTP service to your runbox over SSH.
+const help = `Connect SuiteContainer's SFTP service to your deployment scrumbox over SSH.
 Start SuiteContainer with the usual launcher first. From app/: npm run sftp
 
 Options:
-  --runbox USER@HOST        Default: nsbuild@vms[0].url
-  --remote-port PORT        Runbox port (default: 8000, for Banyan)
-  --remote-bind ADDRESS     Runbox listener address (default: 127.0.0.1)
+  --scrumbox USER@HOST        Default: nsbuild@vms[0].url
+  --remote-port PORT        Scrumbox port (default: 8000, for Banyan)
+  --remote-bind ADDRESS     Scrumbox listener address (default: 127.0.0.1)
   --ssh-option KEY=VALUE    Repeatable ssh -o option
   --help                   Show this help
 
@@ -22,7 +22,7 @@ SuiteScript connects to localhost:8000 after your canary restriction is disabled
 `;
 
 export type SftpOptions = {
-    runbox: string;
+    scrumbox: string;
     remotePort: number;
     remoteBind: string;
     sshOptions: string[];
@@ -31,7 +31,7 @@ export type SftpOptions = {
 export function parseSftpOptions(args: string[]): SftpOptions | null {
     if (args.includes("--help")) return null;
     const options: SftpOptions = {
-        runbox: "",
+        scrumbox: "",
         remotePort: readAuth(join(projectRoot, "credentials/auth.json")).sftp?.port ?? 8000,
         remoteBind: "127.0.0.1",
         sshOptions: [],
@@ -40,7 +40,7 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
         const flag = args[i];
         if (
             ![
-                "--runbox",
+                "--scrumbox",
                 "--remote-port",
                 "--remote-bind",
                 "--ssh-option",
@@ -51,8 +51,8 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
         if (!value || value.startsWith("--") || /[\r\n\0]/.test(value))
             throw new Error(`Supply a value for ${flag}.`);
         switch (flag) {
-            case "--runbox":
-                options.runbox = value;
+            case "--scrumbox":
+                options.scrumbox = value;
                 break;
             case "--remote-port":
                 if (
@@ -79,7 +79,7 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
                 break;
         }
     }
-    if (!options.runbox) {
+    if (!options.scrumbox) {
         const config = JSON.parse(
             readFileSync(
                 join(projectRoot, "suitecontainer.config.json"),
@@ -88,16 +88,16 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
         );
         const host = config?.vms?.[0]?.url;
         if (typeof host !== "string" || !host)
-            throw new Error("Set vms[0].url or supply --runbox nsbuild@HOST.");
-        options.runbox = `nsbuild@${host}`;
+            throw new Error("Set vms[0].url or supply --scrumbox nsbuild@HOST.");
+        options.scrumbox = `nsbuild@${host}`;
     }
     if (
         !/^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*@)?[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(
-            options.runbox,
+            options.scrumbox,
         )
     )
         throw new Error(
-            "Use USER@HOST or an SSH configuration alias for --runbox.",
+            "Use USER@HOST or an SSH configuration alias for --scrumbox.",
         );
     return options;
 }
@@ -144,7 +144,7 @@ export function sftpTunnelArgs(
         "-R",
         `${options.remoteBind}:${options.remotePort}:127.0.0.1:${localPort}`,
         "--",
-        options.runbox,
+        options.scrumbox,
     ];
 }
 
@@ -185,7 +185,7 @@ export async function serveSftp(options: SftpOptions): Promise<number> {
         "cat",
         "/config/credentials/sftp/host-keys/ssh_host_rsa_key.pub",
     ]).split(/\s+/)[1];
-    const url = options.runbox.split("@").at(-1)!;
+    const url = options.scrumbox.split("@").at(-1)!;
     const connection = {
         username: readAuth(join(projectRoot, "credentials/auth.json")).sftp?.username ?? "suitecontainer",
         url:
@@ -209,14 +209,14 @@ export async function serveSftp(options: SftpOptions): Promise<number> {
         `N/sftp connection settings: ${settings}. Shared folder: ${join(projectRoot, "sftp-files")} (read-only).`,
     );
     console.log(
-        `Opening SSH tunnel to ${options.runbox}, port ${options.remotePort}. Keep this terminal open.`,
+        `Opening SSH tunnel to ${options.scrumbox}, port ${options.remotePort}. Keep this terminal open.`,
     );
     if (
         options.remoteBind !== "127.0.0.1" &&
         options.remoteBind !== "localhost"
     )
         console.log(
-            "VM-name access requires GatewayPorts clientspecified or yes on the runbox and Banyan access to this port.",
+            "VM-name access requires GatewayPorts clientspecified or yes on the scrumbox and Banyan access to this port.",
         );
     const marker = `/tmp/suitecontainer-sftp-tunnels/${randomUUID()}`;
     const touch = () => command(podman, ["exec", container, "touch", marker]);
