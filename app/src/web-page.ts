@@ -243,7 +243,7 @@ document.addEventListener('alpine:init', () => {
           if (remote && sftp.target !== sftpProbeTarget && sftp.probe !== 'idle') sftpProbeTarget = sftp.target;
           const active = remote ? sftp.state === 'starting' || sftp.probe === 'checking' : ['starting','running'].includes(sftp?.state);
           const submitting = sftpSubmitting;
-          view.sftp_description.text = remote ? 'Run SFTP on the deployment target and upload files directly to it.' : 'Enable file sharing from your laptop. 🌐 Requires SSH onnectivity to scrumbox';
+          view.sftp_description.text = remote ? 'Run SFTP on the deployment target and upload files directly to it.' : 'Enable file sharing from your laptop. 🌐 Requires SSH connectivity to scrumbox';
           view.sftp_folder.hidden = remote;
           view.sftp_recreate.hidden = !remote || !sftp.recreateAvailable;
           view.sftp_recreate.disabled = active || submitting;
