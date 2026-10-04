@@ -159,7 +159,7 @@ document.addEventListener('alpine:init', () => {
         };
         let state, editing = false, stopped = false, checking, credentialEditing = false, changingToken = false, sqlSubmitting = false, sqlDefaultsApplied = false, sqlDefaultsHost, sqlAccountEdited = false, sqlDatabaseEdited = false, sqlRequestError = '';
         let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false, actionError = '';
-        let themeSaving = false;
+        let selectedTheme, themeSave;
         let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '', actionBusy = false;
         let sftpProbeTarget = '', sftpProbePending = false;
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
@@ -169,7 +169,7 @@ document.addEventListener('alpine:init', () => {
           $('theme-toggle').checked = theme === 'dark' || (theme !== 'light' && systemTheme.matches);
         }
         applyTheme();
-        systemTheme.addEventListener('change', () => { if (!themeSaving && !state?.theme) applyTheme(); });
+        systemTheme.addEventListener('change', () => { if (!selectedTheme && !state?.theme) applyTheme(); });
         const connectionMessage = 'Connection to the app was lost. It may have stopped automatically after inactivity. Start the launcher again to reconnect.';
         function connectionLost() {
           if (stopped) return;
@@ -199,7 +199,7 @@ document.addEventListener('alpine:init', () => {
         function render(next) {
           if (stopped || connectionFailed) return;
           state = next;
-          if (!themeSaving) applyTheme(next.theme);
+          applyTheme(selectedTheme || next.theme);
           if (!sectionsInitialized) {
             sectionsInitialized = true;
             if (next.deploymentStarted) collapseSetupSections();
@@ -241,7 +241,7 @@ document.addEventListener('alpine:init', () => {
           const remote = sftp?.mode === 'remote';
           if (remote && sftp.target !== sftpProbeTarget && sftp.probe !== 'idle') sftpProbeTarget = sftp.target;
           const active = remote ? sftp.state === 'starting' || sftp.probe === 'checking' : ['starting','running'].includes(sftp?.state);
-          const submitting = sftpSubmitting || actionBusy || sqlSubmitting || themeSaving;
+          const submitting = sftpSubmitting || actionBusy || sqlSubmitting;
           view.sftp_description.text = remote ? 'Run SFTP on the deployment target and upload files directly to it.' : 'Enable file sharing from your laptop.';
           view.sftp_folder.hidden = remote;
           view.sftp_recreate.hidden = !remote || !sftp.recreateAvailable;
@@ -329,32 +329,35 @@ document.addEventListener('alpine:init', () => {
         }, {capture:true,passive:true});
         function action(id, fn, messageId = 'validation') { listen(id, 'click', async () => { actionError = ''; actionBusy = true; if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting); view[id.replaceAll('-', '_')].disabled = true; try { await fn(); } catch(error) { if (messageId === 'validation') actionError = error.message; view[messageId.replaceAll('-', '_')].text = error.message; } finally { actionBusy = false; if (!stopped) await refresh(); } }); }
         listen('theme-toggle', 'change', async () => {
-          if (themeSaving || stopped || connectionFailed) return;
+          if (stopped || connectionFailed) return;
           const theme = $('theme-toggle').checked ? 'dark' : 'light';
-          themeSaving = true;
-          view.theme_toggle.disabled = true;
-          view.theme_message.text = '';
+          selectedTheme = theme;
           applyTheme(theme);
+          themeSave?.abort();
+          const controller = new AbortController();
+          themeSave = controller;
+          view.theme_message.text = '';
           try {
-            const next = await api('theme', {theme});
-            if (editing) {
-              try {
-                const config = JSON.parse($('config').value);
-                if (config && typeof config === 'object' && !Array.isArray(config) &&
-                    (config.status === undefined || (config.status && typeof config.status === 'object' && !Array.isArray(config.status)))) {
-                  config.status = {...config.status, theme};
-                  $('config').value = JSON.stringify(config, null, 4);
-                }
-              } catch { /* Keep unfinished JSON edits intact. */ }
+            const config = JSON.parse($('config').value);
+            if (config && typeof config === 'object' && !Array.isArray(config) &&
+                (config.status === undefined || (config.status && typeof config.status === 'object' && !Array.isArray(config.status)))) {
+              config.status = {...config.status, theme};
+              $('config').value = JSON.stringify(config, null, 4);
             }
-            themeSaving = false;
-            render(next);
+          } catch { /* Keep unfinished JSON edits intact. */ }
+          const timeout = setTimeout(() => controller.abort(), 10000);
+          try {
+            const response = await fetch('/api/theme', {signal:controller.signal, method:'POST',
+              headers:{'X-Session-Token':session,'Content-Type':'application/json'}, body:JSON.stringify({theme})});
+            if (!response.ok) {
+              const result = await response.json();
+              throw new Error(result.error || 'The theme could not be saved.');
+            }
           } catch (error) {
-            view.theme_message.text = error.message;
-            applyTheme(state?.theme);
+            if (themeSave === controller && !controller.signal.aborted) view.theme_message.text = error.message;
           } finally {
-            themeSaving = false;
-            view.theme_toggle.disabled = connectionFailed || stopped;
+            clearTimeout(timeout);
+            if (themeSave === controller) themeSave = undefined;
           }
         });
         listen('config', 'input', () => { actionError = ''; editing = true; view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.'; view.deploy.disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350); });
@@ -391,7 +394,7 @@ document.addEventListener('alpine:init', () => {
           if (state) renderSftp(state, state.run.state === 'running' || state.sql?.state === 'running' || state.sql?.preparing || sqlSubmitting);
         });
         for (const operation of ['start','stop','save','recreate']) listen('sftp-' + operation, 'click', async () => {
-          if (sftpSubmitting || actionBusy || sqlSubmitting || themeSaving || !state?.sftp) return;
+          if (sftpSubmitting || actionBusy || sqlSubmitting || !state?.sftp) return;
           if (operation === 'recreate' && !confirm('Recreate the target SFTP container with these credentials? This replaces the existing container named sftp and discards files inside it.')) return;
           sftpSubmitting = true; sftpRequestError = ''; sftpNotice = '';
           render(state);
