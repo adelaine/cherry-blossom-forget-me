@@ -45,8 +45,8 @@ export async function generateEncryptedPassword(args = process.argv.slice(2)): P
         ({ sqlPassword, unlockPassword } = data as { sqlPassword: string; unlockPassword: string });
     } else {
         sqlPassword = await hiddenPrompt("Default SQL password (hidden): ");
-        unlockPassword = await hiddenPrompt("Password hint (hidden): ");
-        if (await hiddenPrompt("Confirm password hint (hidden): ") !== unlockPassword) throw new Error("Password hints do not match.");
+        unlockPassword = await hiddenPrompt("Answer to password hint (hidden): ");
+        if (await hiddenPrompt("Confirm answer to password hint (hidden): ") !== unlockPassword) throw new Error("Password hints do not match.");
     }
     const encrypted = await encryptSqlPassword(sqlPassword, unlockPassword, SQL_PASSWORD_SALT);
     console.log(encrypted);

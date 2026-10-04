@@ -1,12 +1,12 @@
 # SuiteContainer instructions
 
-SuiteContainer runs the SuiteCloud CLI inside a Podman container and provides a browser interface for credentials, configuration, deployment, and SQL.
+SuiteContainer runs the SuiteCloud CLI inside a Podman container and provides a browser interface for credentials, configuration, deployment, SQL, and SFTP.
 
-The computer or **codebox** runs the container. A **runbox**, listed under `vms`, is a NetSuite deployment target.
+The computer or **codebox** runs the container. A **deployment scrumbox**, listed under `vms`, is a NetSuite deployment target.
 
 ## Starting the app
 
-Follow the [quickstart](../README.md) to run the launcher for your platform. You need network access to the internal container registry, package registry, GitLab repositories, and your runboxes.
+Follow the [quickstart](../README.md) to run the launcher for your platform. You need network access to the internal container registry, package registry, GitLab repositories, and your scrumboxes.
 
 The launcher prepares local configuration files, installs Podman when needed, builds the container image, and starts the deployment page. If the app is already running, the launcher reopens it without rebuilding.
 
@@ -16,10 +16,10 @@ Starting the app does not deploy anything. Deployment begins when you click **De
 
 ## Credentials and certificate registration
 
-1. Set **Current VM** to your runbox domain, without `https://` or `/devhome`.
+1. Set **Current VM** to your scrumbox domain, without `https://` or `/devhome`.
 2. Enter a GitLab token if you use remote repositories. Configurations using only local checkouts do not need a GitLab token.
 3. Supply both existing certificate paths, or click **Generate certificates**.
-4. Download the public certificate and register it on the target runbox under **Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup**. Select SuiteCloud Development Integration and the appropriate entity and role.
+4. Download the public certificate and register it on the target scrumbox under **Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup**. Select SuiteCloud Development Integration and the appropriate entity and role.
 5. Enter the certificate ID assigned by NetSuite and click **Save credentials**.
 
 Credentials are stored separately from deployment settings:
@@ -55,7 +55,7 @@ Example:
     ],
     "vms": [
         {
-            "url": "your-runbox.vm.eng.netsuite.com",
+            "url": "your-scrumbox.vm.eng.netsuite.com",
             "account": "000071",
             "database": {
                 "user": "shared",
@@ -69,7 +69,7 @@ Example:
 - `directory` identifies the SuiteApp's workspace folder and must be unique.
 - `url` identifies a repository on `gitlab.eng.netsuite.com`.
 - `branch` is optional for remote repositories. With a branch specified, an existing clone is fetched, checked out to that branch, and updated with a fast-forward pull.
-- `account` is the NetSuite account ID; `url` in a VM entry is its runbox domain.
+- `account` is the NetSuite account ID; `url` in a VM entry is its scrumbox domain.
 - **Current VM** edits the first entry in `vms`. Deployment uses every listed entry.
 - `database.user` and `database.service` prepopulate the SQL connection fields.
 
@@ -98,7 +98,7 @@ Deployment processes the VMs in order and, within each VM, the SuiteApps in orde
 
 Progress, warnings, and errors appear in the deployment output. If deployment fails, correct the reported issue and retry. Earlier successful deployments are not rolled back automatically.
 
-After a deployment starts, Credentials, Settings, and SQL collapse. You can reopen them whenever needed. When all three are collapsed, they appear horizontally on wider screens.
+After a deployment starts, Credentials, Settings, SQL, and SFTP collapse. You can reopen them whenever needed. When all four are collapsed, they appear horizontally on wider screens.
 
 ## SQL
 
@@ -110,6 +110,30 @@ SQL runs separately from SuiteCloud authentication. Uncommitted changes are roll
 
 Deployment and SQL operations cannot run concurrently.
 
+## SFTP
+
+SFTP uses the first target in `vms`. Open **SFTP**, enter a username and password under **SFTP settings**, and click **Start SFTP**. The default port is `8000`. The supported port range is `1024–65535`. A blank password field keeps the saved password. The app stores these settings separately in `credentials/auth.json`.
+
+### Sharing files from Windows or macOS
+
+The SFTP server runs inside SuiteContainer. An SSH tunnel forwards the configured port on the deployment scrumbox's loopback address to this server. Leave the local folder field blank to share `sftp-files` beside `repos`, or enter an absolute path to another folder. File access is read-only. Changing the folder requires stopping the app and relaunching it to refresh its mounts.
+
+The launcher detects the host's SSH settings for `nsbuild@vms[0].url` and mounts the available key and trust files read-only. At least one SSH key must work without a passphrase. Host SSH agents, hardware keys, jump hosts, and proxy commands are not supported in this mode. After changing SSH configuration or Current VM, stop the app and relaunch it to refresh the detected settings.
+
+Keep the computer and SuiteContainer running while NetSuite uses the shared files. **Stop SFTP** closes both the local server and its tunnel. Stop SFTP before changing its settings.
+
+### Running SFTP on a deployment target
+
+When the codebox hostname ends in `.vm.eng.netsuite.com`, SuiteContainer runs SFTP on the deployment target instead of sharing a local folder through a tunnel. The page checks SSH access to the target. **Start SFTP** checks an existing SFTP service with the saved credentials or creates a target-side Podman container when the configured port has no listener.
+
+After access is verified, the page displays an SFTP address for uploading files directly to the target. **Recreate SFTP**, when offered, requires confirmation because replacing the existing container discards files stored inside it. **Stop SFTP** can stop only a target container created by the current app session. Stopping SuiteContainer leaves the target container running.
+
+### NetSuite connection details
+
+Use the **NetSuite connection fields** shown by the page. NetSuite connects to `localhost` on the deployment scrumbox using the configured port, username, password, and SFTP host key. In local sharing mode, the directory is `/files`. In target-side mode, use a directory available to the remote SFTP user.
+
+Starting SFTP saves the public connection settings to `credentials/sftp/connection.json`. The local sharing server's host key persists under `credentials/sftp/host-keys`. Internal SFTP addresses must be allowed on the deployment scrumbox. The SFTP port carries SSH/SFTP traffic, not HTTP.
+
 ## Appearance and saved preferences
 
 The theme switch saves `"light"` or `"dark"` in `status.theme`. If that property is absent, the page follows the system theme. Output panels use a pale background in light mode and black in dark mode.
@@ -118,7 +142,7 @@ The app sets `status.deploy-start-ok` to `1` when deployment is accepted, so the
 
 ## Stopping and restarting
 
-Use **Stop app** when no deployment or SQL operation is running. The app also stops after 15 minutes without user activity; running jobs are allowed to finish.
+Use **Stop app** when no deployment or SQL operation is running. The app also stops after 15 minutes without user activity. Running deployment and SQL jobs, running local SFTP, and active target-side SFTP operations prevent automatic shutdown. A target-side SFTP container can remain running after the app stops.
 
 Settings, credentials, certificates, and repository files persist on the host. The stopped app container remains until the next launch replaces it. Temporary helper containers are removed automatically, while the built image and build cache remain available.
 

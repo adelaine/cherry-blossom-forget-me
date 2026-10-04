@@ -19,6 +19,7 @@ import { SQL_DEFAULTS, SQL_PASSWORD_HINT, SQL_PASSWORD_SALT } from "./sql-settin
 import { decryptSqlPassword } from "./sql-password-crypto.ts";
 import { HeartbeatDeadline } from "./web-inactivity.ts";
 import { SftpService } from "./sftp-server.ts";
+import { RemoteSftpService } from "./sftp-remote.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
@@ -39,7 +40,7 @@ function message(error: unknown): string {
     const text = (error instanceof Error ? error.message : String(error))
         .replace(/ Update .* and run the start script again\.$/, "");
     if (text === "credentials/auth.json needs the NetSuite certificate ID.") return "Enter a valid Certificate ID assigned by NetSuite in Credentials and click Save credentials.";
-    if (text === "VM 1 needs an account ID and a NetSuite domain.") return "Enter your runbox domain in Current VM, without https:// or /devhome. Check the first VM's account ID in Settings.";
+    if (text === "VM 1 needs an account ID and a NetSuite domain.") return "Enter your deployment scrumbox domain in Current VM, without https:// or /devhome. Check the first VM's account ID in Settings.";
     if (text === "Certificate files were not mounted. Check their paths in credentials/auth.json.") return "Cannot find both certificate files. Check Certificate paths in Credentials and relaunch if needed, or use Generate certificates to create a new pair.";
     if (text === "The public and private certificate files do not match or cannot be read.") return "The certificate files do not match or cannot be read. Check Certificate paths in Credentials, or generate and register a new pair.";
     return text;
@@ -75,7 +76,14 @@ export function startWebServer(options: {
     const session = randomBytes(32).toString("hex");
     const passkey = randomBytes(32).toString("hex");
     const record: MountRecord = JSON.parse(readFileSync(join(credentials, "web-mounts.json"), "utf8"));
-    const sftpService = new SftpService(credentials, record);
+    const sftpService = (process.env.SUITECONTAINER_HOST_FQDN || "").toLowerCase().endsWith(".vm.eng.netsuite.com")
+        ? new RemoteSftpService(credentials, record) : new SftpService(credentials, record);
+    const sftpTarget = () => {
+        try {
+            const host = JSON.parse(readFileSync(configPath, "utf8"))?.vms?.[0]?.url;
+            return typeof host === "string" ? host : "";
+        } catch { return ""; }
+    };
     let run: Run = { state: "idle", log: "" };
     let sqlRun: { state: Run["state"]; output: string; host?: string; database?: string } = { state: "idle", output: "" };
     let sqlWorker: ChildProcess | undefined;
@@ -107,7 +115,7 @@ export function startWebServer(options: {
         let publicPath: string | null = null;
         let privatePath: string | null = null;
         if (certs?.public || certs?.private) {
-            if (!certs.public || !certs.private) error = "Set both certificate paths, or generate a new pair and register it on your runbox.";
+            if (!certs.public || !certs.private) error = "Set both certificate paths, or generate a new pair and register it on your scrumbox.";
             else {
                 publicPath = mountedCredentialPath(certs.public);
                 privatePath = mountedCredentialPath(certs.private);
@@ -115,7 +123,7 @@ export function startWebServer(options: {
                 else { try { verifyCertificates(publicPath, privatePath); } catch (e) { error = message(e); } }
             }
         } else if (mounted) error = "Certificate files already exist. Enter both paths in Certificate paths and save credentials, or generate and register a new pair.";
-        else error = "Click Generate certificates, download and register the public certificate on your runbox, then enter its assigned certificate ID and save credentials.";
+        else error = "Click Generate certificates, download and register the public certificate on your scrumbox, then enter its assigned certificate ID and save credentials.";
         return { hasExisting: mounted || !!certs?.public || !!certs?.private, error, publicPath, privatePath };
     };
     const readiness = (text: string) => {
@@ -133,6 +141,7 @@ export function startWebServer(options: {
         } catch (error) { return { ready: false, error: message(error) }; }
     };
     const status = (text = readFileSync(configPath, "utf8")) => {
+        if (sftpService instanceof RemoteSftpService) sftpService.setTarget(sftpTarget());
         let auth: Auth = {};
         let credentialError = "";
         try { auth = readAuth(authPath); } catch (error) { credentialError = message(error); }
@@ -196,6 +205,11 @@ export function startWebServer(options: {
         ["/alpine.js", "text/javascript", alpine],
         ["/pico.css", "text/css", pico],
     ]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
+    const favicon = readFileSync(new URL("./assets/favicon.png", import.meta.url));
+    app.get("/favicon.png", c => {
+        c.header("Content-Type", "image/png");
+        return c.body(new Uint8Array(favicon));
+    });
     for (const name of ["Ubuntu-Light.ttf", "Ubuntu-Regular.ttf", "Ubuntu-Medium.ttf", "Ubuntu-Bold.ttf"]) {
         const font = readFileSync(new URL("./assets/fonts/" + name, import.meta.url));
         app.get("/fonts/" + name, c => {
@@ -223,7 +237,7 @@ export function startWebServer(options: {
     app.use("/api/*", async (c, next) => {
         if (c.req.method !== "POST") return reply(c, 404, { error: "Page not found." });
         if (stopping) return reply(c, 409, { error: "The app is stopping. Relaunch to continue." });
-        const background = ["/api/check", "/api/heartbeat", "/api/theme"].includes(c.req.path);
+        const background = ["/api/check", "/api/heartbeat", "/api/theme", "/api/sftp"].includes(c.req.path);
         if (busy() && !background) return reply(c, 409, { error: busyMessage() });
         // Count every byte before side effects, including requests without Content-Length.
         const chunks: Uint8Array[] = [];
@@ -274,7 +288,22 @@ export function startWebServer(options: {
     });
     app.post("/api/sftp", async c => {
         const input = c.get("input");
-        if (!["save", "start", "stop"].includes(String(input.action))) throw new Error("Choose Start SFTP, Stop SFTP, or Save settings.");
+        if (!["save", "start", "stop", "probe", "recreate"].includes(String(input.action))) throw new Error("Choose an SFTP action.");
+        if (sftpService instanceof RemoteSftpService) {
+            sftpService.setTarget(sftpTarget());
+            if (input.action === "probe") {
+                void sftpService.probe(sftpTarget());
+                return reply(c, 200, status());
+            }
+            if (input.action === "stop") {
+                const remote = sftpService.status(readAuth(authPath));
+                if (!remote.canStop) throw new Error("This session has no target SFTP container available to stop.");
+                void sftpService.stop();
+                return reply(c, 200, status());
+            }
+            if (input.action === "recreate" && (input.confirmReplace !== true || !sftpService.status(readAuth(authPath)).recreateAvailable))
+                throw new Error("Confirm replacement of the existing SFTP container before recreating it.");
+        } else if (input.action === "probe" || input.action === "recreate") throw new Error("This SFTP action requires scrumbox mode.");
         if (input.action === "stop") { sftpService.stop(); return reply(c, 200, status()); }
         if (sftpService.active) throw new Error("Stop SFTP before changing its settings.");
         const auth = readAuth(authPath);
@@ -289,9 +318,11 @@ export function startWebServer(options: {
         finally { rmSync(temporary, { force: true }); }
         writeFileSync(authPath, JSON.stringify(next, null, 4) + "\n", { mode: 0o600 });
         secrets.add(next.sftp!.password);
-        if (input.action === "start") {
-            const host = JSON.parse(readFileSync(configPath, "utf8"))?.vms?.[0]?.url;
-            await sftpService.start(next, typeof host === "string" ? host : "");
+        if (input.action === "start" || input.action === "recreate") {
+            if (sftpService instanceof RemoteSftpService) {
+                if (!next.sftp!.password) throw new Error("Enter an SFTP password before starting.");
+                void sftpService.start(next, sftpTarget(), input.action === "recreate");
+            } else await sftpService.start(next, sftpTarget());
         }
         return reply(c, 200, status());
     });
@@ -418,7 +449,7 @@ export function startWebServer(options: {
     const stopApp = () => {
         if (stopping) return;
         stopping = true;
-        sftpService.stop();
+        sftpService.dispose();
         server.close(options.onStop ?? (() => process.exit(0)));
     };
     const inactivityTimer = setInterval(() => {
@@ -426,7 +457,7 @@ export function startWebServer(options: {
     }, options.inactivityCheckMs ?? 1000);
     inactivityTimer.unref();
     server.once("close", () => clearInterval(inactivityTimer));
-    server.once("close", () => sftpService.stop());
+    server.once("close", () => sftpService.dispose());
     server.requestTimeout = 15_000;
     server.once("close", () => sqlWorker?.kill("SIGKILL"));
     server.on("error", error => { console.error(message(error)); process.exitCode = 1; });
@@ -436,7 +467,7 @@ export function startWebServer(options: {
     });
     const shutdown = () => {
         stopping = true;
-        sftpService.stop();
+        sftpService.dispose();
         sqlWorker?.kill("SIGKILL");
         if (worker?.pid) { try { process.kill(-worker.pid, "SIGTERM"); } catch { worker.kill("SIGTERM"); } }
         server.close();

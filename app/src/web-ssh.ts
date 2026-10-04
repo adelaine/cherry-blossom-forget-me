@@ -10,6 +10,7 @@ export type SshSettings = {
     knownHosts: SshFile[];
     certificates: SshFile[];
     hostKeyAlias?: string;
+    strictHostKeyChecking?: "yes" | "no";
     error?: string;
 };
 
@@ -28,6 +29,7 @@ export function hostSshSettings(hostRoot: string, platform: string): SshSettings
     settings.user = first("user") || "nsbuild";
     settings.port = Number(first("port") || 22);
     settings.hostKeyAlias = first("hostkeyalias");
+    settings.strictHostKeyChecking = ["no", "false"].includes(first("stricthostkeychecking") || "") ? "no" : "yes";
     if (!target || !values.size) settings.error = "SSH settings could not be detected. Check laptop SSH access and relaunch SuiteContainer.";
     else if (![target, settings.hostname].every(host => /^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(host)) ||
         !/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(settings.user) ||
