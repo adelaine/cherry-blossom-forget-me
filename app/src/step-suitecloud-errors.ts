@@ -37,7 +37,7 @@ export function authenticationError(
         );
     }
     lines.push(
-        "Authentication did not complete. Fix the issue above and run the start script again.",
+        "Authentication did not complete. Fix the issue above and retry.",
     );
     return lines.join("\n");
 }
