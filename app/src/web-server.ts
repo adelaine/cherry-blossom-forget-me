@@ -196,6 +196,7 @@ export function startWebServer(options: {
     const alpine = readFileSync(sourceMode ? require.resolve("@alpinejs/csp/dist/cdn.min.js") : new URL("./assets/alpine.js", import.meta.url), "utf8");
     const pico = readFileSync(sourceMode ? require.resolve("@picocss/pico/css/pico.min.css") : new URL("./assets/pico.css", import.meta.url), "utf8");
     const netsuiteTheme = readFileSync(new URL(sourceMode ? "./themes/netsuite-2026.css" : "./assets/netsuite-2026.css", import.meta.url), "utf8");
+    const oracleTheme = readFileSync(new URL(sourceMode ? "./themes/oracle-corporate-2026.css" : "./assets/oracle-corporate-2026.css", import.meta.url), "utf8");
     app.use("*", async (c, next) => {
         c.header("X-Content-Type-Options", "nosniff");
         c.header("Referrer-Policy", "no-referrer");
@@ -211,6 +212,7 @@ export function startWebServer(options: {
         ["/page.js", "text/javascript", deploymentPage.script],
         ["/page.css", "text/css", deploymentPage.style],
         ["/themes/netsuite-2026.css", "text/css", netsuiteTheme],
+        ["/themes/oracle-corporate-2026.css", "text/css", oracleTheme],
         ["/alpine.js", "text/javascript", alpine],
         ["/pico.css", "text/css", pico],
     ]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
