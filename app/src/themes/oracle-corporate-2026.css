@@ -1,5 +1,5 @@
 /* Oracle Corporate 2026 palette adapted from the presentation theme for SuiteContainer. */
-@font-face {
+/* @font-face {
   font-family: "Oracle Corporate Tab";
   src: local("Oracle Sans Tab"), local("Oracle Sans Tab Regular");
   font-weight: 400;
@@ -13,7 +13,7 @@
   font-weight: 700;
   font-style: normal;
   font-display: swap;
-}
+} */
 
 :root,
 :root:not([data-theme="dark"]) {
