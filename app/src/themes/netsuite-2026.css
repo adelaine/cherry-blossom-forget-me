@@ -1,0 +1,229 @@
+/* NetSuite 2026 colors adapted from the presentation theme for SuiteContainer. */
+@font-face {
+  font-family: "NetSuite Tab";
+  src: local("Oracle Sans Tab"), local("Oracle Sans Tab Regular");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "NetSuite Tab";
+  src: local("Oracle Sans Tab Bold");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root,
+:root:not([data-theme="light"]) {
+  --netsuite-ocean-180: #13212c;
+  --netsuite-ocean-160: #1f3a4b;
+  --netsuite-ocean-150: #264759;
+  --netsuite-ocean-120: #36677d;
+  --netsuite-ocean-90: #558ea4;
+  --netsuite-ocean-80: #6ba1b6;
+  --netsuite-ocean-70: #81b2c3;
+  --netsuite-yellow: #e2c06b;
+  --netsuite-purple: #796087;
+  --netsuite-coral: #ff8675;
+  --netsuite-green: #86b596;
+  --netsuite-red: #c74634;
+  --netsuite-summary-color: var(--netsuite-yellow);
+  --netsuite-status-color: #c5a2d5;
+  --pico-font-family-sans-serif: "NetSuite Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif;
+  --pico-font-weight: 400;
+  --pico-background-color: var(--netsuite-ocean-160);
+  --pico-color: #fff;
+  --pico-muted-color: #c2d5de;
+  --pico-muted-border-color: var(--netsuite-ocean-120);
+  --pico-primary: var(--netsuite-yellow);
+  --pico-primary-hover: #f0d58d;
+  --pico-primary-focus: #e2c06b55;
+  --pico-primary-background: var(--netsuite-yellow);
+  --pico-primary-border: var(--netsuite-yellow);
+  --pico-primary-inverse: var(--netsuite-ocean-180);
+  --pico-secondary: #d5e6ec;
+  --pico-secondary-hover: #fff;
+  --pico-secondary-background: var(--netsuite-ocean-120);
+  --pico-secondary-border: var(--netsuite-ocean-90);
+  --pico-secondary-inverse: #fff;
+  --pico-contrast: #fff;
+  --pico-contrast-background: var(--netsuite-ocean-180);
+  --pico-contrast-border: var(--netsuite-ocean-90);
+  --pico-contrast-inverse: #fff;
+  --pico-card-background-color: var(--netsuite-ocean-150);
+  --pico-card-border-color: var(--netsuite-ocean-120);
+  --pico-card-box-shadow: none;
+  --pico-form-element-background-color: var(--netsuite-ocean-180);
+  --pico-form-element-border-color: var(--netsuite-ocean-90);
+  --pico-form-element-color: #fff;
+  --pico-form-element-placeholder-color: #b6c9d2;
+  --pico-form-element-active-background-color: var(--netsuite-ocean-180);
+  --pico-form-element-active-border-color: var(--netsuite-yellow);
+  --pico-form-element-focus-color: #e2c06b55;
+  --pico-switch-background-color: var(--netsuite-ocean-120);
+  --pico-switch-checked-background-color: var(--netsuite-yellow);
+  --pico-blockquote-border-color: var(--netsuite-ocean-80);
+  --pico-code-background-color: var(--netsuite-ocean-180);
+  --pico-code-color: #fff;
+}
+
+/* The presentation has a dark canvas; these companion colors keep the app's light toggle useful. */
+:root[data-theme="light"] {
+  --netsuite-summary-color: #305e73;
+  --netsuite-status-color: #664675;
+  --pico-background-color: #edf3f5;
+  --pico-color: var(--netsuite-ocean-180);
+  --pico-muted-color: #4a6573;
+  --pico-muted-border-color: #bfd1d9;
+  --pico-primary: #305e73;
+  --pico-primary-hover: var(--netsuite-ocean-180);
+  --pico-primary-focus: #36677d55;
+  --pico-primary-background: var(--netsuite-ocean-120);
+  --pico-primary-border: var(--netsuite-ocean-120);
+  --pico-primary-inverse: #fff;
+  --pico-secondary: var(--netsuite-ocean-120);
+  --pico-secondary-hover: var(--netsuite-ocean-180);
+  --pico-secondary-background: #d8e7ec;
+  --pico-secondary-border: #a7c3ce;
+  --pico-secondary-inverse: var(--netsuite-ocean-180);
+  --pico-contrast: var(--netsuite-ocean-180);
+  --pico-contrast-background: var(--netsuite-ocean-180);
+  --pico-contrast-border: var(--netsuite-ocean-180);
+  --pico-card-background-color: #fff;
+  --pico-card-border-color: #bfd1d9;
+  --pico-form-element-background-color: #fff;
+  --pico-form-element-border-color: #91b2c0;
+  --pico-form-element-color: var(--netsuite-ocean-180);
+  --pico-form-element-placeholder-color: #54717d;
+  --pico-form-element-active-background-color: #fff;
+  --pico-form-element-active-border-color: var(--netsuite-ocean-120);
+  --pico-form-element-focus-color: #36677d55;
+  --pico-switch-background-color: #91b2c0;
+  --pico-switch-checked-background-color: var(--netsuite-ocean-120);
+  --pico-blockquote-border-color: var(--netsuite-ocean-120);
+  --pico-code-background-color: #dbe8ed;
+  --pico-code-color: var(--netsuite-ocean-180);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --netsuite-summary-color: #305e73;
+    --netsuite-status-color: #664675;
+    --pico-background-color: #edf3f5;
+    --pico-color: var(--netsuite-ocean-180);
+    --pico-muted-color: #4a6573;
+    --pico-muted-border-color: #bfd1d9;
+    --pico-primary: #305e73;
+    --pico-primary-hover: var(--netsuite-ocean-180);
+    --pico-primary-focus: #36677d55;
+    --pico-primary-background: var(--netsuite-ocean-120);
+    --pico-primary-border: var(--netsuite-ocean-120);
+    --pico-primary-inverse: #fff;
+    --pico-secondary: var(--netsuite-ocean-120);
+    --pico-secondary-hover: var(--netsuite-ocean-180);
+    --pico-secondary-background: #d8e7ec;
+    --pico-secondary-border: #a7c3ce;
+    --pico-secondary-inverse: var(--netsuite-ocean-180);
+    --pico-contrast: var(--netsuite-ocean-180);
+    --pico-contrast-background: var(--netsuite-ocean-180);
+    --pico-contrast-border: var(--netsuite-ocean-180);
+    --pico-card-background-color: #fff;
+    --pico-card-border-color: #bfd1d9;
+    --pico-form-element-background-color: #fff;
+    --pico-form-element-border-color: #91b2c0;
+    --pico-form-element-color: var(--netsuite-ocean-180);
+    --pico-form-element-placeholder-color: #54717d;
+    --pico-form-element-active-background-color: #fff;
+    --pico-form-element-active-border-color: var(--netsuite-ocean-120);
+    --pico-form-element-focus-color: #36677d55;
+    --pico-switch-background-color: #91b2c0;
+    --pico-switch-checked-background-color: var(--netsuite-ocean-120);
+    --pico-blockquote-border-color: var(--netsuite-ocean-120);
+    --pico-code-background-color: #dbe8ed;
+    --pico-code-color: var(--netsuite-ocean-180);
+  }
+}
+
+main.container {
+  max-width: 72rem;
+}
+
+body {
+  background: var(--pico-background-color);
+}
+
+main h1,
+main h2,
+main h3 {
+  font-weight: 700;
+}
+
+main mark {
+  background: none;
+  color: var(--pico-color);
+  -webkit-text-fill-color: currentColor;
+}
+
+main article {
+  border: 1px solid var(--pico-card-border-color);
+  border-radius: 0.25rem;
+}
+
+main :is(a, details > summary) {
+  color: var(--pico-primary);
+}
+
+main details > summary {
+  --pico-primary: var(--netsuite-summary-color);
+  --pico-accordion-close-summary-color: var(--pico-primary);
+  --pico-accordion-open-summary-color: var(--pico-primary);
+  --pico-accordion-active-summary-color: var(--pico-primary);
+}
+
+main .setup-section > summary {
+  color: var(--pico-color);
+}
+
+main .credential-steps > li::before {
+  background: var(--netsuite-ocean-120);
+  color: #fff;
+}
+
+main .credential-steps > li:not(:last-child)::after {
+  border-color: var(--netsuite-ocean-90);
+}
+
+main :is(input:not([type="checkbox"]), textarea):enabled {
+  background-color: var(--pico-form-element-background-color);
+}
+
+main .status-message,
+main blockquote.status-message {
+  --pico-primary: var(--netsuite-status-color);
+}
+
+/*
+main pre {
+  background: var(--netsuite-ocean-180);
+  border-color: var(--netsuite-ocean-90);
+  color: #fff;
+}
+
+main pre :is(.ansi-fg-2, .ansi-fg-10) { color: var(--netsuite-green); }
+main pre :is(.ansi-fg-3, .ansi-fg-11) { color: var(--netsuite-yellow); }
+main pre :is(.ansi-fg-4, .ansi-fg-12) { color: var(--netsuite-ocean-70); }
+main pre :is(.ansi-fg-5, .ansi-fg-13) { color: #c5a2d5; }
+main pre :is(.ansi-fg-6, .ansi-fg-14) { color: #a1d2df; }
+main pre :is(.ansi-fg-7, .ansi-fg-15) { color: #fff; }
+*/
+
+:focus-visible {
+  outline-color: var(--netsuite-yellow);
+}
+
+::selection {
+  background: var(--netsuite-yellow);
+  color: var(--netsuite-ocean-180);
+}
