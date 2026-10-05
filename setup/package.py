@@ -23,13 +23,15 @@ def package(target, sources):
                 continue
             if relative.startswith("setup/python/") and relative not in ("setup/python/runtimes.tsv", "setup/python/NOTICE.txt"):
                 continue
-            if parts[0] not in ("app", "setup", "docs", "credentials", "sftp-files") and relative not in {"README.md", ".gitignore", ".gitattributes", "suitecontainer.config.example.json", *LAUNCHERS[target]}:
+            if parts[0] not in ("app", "setup", "docs", "credentials", "sftp-files", "container-image") and relative not in {"README.md", ".gitignore", ".gitattributes", "suitecontainer.config.example.json", *LAUNCHERS[target]}:
                 continue
             if "test" in parts or "tests" in parts or any(part in (".npmrc", ".nems.env") or part.startswith(".env") for part in parts):
                 continue
             if parts[0] == "credentials" and relative not in ("credentials/auth.example.json", "credentials/.sql-default"):
                 continue
             if parts[0] == "sftp-files" and relative != "sftp-files/.gitkeep":
+                continue
+            if parts[0] == "container-image" and relative != "container-image/.gitkeep":
                 continue
             path = PROJECT / relative
             if not path.is_file():

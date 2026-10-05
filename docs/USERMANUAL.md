@@ -8,7 +8,7 @@ The computer or **codebox** runs the container. A **deployment scrumbox**, liste
 
 Follow the [quickstart](../README.md) to run the launcher for your platform. Building the image needs access to the internal container and package registries. Copying SuiteApps from GitLab needs GitLab access. Deployment needs access to your scrumboxes.
 
-In PM Mode (`"PM_MODE": true`), or when no GitLab token is available, load the shared `suitecloud-workspace` image with `podman load -i <archive-path>` before launching. The launcher uses that image without accessing GitLab or npm. Local SuiteApp checkouts can be used without GitLab access.
+In PM Mode (`"PM_MODE": true`), or when no GitLab token is available, copy the shared image archive to `container-image/suitecloud-workspace.tar` before launching. The launcher loads it into Podman automatically. The archive is not included in Git or the team ZIP. Use an image built for the recipient's computer architecture. Local SuiteApp checkouts can be used without GitLab access.
 
 On first launch, the launcher downloads a private Python runtime for Windows x64, Apple Silicon macOS, or Linux x64. You do not need to install Python or Node on the host. Intel Macs and Windows ARM computers are not supported by these launchers.
 

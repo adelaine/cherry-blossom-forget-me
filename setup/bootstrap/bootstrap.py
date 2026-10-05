@@ -381,9 +381,17 @@ def main():
     else:
         image = podman("image", "exists", IMAGE, optional=True)
         if image.returncode == 1:
-            if pm_mode():
-                raise RuntimeError("Load the shared suitecloud-workspace image with podman load -i <archive-path>, then run the launcher again.")
-            build_image(machine)
+            archive = PROJECT / "container-image/suitecloud-workspace.tar"
+            if archive.is_file():
+                print(f"Loading the shared SuiteCloud image from {archive}...", flush=True)
+                podman("load", "-i", archive)
+                image = podman("image", "exists", IMAGE, optional=True)
+                if image.returncode:
+                    raise RuntimeError(f"The archive did not contain the {IMAGE} image: {archive}")
+            elif pm_mode():
+                raise RuntimeError(f"Copy the shared {IMAGE} image archive to {archive}, then run the launcher again.")
+            else:
+                build_image(machine)
         elif image.returncode:
             raise RuntimeError("Could not check the local SuiteCloud image. Check the Podman connection and retry.")
         start_web(name)
