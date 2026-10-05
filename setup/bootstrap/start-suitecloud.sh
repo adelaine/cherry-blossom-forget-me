@@ -24,6 +24,15 @@ fi
 
 if reuse_web_app; then exit 0; fi
 
+if podman image exists suitecloud-workspace; then
+  start_web_app
+  exit 0
+fi
+if [[ "$pm_mode" == true ]]; then
+  echo 'Load the shared suitecloud-workspace image with podman load -i <archive-path>, then run the launcher again.' >&2
+  exit 1
+fi
+
 echo 'Preparing the SuiteCloud container...'
 # Make the host npm credentials available only during dependency installation.
 npmrc_file="${SUITECONTAINER_NPMRC:-${NPM_CONFIG_USERCONFIG:-${npm_config_userconfig:-$HOME/.npmrc}}}"

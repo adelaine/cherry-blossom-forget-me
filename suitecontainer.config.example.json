@@ -27,5 +27,6 @@
                 "user": "shared"
             }
         }
-    ]
+    ],
+    "PM_MODE": false
 }

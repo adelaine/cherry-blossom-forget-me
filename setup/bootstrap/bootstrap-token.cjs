@@ -30,6 +30,13 @@ function run(args) {
         read = function(path) { try { return fs.readFileSync(path, "utf8"); } catch (_) { return ""; } };
         write = function(path, contents) { fs.writeFileSync(path, contents, {mode:384}); };
     }
+    if (args[0] === "--pm-mode") {
+        var config = {}, credentials = {};
+        try { config = JSON.parse(read(args[1])); } catch (_) { /* The page reports malformed settings. */ }
+        try { credentials = JSON.parse(read(args[2])); } catch (_) { /* Missing credentials use PM mode. */ }
+        return (config && config.PM_MODE === true) || !credentials ||
+            typeof credentials["gitlab-token"] !== "string" || !credentials["gitlab-token"].trim() ? "true" : "false";
+    }
     var auth;
     try { auth = JSON.parse(read(args[0])); } catch (_) { return; }
     if (!auth || typeof auth !== "object" || Array.isArray(auth) || (typeof auth["gitlab-token"] === "string" && auth["gitlab-token"].trim())) return;
@@ -40,5 +47,8 @@ function run(args) {
 }
 if (typeof module !== "undefined") {
     module.exports = { tokenIn: tokenIn, run: run };
-    if (require.main === module) run(process.argv.slice(2));
+    if (require.main === module) {
+        var result = run(process.argv.slice(2));
+        if (result !== undefined) console.log(result);
+    }
 }

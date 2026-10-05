@@ -23,3 +23,12 @@ else
   echo 'Token discovery is unavailable on this host. Enter your GitLab token on the deployment page if needed.'
 fi
 chmod 600 "$project_dir/credentials/auth.json"
+pm_mode=true
+if [[ "$(uname -s)" == Darwin ]]; then
+  pm_mode="$(osascript -l JavaScript "$bootstrap_dir/bootstrap-token.cjs" --pm-mode "$project_dir/suitecontainer.config.json" "$project_dir/credentials/auth.json")"
+elif command -v node >/dev/null 2>&1; then
+  pm_mode="$(node "$bootstrap_dir/bootstrap-token.cjs" --pm-mode "$project_dir/suitecontainer.config.json" "$project_dir/credentials/auth.json")"
+elif command -v python3 >/dev/null 2>&1; then
+  pm_mode="$(python3 "$bootstrap_dir/bootstrap-token.py" --pm-mode "$project_dir/suitecontainer.config.json" "$project_dir/credentials/auth.json")"
+fi
+pm_mode="${pm_mode:-true}"

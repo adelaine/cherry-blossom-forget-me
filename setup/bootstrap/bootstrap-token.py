@@ -32,6 +32,19 @@ def token_in(contents):
 
 
 def main(args):
+    if args[0] == "--pm-mode":
+        try:
+            config = json.loads(Path(args[1]).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            config = {}
+        try:
+            credentials = json.loads(Path(args[2]).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            credentials = {}
+        explicit = isinstance(config, dict) and config.get("PM_MODE") is True
+        token = credentials.get("gitlab-token") if isinstance(credentials, dict) else None
+        print("true" if explicit or not isinstance(token, str) or not token.strip() else "false")
+        return
     auth_file = Path(args[0])
     try:
         auth = json.loads(auth_file.read_text(encoding="utf-8"))

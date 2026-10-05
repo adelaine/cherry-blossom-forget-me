@@ -57,6 +57,23 @@ if ($machineJson.Trim() -eq '[]') {
 $runningApp = (Invoke-SuiteContainerQuiet inspect --format '{{.State.Running}}' $script:containerName) -join ''
 if ($runningApp -eq 'true') { Confirm-SuiteContainerOwner; Open-SuiteContainerPage; return }
 
+& podman image exists suitecloud-workspace
+if ($LASTEXITCODE -eq 0) {
+    Start-SuiteContainerWeb
+    return
+}
+
+$pmMode = $true
+try {
+    $settings = Get-Content -LiteralPath (Join-Path $projectDir 'suitecontainer.config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $auth = Get-Content -LiteralPath (Join-Path $projectDir 'credentials/auth.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $pmMode = $settings.PM_MODE -eq $true -or -not ([string]$auth.'gitlab-token').Trim()
+} catch { # The page reports malformed settings and credentials.
+}
+if ($pmMode) {
+    throw 'Load the shared suitecloud-workspace image with podman load -i <archive-path>, then run the launcher again.'
+}
+
 # Make the host npm credentials available only during dependency installation.
 $npmrcFile = if ($env:SUITECONTAINER_NPMRC) { $env:SUITECONTAINER_NPMRC }
     elseif ($env:NPM_CONFIG_USERCONFIG) { $env:NPM_CONFIG_USERCONFIG }

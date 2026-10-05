@@ -16,12 +16,17 @@ export function run(command: string, args: string[]): void {
     if (result.status !== 0) throw new Error(`${command} failed.`);
 }
 
-export function cloneRepos(repos: SuiteApp[]): void {
+export function hasLocalCheckout(directory: string): boolean {
+    const destination = join("/workspace", directory);
+    return existsSync(destination) && statSync(destination).isDirectory() &&
+        existsSync(join(destination, ".git"));
+}
+
+export function cloneRepos(repos: SuiteApp[], pmMode = false): void {
     for (const repo of repos) {
-        if (repo.localPath) {
-            const destination = join("/workspace", repo.directory);
-            if (!existsSync(destination) || !statSync(destination).isDirectory() ||
-                !existsSync(join(destination, ".git"))) {
+        if (repo.localPath || pmMode) {
+            if (!hasLocalCheckout(repo.directory)) {
+                if (!repo.localPath) throw new Error(`Place a local checkout in repos/${repo.directory} or set its localPath before continuing.`);
                 throw new Error(`SuiteApp ${repo.directory} localPath is not a Git checkout: ${repo.localPath}`);
             }
             console.log(`Using local checkout: ${repo.directory}`);
