@@ -1,162 +1,32 @@
+param([switch]$RuntimeOnly)
 $ErrorActionPreference = 'Stop'
-
-$setupDir = Split-Path -Parent $PSScriptRoot
-$projectDir = Split-Path -Parent $setupDir
-$nemsDir = if ($env:SUITECONTAINER_NEMS_DIR) { $env:SUITECONTAINER_NEMS_DIR } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex' }
-& (Join-Path $PSScriptRoot 'bootstrap-host.ps1') -ProjectDir $projectDir -NemsDir $nemsDir
-. (Join-Path $PSScriptRoot 'web-host.ps1')
-$projectHash = [Security.Cryptography.SHA256]::Create()
-try { $hash = [BitConverter]::ToString($projectHash.ComputeHash([Text.Encoding]::UTF8.GetBytes($projectDir.ToLowerInvariant()))).Replace('-', '').Substring(0, 16).ToLowerInvariant() }
-finally { $projectHash.Dispose() }
-$script:containerName = "suitecontainer-$hash"
-
-function ConvertTo-PodmanMachinePath([string]$path) {
-    $fullPath = [IO.Path]::GetFullPath($path)
-    if ($fullPath -notmatch '^([A-Za-z]):[\\/](.*)$') {
-        throw "Podman's WSL machine cannot access this Windows path: $fullPath"
-    }
-    return "/mnt/$($Matches[1].ToLowerInvariant())/$($Matches[2].Replace('\', '/'))"
+$projectDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64' -and $env:PROCESSOR_ARCHITEW6432 -ne 'AMD64') {
+    throw 'This package supports Windows computers with an Intel or AMD 64-bit processor.'
 }
-
-function Quote-PosixArgument([string]$value) {
-    $quote = [string][char]39
-    return $quote + $value.Replace($quote, $quote + '"' + $quote + '"' + $quote) + $quote
-}
-
-function Export-WindowsRootCertificates([string]$destination) {
-    $certificates = Get-ChildItem Cert:\CurrentUser\Root, Cert:\LocalMachine\Root |
-        Sort-Object -Property Thumbprint -Unique
-    $pem = foreach ($certificate in $certificates) {
-        '-----BEGIN CERTIFICATE-----'
-        [Convert]::ToBase64String($certificate.RawData, [Base64FormattingOptions]::InsertLineBreaks)
-        '-----END CERTIFICATE-----'
-    }
-    [IO.File]::WriteAllText($destination, ($pem -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
-}
-
-& (Join-Path $setupDir 'installers/install-podman-windows.ps1')
-
-$machineJson = (& podman machine list --format json) -join "`n"
-if ($LASTEXITCODE -ne 0) { throw 'Could not check the Podman machine.' }
-
-if ($machineJson.Trim() -eq '[]') {
-    Write-Host 'Setting up and starting the Podman machine...'
-    & podman machine init --now
-    if ($LASTEXITCODE -ne 0) { throw 'Could not set up the Podman machine. A Windows restart may be needed.' }
-} else {
-    $machines = ConvertFrom-Json -InputObject $machineJson
-    if (-not ($machines | Where-Object Running | Select-Object -First 1)) {
-        $machine = $machines | Where-Object Default | Select-Object -First 1
-        if (-not $machine) { $machine = $machines | Select-Object -First 1 }
-        Write-Host 'Starting the Podman machine...'
-        & podman machine start $machine.Name
-        if ($LASTEXITCODE -ne 0) { throw 'Could not start the Podman machine.' }
-    }
-}
-
-$runningApp = (Invoke-SuiteContainerQuiet inspect --format '{{.State.Running}}' $script:containerName) -join ''
-if ($runningApp -eq 'true') { Confirm-SuiteContainerOwner; Open-SuiteContainerPage; return }
-
-# Make the host npm credentials available only during dependency installation.
-$npmrcFile = if ($env:SUITECONTAINER_NPMRC) { $env:SUITECONTAINER_NPMRC }
-    elseif ($env:NPM_CONFIG_USERCONFIG) { $env:NPM_CONFIG_USERCONFIG }
-    else { Join-Path $HOME '.npmrc' }
-$npmGlobalrc = $env:NPM_CONFIG_GLOBALCONFIG
-if (Get-Command npm -ErrorAction SilentlyContinue) {
-    if (-not $env:SUITECONTAINER_NPMRC -and -not $env:NPM_CONFIG_USERCONFIG) {
-        try {
-            $reportedConfig = (& npm config get userconfig 2>$null) -join ''
-            if ($LASTEXITCODE -eq 0 -and $reportedConfig) { $npmrcFile = $reportedConfig }
-        } catch { <# Host npm discovery is optional. #> }
-    }
-    if (-not $npmGlobalrc) {
-        try {
-            $reportedConfig = (& npm config get globalconfig 2>$null) -join ''
-            if ($LASTEXITCODE -eq 0 -and $reportedConfig) { $npmGlobalrc = $reportedConfig }
-        } catch { <# Host npm discovery is optional. #> }
-    }
-}
-$npmConfigFiles = [ordered]@{}
-$npmCandidates = [ordered]@{
-    'npm-globalrc' = $npmGlobalrc
-    'npmrc' = $npmrcFile
-    'npm-rootrc' = (Join-Path $projectDir '.npmrc')
-    'npm-projectrc' = (Join-Path $projectDir 'app/.npmrc')
-}
-$npmEnvironment = @{}
-Get-ChildItem Env: | Where-Object { $_.Name -like 'npm_config_*' } | ForEach-Object { $npmEnvironment[$_.Name] = $_.Value }
-$buildSecrets = @()
-foreach ($id in $npmCandidates.Keys) {
-    $configFile = $npmCandidates[$id]
-    if ($configFile -and (Test-Path -LiteralPath $configFile -PathType Leaf)) {
-        $npmConfigFiles[$id] = [IO.Path]::GetFullPath($configFile)
-        $buildSecrets += @('--secret', "id=$id,src=$($npmConfigFiles[$id])")
-        Write-Host "npm configuration: $($npmConfigFiles[$id])"
-        foreach ($reference in [regex]::Matches([IO.File]::ReadAllText($npmConfigFiles[$id]), '\$\{([A-Za-z_][A-Za-z0-9_]*)\}')) {
-            $variable = $reference.Groups[1].Value
-            $value = [Environment]::GetEnvironmentVariable($variable)
-            if ($null -ne $value) { $npmEnvironment[$variable] = $value }
-        }
-    }
-}
-if ($npmConfigFiles.Count -eq 0) { Write-Host 'npm configuration: environment and container defaults' }
-if ($env:NSX_NPM_TOKEN) { $buildSecrets += @('--secret', 'id=npm-token,env=NSX_NPM_TOKEN,type=env') }
-
-Write-Host 'Preparing the SuiteCloud container...'
-$caFile = Join-Path $env:TEMP ("suitecontainer-npm-ca-$([guid]::NewGuid().ToString('N')).pem")
-$npmEnvFile = Join-Path $env:TEMP ("suitecontainer-npm-env-$([guid]::NewGuid().ToString('N'))")
-try {
-if ($npmEnvironment.Count -gt 0) {
-    $environmentPairs = foreach ($variable in $npmEnvironment.Keys) { $variable; $npmEnvironment[$variable] }
-    [IO.File]::WriteAllText($npmEnvFile, ($environmentPairs -join ([string][char]0)) + ([string][char]0), [Text.UTF8Encoding]::new($false))
-    $npmConfigFiles['npm-env'] = $npmEnvFile
-    $buildSecrets += @('--secret', "id=npm-env,src=$npmEnvFile")
-}
-Export-WindowsRootCertificates $caFile
-$buildSecrets += @('--secret', "id=npm-ca,src=$caFile")
-$wslMachine = $null
-if ($buildSecrets.Count -gt 0) {
-    $machineJson = (& podman machine list --format json) -join "`n"
-    if ($LASTEXITCODE -ne 0) { throw 'Could not check the Podman machine.' }
-    $machines = if ($machineJson.Trim()) { @(ConvertFrom-Json -InputObject $machineJson) } else { @() }
-    $wslMachine = $machines | Where-Object { $_.Default -and $_.Running -and $_.VMType -eq 'wsl' } | Select-Object -First 1
-}
-if ($wslMachine) {
-    # The Windows remote client currently builds secret temp-file paths with mixed separators.
-    # Build inside the WSL machine, where the same host files are mounted under /mnt/<drive>.
-    $remoteSecrets = @('--secret', "id=npm-ca,src=$(ConvertTo-PodmanMachinePath $caFile)")
-    foreach ($id in $npmConfigFiles.Keys) {
-        $remoteSecrets += @('--secret', "id=$id,src=$(ConvertTo-PodmanMachinePath $npmConfigFiles[$id])")
-    }
-    $tokenFile = $null
+$metadata = @(Import-Csv -LiteralPath (Join-Path $projectDir 'setup/python/runtimes.tsv') -Delimiter "`t" | Where-Object target -eq 'windows-x64')
+if ($metadata.Count -ne 1 -or $metadata[0].sha256 -notmatch '^[a-f0-9]{64}$' -or $metadata[0].url -notlike 'https://*') { throw 'The Windows Python download metadata is missing or invalid.' }
+$metadata = $metadata[0]
+$runtimeDir = Join-Path $projectDir ".cache/python/$($metadata.sha256)"
+$python = Join-Path $runtimeDir 'python/python.exe'
+$ready = Join-Path $runtimeDir '.ready'
+if (-not (Test-Path -LiteralPath $ready) -or -not (Test-Path -LiteralPath $python)) {
+    [IO.Directory]::CreateDirectory($runtimeDir) | Out-Null
+    $archive = Join-Path $runtimeDir ("download-$([guid]::NewGuid().ToString('N')).tar.gz")
     try {
-        if ($env:NSX_NPM_TOKEN) {
-            $tokenFile = Join-Path $env:TEMP ("suitecontainer-npm-token-$([guid]::NewGuid().ToString('N'))")
-            [IO.File]::WriteAllText($tokenFile, $env:NSX_NPM_TOKEN, [Text.UTF8Encoding]::new($false))
-            $remoteSecrets += @('--secret', "id=npm-token,src=$(ConvertTo-PodmanMachinePath $tokenFile)")
-        }
-        $remoteArgs = @('podman', 'build') + $remoteSecrets + @(
-            '-f', (ConvertTo-PodmanMachinePath (Join-Path $setupDir 'Containerfile')),
-            '--ignorefile', (ConvertTo-PodmanMachinePath (Join-Path $setupDir '.containerignore')),
-            '--build-arg', 'SUITECLOUD_CLI_ACCEPT_LICENSE=true', '-t', 'suitecloud-workspace',
-            (ConvertTo-PodmanMachinePath $projectDir)
-        )
-        $remoteCommand = ($remoteArgs | ForEach-Object { Quote-PosixArgument $_ }) -join ' '
-        & podman machine ssh $wslMachine.Name -- $remoteCommand
+        Write-Host "Downloading Python $($metadata.version) for Windows..."
+        & curl.exe --fail --location --show-error --silent --output $archive $metadata.url
+        if ($LASTEXITCODE -ne 0) { throw 'Could not download Python. Check network access, proxy settings, and VPN/Banyan sign-in, then retry.' }
+        $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($digest -ne $metadata.sha256) { throw 'The Python download checksum did not match. A proxy or VPN/Banyan sign-in page may have replaced the archive. Reconnect/sign in and retry.' }
+        & tar.exe -xzf $archive -C $runtimeDir
+        if ($LASTEXITCODE -ne 0) { throw 'Could not extract the downloaded Python runtime.' }
+        if (-not (Test-Path -LiteralPath $python)) { throw 'The downloaded Python archive does not contain its interpreter.' }
+        [IO.File]::WriteAllText($ready, '')
     } finally {
-        if ($tokenFile -and (Test-Path -LiteralPath $tokenFile)) {
-            Remove-Item -LiteralPath $tokenFile -Force
-        }
-    }
-} else {
-    & podman build @buildSecrets -f (Join-Path $setupDir 'Containerfile') --ignorefile (Join-Path $setupDir '.containerignore') --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace $projectDir
-}
-if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
-} finally {
-    if (Test-Path -LiteralPath $npmEnvFile) { Remove-Item -LiteralPath $npmEnvFile -Force }
-    if (Test-Path -LiteralPath $caFile) {
-        Remove-Item -LiteralPath $caFile -Force
+        if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
     }
 }
-
-Start-SuiteContainerWeb
+if ($RuntimeOnly) { return $python }
+& $python -I -B (Join-Path $PSScriptRoot 'bootstrap.py')
+exit $LASTEXITCODE

@@ -8,6 +8,12 @@ The computer or **codebox** runs the container. A **deployment scrumbox**, liste
 
 Follow the [quickstart](../README.md) to run the launcher for your platform. You need network access to the internal container registry, package registry, GitLab repositories, and your scrumboxes.
 
+On first launch, the launcher downloads a private Python runtime for Windows x64, Apple Silicon macOS, or Linux x64. You do not need to install Python or Node on the host. Intel Macs and Windows ARM computers are not supported by these launchers.
+
+The first launch needs HTTPS access to GitHub release downloads. The launcher verifies the pinned SHA-256 checksum before extracting Python into `.cache/python` inside the project. Later launches reuse that runtime without downloading it again. A pinned runtime update downloads the new version on its next launch. Cached runtimes are Git-ignored and remain outside the container build.
+
+Team distribution ZIPs contain one platform's launcher, download metadata, shared application source, and example settings. Personal settings, credentials, repositories, and cached files are excluded. Extract the entire ZIP before running its launcher. If the download fails or its checksum does not match, check network/proxy access and VPN/Banyan sign-in, then retry.
+
 The launcher prepares local configuration files, installs Podman when needed, builds the container image, and starts the deployment page. If the app is already running, the launcher reopens it without rebuilding.
 
 On a remote codebox, follow the SSH port-forwarding instructions printed by the launcher, then open the displayed deployment URL on your computer. The app's port is bound to the host's loopback address.
