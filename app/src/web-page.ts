@@ -81,7 +81,7 @@ body{background:var(--pico-background-color)}
 h1,h2,h3,h4,h5,h6{--pico-font-weight:400}
 header>hgroup>h1::before{display:block;content:"";height:100px;width:100px;float:left;background-image:url(/favicon.png)}
 mark{--pico-mark-gradient:var(--suite-mark-gradient,linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05)));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
-button{--pico-border-radius:2rem}
+button{--pico-border-radius:2rem;--pico-font-weight:500}
 .theme-controls{display:flex;align-items:flex-end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}
 .brand-theme-picker{min-width:13rem;margin:0}
 .brand-theme-picker select{margin:0}
