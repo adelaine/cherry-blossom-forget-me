@@ -203,7 +203,6 @@ main mark {
   -webkit-text-fill-color: currentColor;
 }
 main article {
-  border: 1px solid var(--pico-card-border-color);
   border-radius: 0.25rem;
 }
 main :is(a, details > summary) { color: var(--oracle-summary-color); }

@@ -163,7 +163,6 @@ main mark {
 }
 
 main article {
-  border: 1px solid var(--pico-card-border-color);
   border-radius: 0.25rem;
 }
 
