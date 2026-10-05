@@ -21,7 +21,7 @@ PROJECT = Path(__file__).resolve().parents[2]
 WINDOWS = sys.platform == "win32"
 MACOS = sys.platform == "darwin"
 HOST_PLATFORM = "win32" if WINDOWS else "linux"
-IMAGE = "suitecloud-workspace"
+IMAGE = "suitecontainer-workspace"
 OWNER = "suitecontainer.project"
 
 
@@ -381,7 +381,7 @@ def main():
     else:
         image = podman("image", "exists", IMAGE, optional=True)
         if image.returncode == 1:
-            archive = PROJECT / "container-image/suitecloud-workspace.tar"
+            archive = PROJECT / "container-image/suitecontainer-workspace.tar"
             if archive.is_file():
                 print(f"Loading the shared SuiteCloud image from {archive}...", flush=True)
                 podman("load", "-i", archive)
