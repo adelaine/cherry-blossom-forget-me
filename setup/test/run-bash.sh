@@ -8,6 +8,8 @@ fi
 
 test_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd -- "$test_dir/../.." && pwd)"
+python="$(bash "$project_dir/setup/bootstrap/start-suitecloud.sh" --runtime-only)"
+"$python" -I -B "$test_dir/bootstrap_test.py"
 if command -v bats >/dev/null 2>&1; then
   bats "$test_dir/bash"
 elif [[ -f "$project_dir/.cache/test-tools/bats-core-1.12.0/bin/bats" ]]; then

@@ -58,6 +58,7 @@ $RECYCLE.BIN/
 tmp/
 temp/
 .cache/
+/setup/python/*.tar.gz
 
 # Local AI agent state
 .ai-docs/

@@ -16,7 +16,14 @@ export class SftpService {
     private error = "";
     private tunnelState: ServiceState = "stopped";
     private generation = 0;
-    constructor(private credentials: string, private record: MountRecord, private enabled = process.env.SUITECONTAINER_SFTP === "1") {}
+    private credentials: string;
+    private record: MountRecord;
+    private enabled: boolean;
+    constructor(credentials: string, record: MountRecord, enabled = process.env.SUITECONTAINER_SFTP === "1") {
+        this.credentials = credentials;
+        this.record = record;
+        this.enabled = enabled;
+    }
     get active(): boolean { return this.state === "starting" || this.state === "running"; }
     dispose(): void { this.stop(); }
     status(auth: Auth) {

@@ -6,7 +6,15 @@ The computer or **codebox** runs the container. A **deployment scrumbox**, liste
 
 ## Starting the app
 
-Follow the [quickstart](../README.md) to run the launcher for your platform. You need network access to the internal container registry, package registry, GitLab repositories, and your scrumboxes.
+Follow the [quickstart](../README.md) to run the launcher for your platform. Building the image needs access to the internal container and package registries. Copying SuiteApps from GitLab needs GitLab access. Deployment needs access to your scrumboxes.
+
+In PM Mode (`"PM_MODE": true`), or when no GitLab token is available, load the shared `suitecloud-workspace` image with `podman load -i <archive-path>` before launching. The launcher uses that image without accessing GitLab or npm. Local SuiteApp checkouts can be used without GitLab access.
+
+On first launch, the launcher downloads a private Python runtime for Windows x64, Apple Silicon macOS, or Linux x64. You do not need to install Python or Node on the host. Intel Macs and Windows ARM computers are not supported by these launchers.
+
+The first launch needs HTTPS access to GitHub release downloads. The launcher verifies the pinned SHA-256 checksum before extracting Python into `.cache/python` inside the project. Later launches reuse that runtime without downloading it again. A pinned runtime update downloads the new version on its next launch. Cached runtimes are Git-ignored and remain outside the container build.
+
+Team distribution ZIPs contain one platform's launcher, download metadata, shared application source, and example settings. Personal settings, credentials, repositories, and cached files are excluded. Extract the entire ZIP before running its launcher. If the download fails or its checksum does not match, check network/proxy access and VPN/Banyan sign-in, then retry.
 
 The launcher prepares local configuration files, installs Podman when needed, builds the container image, and starts the deployment page. If the app is already running, the launcher reopens it without rebuilding.
 
