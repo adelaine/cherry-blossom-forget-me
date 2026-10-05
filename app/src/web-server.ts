@@ -221,6 +221,13 @@ export function startWebServer(options: {
         c.header("Content-Type", "image/png");
         return c.body(new Uint8Array(favicon));
     });
+    for (const name of ["oracle-cover-dark.jpg", "oracle-cover-light.jpg"]) {
+        const art = readFileSync(new URL(sourceMode ? "./themes/" + name : "./assets/" + name, import.meta.url));
+        app.get("/themes/" + name, c => {
+            c.header("Content-Type", "image/jpeg");
+            return c.body(new Uint8Array(art));
+        });
+    }
     for (const name of ["Ubuntu-Light.ttf", "Ubuntu-Regular.ttf", "Ubuntu-Medium.ttf", "Ubuntu-Bold.ttf"]) {
         const font = readFileSync(new URL("./assets/fonts/" + name, import.meta.url));
         app.get("/fonts/" + name, c => {

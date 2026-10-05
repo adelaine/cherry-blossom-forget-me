@@ -18,7 +18,7 @@ export const deploymentPage = {
     html: `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><link id="brand-theme-stylesheet" rel="stylesheet" href="/themes/oracle-corporate-2026.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
-<div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select">Theme<select id="brand-theme-select" @change="changebrand_theme_select"><option value="oracle-corporate-2026">Oracle Corporate 2026</option><option value="netsuite-2026">NetSuite 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label></div>
+<div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select">Theme<select id="brand-theme-select" @change="changebrand_theme_select"><option value="default">Default</option><option value="oracle-corporate-2026" selected>Oracle Corporate 2026</option><option value="netsuite-2026">NetSuite 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label></div>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
 <header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your scrumbox address, complete your credentials, then deploy your SuiteApps.</p></hgroup></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
@@ -168,7 +168,10 @@ document.addEventListener('alpine:init', () => {
         let sftpProbeTarget = '', sftpProbePending = false;
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
         const brandTheme = sessionStorage.getItem('suitecontainer-brand-theme');
-        if (brandTheme === 'netsuite-2026') {
+        if (brandTheme === 'default') {
+          $('brand-theme-select').value = brandTheme;
+          $('brand-theme-stylesheet').media = 'not all';
+        } else if (brandTheme === 'netsuite-2026') {
           $('brand-theme-select').value = brandTheme;
           $('brand-theme-stylesheet').href = '/themes/netsuite-2026.css';
         }
@@ -370,8 +373,13 @@ document.addEventListener('alpine:init', () => {
           }
         });
         listen('brand-theme-select', 'change', () => {
-          const brand = $('brand-theme-select').value === 'netsuite-2026' ? 'netsuite-2026' : 'oracle-corporate-2026';
-          $('brand-theme-stylesheet').href = '/themes/' + brand + '.css';
+          const choice = $('brand-theme-select').value;
+          const brand = choice === 'default' || choice === 'netsuite-2026' ? choice : 'oracle-corporate-2026';
+          if (brand === 'default') $('brand-theme-stylesheet').media = 'not all';
+          else {
+            $('brand-theme-stylesheet').href = '/themes/' + brand + '.css';
+            $('brand-theme-stylesheet').media = 'all';
+          }
           sessionStorage.setItem('suitecontainer-brand-theme', brand);
         });
         listen('config', 'input', () => { actionError = ''; editing = true; view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.'; view.deploy.disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350); });

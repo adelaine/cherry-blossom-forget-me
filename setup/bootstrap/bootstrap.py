@@ -378,22 +378,39 @@ def main():
     info = inspect(name)
     if info and info.get("State", {}).get("Running"):
         confirm_owner(info)
+    source_available = (PROJECT / "app/package.json").is_file() and (PROJECT / "setup/Containerfile").is_file()
+    shared_image_mode = pm_mode()
+    build_from_source = source_available and not shared_image_mode
+    if info and info.get("State", {}).get("Running") and not build_from_source:
+        open_page(name)
+        return
+    if build_from_source:
+        build_image(machine)
     else:
         image = podman("image", "exists", IMAGE, optional=True)
-        if image.returncode == 1:
-            archive = PROJECT / "container-image/suitecontainer-workspace.tar"
-            if archive.is_file():
-                print(f"Loading the shared SuiteCloud image from {archive}...", flush=True)
-                podman("load", "-i", archive)
-                image = podman("image", "exists", IMAGE, optional=True)
-                if image.returncode:
-                    raise RuntimeError(f"The archive did not contain the {IMAGE} image: {archive}")
-            elif pm_mode():
-                raise RuntimeError(f"Copy the shared {IMAGE} image archive to {archive}, then run the launcher again.")
-            else:
-                build_image(machine)
+        archive = PROJECT / "container-image/suitecontainer-workspace.tar"
+        if image.returncode == 1 and archive.is_file():
+            print(f"Loading the shared SuiteCloud image from {archive}...", flush=True)
+            podman("load", "-i", archive)
+            image = podman("image", "exists", IMAGE, optional=True)
+            if image.returncode:
+                raise RuntimeError(f"The archive did not contain the {IMAGE} image: {archive}")
+        elif image.returncode == 1 and shared_image_mode:
+            raise RuntimeError(f"Copy the shared {IMAGE} image archive to {archive}, then run the launcher again.")
+        elif image.returncode == 1:
+            build_image(machine)
         elif image.returncode:
             raise RuntimeError("Could not check the local SuiteCloud image. Check the Podman connection and retry.")
+    if info and info.get("State", {}).get("Running"):
+        current_image = podman("image", "inspect", IMAGE, "--format", "{{.Id}}", capture=True).stdout.strip().removeprefix("sha256:")
+        running_image = str(info.get("Image") or "").removeprefix("sha256:")
+        if not current_image or not running_image:
+            raise RuntimeError("Could not compare the running app with the updated image. The running app was left untouched.")
+        if current_image != running_image:
+            print("Replacing the running app with the updated image...", flush=True)
+            podman("stop", name)
+            start_web(name)
+    else:
         start_web(name)
     open_page(name)
 
