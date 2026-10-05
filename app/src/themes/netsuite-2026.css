@@ -146,10 +146,6 @@
   }
 }
 
-main.container {
-  max-width: 72rem;
-}
-
 body {
   background: var(--pico-background-color);
 }
