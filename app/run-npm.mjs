@@ -16,29 +16,59 @@ export function downloadFailureMessage(output) {
 }
 
 export function runNpm(args) {
-    const child = spawn("npm", args, { stdio: ["inherit", "inherit", "pipe"] });
+    const installing = args[0] === "install" || args[0] === "ci";
+    const child = spawn("npm", args, { stdio: ["inherit", installing ? "pipe" : "inherit", "pipe"] });
     let recentOutput = "";
     let failureMessage = "";
     let launchFailed = false;
+    let progressTimer;
+
+    if (installing) {
+        const frames = ["|", "/", "-", "\\"];
+        let frame = 0;
+        const renderProgress = () => {
+            process.stdout.write(`\r⬇️  Downloading packages… ${frames[frame++ % frames.length]}`);
+        };
+        renderProgress();
+        progressTimer = setInterval(renderProgress, 250);
+        progressTimer.unref();
+        child.stdout.setEncoding("utf8");
+        child.stdout.on("data", (chunk) => {
+            recentOutput = (recentOutput + chunk).slice(-32_768);
+        });
+    }
+
+    const stopProgress = () => {
+        if (!progressTimer) return;
+        clearInterval(progressTimer);
+        progressTimer = undefined;
+        process.stdout.write(`\r${" ".repeat(40)}\r`);
+    };
 
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
-        if (failureMessage) return;
         recentOutput = (recentOutput + chunk).slice(-32_768);
+        if (failureMessage) return;
         failureMessage = downloadFailureMessage(recentOutput);
         if (failureMessage) {
             // Stop npm retries when access fails or a login page replaces a download.
-            console.error(`\n${failureMessage}`);
+            if (!installing) console.error(`\n${failureMessage}`);
             child.kill();
-        } else {
+        } else if (!installing) {
             process.stderr.write(chunk);
         }
     });
     child.on("error", (error) => {
         launchFailed = true;
+        stopProgress();
         console.error(`Could not start npm: ${error.message}`);
     });
     child.on("close", (code) => {
+        stopProgress();
+        if (installing && (failureMessage || launchFailed || code !== 0)) {
+            if (recentOutput) process.stderr.write(recentOutput.endsWith("\n") ? recentOutput : `${recentOutput}\n`);
+            if (failureMessage) console.error(failureMessage);
+        }
         process.exitCode = failureMessage || launchFailed ? 1 : (code ?? 1);
     });
 }
