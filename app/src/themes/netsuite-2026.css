@@ -204,7 +204,6 @@ main blockquote.status-message {
   --pico-primary: var(--netsuite-status-color);
 }
 
-/*
 main pre {
   background: var(--netsuite-ocean-180);
   border-color: var(--netsuite-ocean-90);
@@ -217,7 +216,6 @@ main pre :is(.ansi-fg-4, .ansi-fg-12) { color: var(--netsuite-ocean-70); }
 main pre :is(.ansi-fg-5, .ansi-fg-13) { color: #c5a2d5; }
 main pre :is(.ansi-fg-6, .ansi-fg-14) { color: #a1d2df; }
 main pre :is(.ansi-fg-7, .ansi-fg-15) { color: #fff; }
-*/
 
 :focus-visible {
   outline-color: var(--netsuite-yellow);
