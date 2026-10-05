@@ -24,7 +24,12 @@ export class RemoteSftpService {
     private agent?: ChildProcess;
     private agentPreparation?: Promise<void>;
 
-    constructor(private credentials: string, private record: MountRecord) {}
+    private credentials: string;
+    private record: MountRecord;
+    constructor(credentials: string, record: MountRecord) {
+        this.credentials = credentials;
+        this.record = record;
+    }
 
     get active(): boolean { return this.state === "starting" || this.probeState === "checking"; }
 

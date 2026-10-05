@@ -8,7 +8,7 @@ COPY app/package.json app/tsconfig.build.json ./
 COPY app/src ./src
 COPY app/copy-runtime.mjs ./copy-runtime.mjs
 COPY app/run-npm.mjs /opt/suitecontainer/run-npm.mjs
-RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=type=secret,id=npm-rootrc --mount=type=secret,id=npm-projectrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
     if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
     && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
     && node /opt/suitecontainer/run-npm.mjs install --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund && npm run build
@@ -32,7 +32,7 @@ ARG SUITECLOUD_CLI_ACCEPT_LICENSE=true
 # Supplied by the CodeBox launcher for the SDK download.
 ARG SUITECLOUD_PROXY=""
 COPY app/run-npm.mjs /opt/suitecontainer/run-npm.mjs
-RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=type=secret,id=npm-rootrc --mount=type=secret,id=npm-projectrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
     if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
     && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
     && test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \

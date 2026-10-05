@@ -25,15 +25,7 @@ fi
 if reuse_web_app; then exit 0; fi
 
 echo 'Preparing the SuiteCloud container...'
-# Make the host npm credentials available only during dependency installation.
-npmrc_file="${SUITECONTAINER_NPMRC:-${NPM_CONFIG_USERCONFIG:-${npm_config_userconfig:-$HOME/.npmrc}}}"
-build_secrets=()
-if [[ -f "$npmrc_file" ]]; then
-  build_secrets+=(--secret "id=npmrc,src=$npmrc_file")
-  if [[ -n "${NSX_NPM_TOKEN:-}" ]]; then
-    build_secrets+=(--secret "id=npm-token,env=NSX_NPM_TOKEN,type=env")
-  fi
-fi
+source "$bootstrap_dir/npm-host.sh"
 if ! podman build ${build_secrets[@]+"${build_secrets[@]}"} -f "$setup_dir/Containerfile" --ignorefile "$setup_dir/.containerignore" --build-arg SUITECLOUD_CLI_ACCEPT_LICENSE=true -t suitecloud-workspace "$project_dir"; then
   echo 'The container build failed.' >&2
   exit 1

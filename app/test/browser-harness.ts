@@ -25,6 +25,12 @@ export function initializeBrowser(context: any): void {
         if (tag === "details") element.open = /\sopen(?:\s|$)/.test(attributes!);
         element.disabled = /\sdisabled(?:\s|$)/.test(attributes!);
         element.textContent = id === "run-state" ? "Loading…" : "";
+        const classes = new Set<string>();
+        element.classList ??= { toggle(name: string, force?: boolean) {
+            const present = force ?? !classes.has(name);
+            if (present) classes.add(name); else classes.delete(name);
+            return present;
+        } };
         pageElements.push(element);
     }
     const querySelectorAll = context.document.querySelectorAll;
@@ -44,7 +50,7 @@ export function initializeBrowser(context: any): void {
         element.id = id;
         element.tagName = tag!.toUpperCase();
         const values = component.view[id!.replaceAll("-", "_")];
-        for (const property of ["hidden", "disabled", ...(tag === "p" ? ["textContent"] : [])]) {
+        for (const property of ["hidden", "disabled", ...(attributes!.includes("x-text=") ? ["textContent"] : [])]) {
             const key = property === "textContent" ? "text" : property;
             Object.defineProperty(element, property, { configurable: true, get: () => values[key], set: value => { values[key] = value; } });
         }

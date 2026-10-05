@@ -61,17 +61,57 @@ if ($runningApp -eq 'true') { Confirm-SuiteContainerOwner; Open-SuiteContainerPa
 $npmrcFile = if ($env:SUITECONTAINER_NPMRC) { $env:SUITECONTAINER_NPMRC }
     elseif ($env:NPM_CONFIG_USERCONFIG) { $env:NPM_CONFIG_USERCONFIG }
     else { Join-Path $HOME '.npmrc' }
-$buildSecrets = @()
-if (Test-Path -LiteralPath $npmrcFile -PathType Leaf) {
-    $buildSecrets = @('--secret', "id=npmrc,src=$npmrcFile")
-    if ($env:NSX_NPM_TOKEN) {
-        $buildSecrets += @('--secret', 'id=npm-token,env=NSX_NPM_TOKEN,type=env')
+$npmGlobalrc = $env:NPM_CONFIG_GLOBALCONFIG
+if (Get-Command npm -ErrorAction SilentlyContinue) {
+    if (-not $env:SUITECONTAINER_NPMRC -and -not $env:NPM_CONFIG_USERCONFIG) {
+        try {
+            $reportedConfig = (& npm config get userconfig 2>$null) -join ''
+            if ($LASTEXITCODE -eq 0 -and $reportedConfig) { $npmrcFile = $reportedConfig }
+        } catch { <# Host npm discovery is optional. #> }
+    }
+    if (-not $npmGlobalrc) {
+        try {
+            $reportedConfig = (& npm config get globalconfig 2>$null) -join ''
+            if ($LASTEXITCODE -eq 0 -and $reportedConfig) { $npmGlobalrc = $reportedConfig }
+        } catch { <# Host npm discovery is optional. #> }
     }
 }
+$npmConfigFiles = [ordered]@{}
+$npmCandidates = [ordered]@{
+    'npm-globalrc' = $npmGlobalrc
+    'npmrc' = $npmrcFile
+    'npm-rootrc' = (Join-Path $projectDir '.npmrc')
+    'npm-projectrc' = (Join-Path $projectDir 'app/.npmrc')
+}
+$npmEnvironment = @{}
+Get-ChildItem Env: | Where-Object { $_.Name -like 'npm_config_*' } | ForEach-Object { $npmEnvironment[$_.Name] = $_.Value }
+$buildSecrets = @()
+foreach ($id in $npmCandidates.Keys) {
+    $configFile = $npmCandidates[$id]
+    if ($configFile -and (Test-Path -LiteralPath $configFile -PathType Leaf)) {
+        $npmConfigFiles[$id] = [IO.Path]::GetFullPath($configFile)
+        $buildSecrets += @('--secret', "id=$id,src=$($npmConfigFiles[$id])")
+        Write-Host "npm configuration: $($npmConfigFiles[$id])"
+        foreach ($reference in [regex]::Matches([IO.File]::ReadAllText($npmConfigFiles[$id]), '\$\{([A-Za-z_][A-Za-z0-9_]*)\}')) {
+            $variable = $reference.Groups[1].Value
+            $value = [Environment]::GetEnvironmentVariable($variable)
+            if ($null -ne $value) { $npmEnvironment[$variable] = $value }
+        }
+    }
+}
+if ($npmConfigFiles.Count -eq 0) { Write-Host 'npm configuration: environment and container defaults' }
+if ($env:NSX_NPM_TOKEN) { $buildSecrets += @('--secret', 'id=npm-token,env=NSX_NPM_TOKEN,type=env') }
 
 Write-Host 'Preparing the SuiteCloud container...'
 $caFile = Join-Path $env:TEMP ("suitecontainer-npm-ca-$([guid]::NewGuid().ToString('N')).pem")
+$npmEnvFile = Join-Path $env:TEMP ("suitecontainer-npm-env-$([guid]::NewGuid().ToString('N'))")
 try {
+if ($npmEnvironment.Count -gt 0) {
+    $environmentPairs = foreach ($variable in $npmEnvironment.Keys) { $variable; $npmEnvironment[$variable] }
+    [IO.File]::WriteAllText($npmEnvFile, ($environmentPairs -join ([string][char]0)) + ([string][char]0), [Text.UTF8Encoding]::new($false))
+    $npmConfigFiles['npm-env'] = $npmEnvFile
+    $buildSecrets += @('--secret', "id=npm-env,src=$npmEnvFile")
+}
 Export-WindowsRootCertificates $caFile
 $buildSecrets += @('--secret', "id=npm-ca,src=$caFile")
 $wslMachine = $null
@@ -85,8 +125,8 @@ if ($wslMachine) {
     # The Windows remote client currently builds secret temp-file paths with mixed separators.
     # Build inside the WSL machine, where the same host files are mounted under /mnt/<drive>.
     $remoteSecrets = @('--secret', "id=npm-ca,src=$(ConvertTo-PodmanMachinePath $caFile)")
-    if (Test-Path -LiteralPath $npmrcFile -PathType Leaf) {
-        $remoteSecrets += @('--secret', "id=npmrc,src=$(ConvertTo-PodmanMachinePath $npmrcFile)")
+    foreach ($id in $npmConfigFiles.Keys) {
+        $remoteSecrets += @('--secret', "id=$id,src=$(ConvertTo-PodmanMachinePath $npmConfigFiles[$id])")
     }
     $tokenFile = $null
     try {
@@ -113,6 +153,7 @@ if ($wslMachine) {
 }
 if ($LASTEXITCODE -ne 0) { throw 'The container build failed.' }
 } finally {
+    if (Test-Path -LiteralPath $npmEnvFile) { Remove-Item -LiteralPath $npmEnvFile -Force }
     if (Test-Path -LiteralPath $caFile) {
         Remove-Item -LiteralPath $caFile -Force
     }
