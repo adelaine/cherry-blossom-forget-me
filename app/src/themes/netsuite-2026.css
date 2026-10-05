@@ -31,8 +31,7 @@
   --netsuite-red: #c74634;
   --netsuite-summary-color: var(--netsuite-yellow);
   --netsuite-status-color: #c5a2d5;
-  --pico-font-family-sans-serif: "NetSuite Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif;
-  --pico-font-weight: 400;
+  /* --pico-font-family-sans-serif: "NetSuite Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif; */
   --pico-background-color: var(--netsuite-ocean-160);
   --pico-color: #fff;
   --pico-muted-color: #c2d5de;
@@ -148,12 +147,6 @@
 
 body {
   background: var(--pico-background-color);
-}
-
-main h1,
-main h2,
-main h3 {
-  font-weight: 700;
 }
 
 main mark {

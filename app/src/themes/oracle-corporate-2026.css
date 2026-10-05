@@ -44,8 +44,8 @@
   --oracle-log-blue: var(--oracle-sky-120);
   --oracle-log-purple: var(--oracle-rose-140);
   --oracle-log-cyan: #375d61;
-  --pico-font-family-sans-serif: "Oracle Corporate Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif;
-  --pico-font-weight: 400;
+  /* --pico-font-family-sans-serif: "Oracle Corporate Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif;
+  --pico-font-weight: 400; */
   --pico-background-color: var(--oracle-neutral-10);
   --pico-color: var(--oracle-slate-170);
   --pico-muted-color: var(--oracle-neutral-140);
@@ -193,12 +193,10 @@ body {
   background-size: cover;
 }
 
-main > header > hgroup { max-width: 65%; margin: 0; }
 @media (max-width: 575px) {
   main > header { padding: 1.5rem; }
   main > header > hgroup { max-width: 100%; }
 }
-main :is(h1, h2, h3) { font-weight: 700; }
 main mark {
   background: none;
   color: var(--oracle-heading-accent);
