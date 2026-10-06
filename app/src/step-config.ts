@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
-import { readAuth } from "./step-auth.ts";
+import { readAuth, type Auth } from "./step-auth.ts";
 
 export type SuiteApp = { url?: string; directory: string; branch?: string; localPath?: string };
 export type Vm = { account: string; url: string; database?: { user?: string; service?: string } };
 export type Config = {
+    PM_MODE?: boolean;
     suiteapps: SuiteApp[];
     certificates?: { public: string; private: string; id: string };
     vms: Vm[];
@@ -69,6 +70,7 @@ export function validBranch(branch: unknown): boolean {
 export function validateConfig(
     value: unknown,
     requireDeploymentSettings = false,
+    auth?: Auth,
 ): Config {
     if (
         !value ||
@@ -78,6 +80,10 @@ export function validateConfig(
         invalidConfig('The file needs a "suiteapps" list.');
     }
     const config = value as Config;
+    if (config.PM_MODE !== undefined && typeof config.PM_MODE !== "boolean") {
+        invalidConfig("The setting that controls local deployment must be true or false.");
+    }
+    if (auth && !auth["gitlab-token"]?.trim()) config.PM_MODE = true;
     if (config.status !== undefined &&
         (!config.status || typeof config.status !== "object" || Array.isArray(config.status) ||
             (config.status["deploy-start-ok"] !== undefined && ![0, 1].includes(config.status["deploy-start-ok"])))) {
@@ -127,7 +133,7 @@ export function validateConfig(
             !repo ||
             typeof repo !== "object" ||
             Array.isArray(repo) ||
-            (!repo.localPath && !gitlabHttpsUrl(repo.url))
+            (!config.PM_MODE && !repo.localPath && !gitlabHttpsUrl(repo.url))
         ) {
             invalidConfig(
                 `SuiteApp ${index + 1} needs a localPath or a GitLab HTTPS or SSH URL from gitlab.eng.netsuite.com.`,
@@ -152,7 +158,7 @@ export function validateConfig(
             /[,\r\n\t]/.test(repo.localPath) || (repo.localPath.length > 0 && !repo.localPath.trim()))) {
             invalidConfig(`SuiteApp ${index + 1} has an invalid "localPath".`);
         }
-        if (repo.localPath && repo.branch !== undefined) {
+        if (!config.PM_MODE && repo.localPath && repo.branch !== undefined) {
             invalidConfig(`SuiteApp ${index + 1} cannot set both "localPath" and "branch".`);
         }
         if (repo.url !== undefined && !gitlabHttpsUrl(repo.url)) {
@@ -174,7 +180,8 @@ export function readConfig(
     } catch {
         invalidConfig("The JSON file could not be read or has a syntax error.");
     }
-    const config = validateConfig(value);
-    config.certificates = readAuth(authPath)["suitecloud-certificates"];
+    const auth = readAuth(authPath);
+    const config = validateConfig(value, false, auth);
+    config.certificates = auth["suitecloud-certificates"];
     return validateConfig(config, requireDeploymentSettings);
 }

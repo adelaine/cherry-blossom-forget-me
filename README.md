@@ -2,6 +2,8 @@
 
 Deploy NetSuite SuiteApps through a browser interface backed by Podman and the SuiteCloud CLI.
 
+![SuiteContainer main page](docs/screenshot-main-page.png)
+
 1. Run the launcher for your platform from this folder:
 
    | Platform | Launcher |

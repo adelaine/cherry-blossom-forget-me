@@ -16,9 +16,9 @@ const lightTheme = `
 
 export const deploymentPage = {
     html: `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><link id="brand-theme-stylesheet" rel="stylesheet" href="/themes/oracle-corporate-2026.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
-<label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label>
+<div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select"><select id="brand-theme-select" @change="changebrand_theme_select"><option value="default">Default</option><option value="oracle-corporate-2026" selected>Oracle Corporate 2026</option><option value="netsuite-2026">NetSuite 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label></div>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
 <header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your scrumbox address, complete your credentials, then deploy your SuiteApps.</p></hgroup></header>
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
@@ -81,8 +81,11 @@ body{background:var(--pico-background-color)}
 h1,h2,h3,h4,h5,h6{--pico-font-weight:400}
 header>hgroup>h1::before{display:block;content:"";height:100px;width:100px;float:left;background-image:url(/favicon.png)}
 mark{--pico-mark-gradient:var(--suite-mark-gradient,linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05)));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
-button{--pico-border-radius:2rem}
-.theme-toggle{display:flex;align-items:center;gap:0.5rem;width:fit-content;margin-inline-start:auto;font-family:system-ui,"Segoe UI",sans-serif,var(--pico-font-family-emoji)}
+button{--pico-border-radius:2rem;--pico-font-weight:500}
+.theme-controls{display:flex;align-items:flex-end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}
+.brand-theme-picker{min-width:13rem;margin:0}
+.brand-theme-picker select{margin:0}
+.theme-toggle{display:flex;align-items:center;gap:0.5rem;width:fit-content;margin:0 0 0.6rem;font-family:system-ui,"Segoe UI",sans-serif,var(--pico-font-family-emoji)}
 .theme-toggle input{margin:0}
 article{margin:2rem auto;padding:1.5rem}
 .credential-steps{list-style:none;padding:0;counter-reset:credential-step}
@@ -140,7 +143,7 @@ document.addEventListener('alpine:init', () => {
         { hidden: element.hidden, disabled: !!element.disabled, text: ['P', 'BLOCKQUOTE'].includes(element.tagName) ? element.textContent : '' },
       ])),
       ...Object.fromEntries([
-        ['change', 'theme-toggle'],
+        ['change', 'theme-toggle'],['change', 'brand-theme-select'],
         ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path'].map(id => ['input', id]),
         ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','sftp-recreate','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port'].map(id => ['click', id]),
       ].map(([event, id]) => {
@@ -164,6 +167,14 @@ document.addEventListener('alpine:init', () => {
         let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '';
         let sftpProbeTarget = '', sftpProbePending = false;
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
+        const brandTheme = sessionStorage.getItem('suitecontainer-brand-theme');
+        if (brandTheme === 'default') {
+          $('brand-theme-select').value = brandTheme;
+          $('brand-theme-stylesheet').media = 'not all';
+        } else if (brandTheme === 'netsuite-2026') {
+          $('brand-theme-select').value = brandTheme;
+          $('brand-theme-stylesheet').href = '/themes/netsuite-2026.css';
+        }
         function applyTheme(theme) {
           if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
           else delete document.documentElement.dataset.theme;
@@ -212,7 +223,7 @@ document.addEventListener('alpine:init', () => {
           if (!editing) $('config').value = next.config;
           const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
           if (!credentialEditing) for (const key of ['public','private','id']) $(key).value = next.certificates[key] || '';
-          view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token is saved. Paste it below and click Save credentials. A token is needed for SuiteApps copied from GitLab.';
+          view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token is found. SuiteContainer may still be used if you have a local copy of the container image and local copies of SuiteApps.';
           view.token_entry.hidden = next.tokenPresent && !changingToken;
           view.change_token.hidden = !next.tokenPresent || changingToken;
           view.generate.disabled = busy;
@@ -360,6 +371,16 @@ document.addEventListener('alpine:init', () => {
             clearTimeout(timeout);
             if (themeSave === controller) themeSave = undefined;
           }
+        });
+        listen('brand-theme-select', 'change', () => {
+          const choice = $('brand-theme-select').value;
+          const brand = choice === 'default' || choice === 'netsuite-2026' ? choice : 'oracle-corporate-2026';
+          if (brand === 'default') $('brand-theme-stylesheet').media = 'not all';
+          else {
+            $('brand-theme-stylesheet').href = '/themes/' + brand + '.css';
+            $('brand-theme-stylesheet').media = 'all';
+          }
+          sessionStorage.setItem('suitecontainer-brand-theme', brand);
         });
         listen('config', 'input', () => { actionError = ''; editing = true; view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.'; view.deploy.disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350); });
         listen('vm', 'input', () => {

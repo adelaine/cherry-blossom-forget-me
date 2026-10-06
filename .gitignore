@@ -58,6 +58,7 @@ $RECYCLE.BIN/
 tmp/
 temp/
 .cache/
+/setup/python/*.tar.gz
 
 # Local AI agent state
 .ai-docs/
@@ -76,3 +77,7 @@ temp/
 /repos/
 /sftp-files/*
 !/sftp-files/.gitkeep
+
+# Shared container image copied in by each user
+/container-image/*
+!/container-image/.gitkeep

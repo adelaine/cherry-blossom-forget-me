@@ -3,6 +3,9 @@ param([string]$PesterModulePath)
 
 $ErrorActionPreference = 'Stop'
 $projectDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$python = & (Join-Path $projectDir 'setup/bootstrap/start-suitecloud.ps1') -RuntimeOnly
+& $python -I -B (Join-Path $PSScriptRoot 'bootstrap_test.py')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($PesterModulePath) {
     Import-Module $PesterModulePath -Force
 } else {

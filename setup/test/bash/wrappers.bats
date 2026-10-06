@@ -5,9 +5,9 @@ setup() { setup_fixture; }
 @test "macOS entry wrapper locates its launcher from a different working directory" {
   printf 'printf "launcher reached\\n"\nexit 7\n' > "$fixture_root/setup/bootstrap/start-suitecloud.sh"
   cd "$BATS_TEST_TMPDIR"
-  run bash "$fixture_root/start-macos.sh"
+  run bash -c 'printf "\n" | bash "$1"' _ "$fixture_root/start-macos.command"
   [ "$status" -eq 7 ]
-  [ "$output" = 'launcher reached' ]
+  [[ "$output" == *'launcher reached'* ]]
 }
 
 @test "Finder wrapper leaves a failure visible and preserves its exit status" {

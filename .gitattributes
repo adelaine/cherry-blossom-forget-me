@@ -4,3 +4,5 @@
 *.bats text eol=lf
 start-codebox text eol=lf
 *.cmd text eol=crlf
+*.py text eol=lf
+/setup/python/*.tsv text eol=lf

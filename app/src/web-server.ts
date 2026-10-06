@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { readAuth, type Auth } from "./step-auth.ts";
 import { validateConfig, type Config } from "./step-config.ts";
+import { hasLocalCheckout } from "./step-clone.ts";
 import { replaceCertificates, verifyCertificates } from "./step-certificates.ts";
 import { credentialPath, hostPath, type MountRecord } from "./web-mounts.ts";
 import { deploymentPage } from "./web-page.ts";
@@ -128,15 +129,19 @@ export function startWebServer(options: {
     };
     const readiness = (text: string) => {
         try {
-            const config = validateConfig(JSON.parse(text));
             const auth = readAuth(authPath);
+            const config = validateConfig(JSON.parse(text), false, auth);
             if (config.suiteapps.length === 0) throw new Error("Add at least one SuiteApp before deploying.");
+            if (config.PM_MODE) {
+                const missing = config.suiteapps.find(repo => !repo.localPath && !hasLocalCheckout(repo.directory));
+                if (missing) throw new Error(`Place a local checkout in repos/${missing.directory} or set its localPath in Settings before deploying.`);
+            }
             if (mountChanges(config, auth, record, generatedCertificates)) throw new Error("Relaunch required: local repositories or certificate paths need different mounts.");
             const cert = certificateState(auth);
             if (cert.error) throw new Error(cert.error);
             config.certificates = auth["suitecloud-certificates"];
             validateConfig(config, true);
-            if (config.suiteapps.some(repo => !repo.localPath) && !auth["gitlab-token"]?.trim()) throw new Error("Paste a GitLab token in Credentials and click Save credentials to copy SuiteApps from GitLab.");
+            if (!config.PM_MODE && config.suiteapps.some(repo => !repo.localPath) && !auth["gitlab-token"]?.trim()) throw new Error("Paste a GitLab token in Credentials and click Save credentials to copy SuiteApps from GitLab.");
             return { ready: true, error: "", config, auth, cert };
         } catch (error) { return { ready: false, error: message(error) }; }
     };
@@ -151,12 +156,14 @@ export function startWebServer(options: {
         let deploymentStarted = false;
         let relaunch = false;
         let theme: "light" | "dark" | undefined;
+        let pmMode = !auth["gitlab-token"]?.trim();
         try {
             const savedTheme = JSON.parse(readFileSync(configPath, "utf8"))?.status?.theme;
             if (savedTheme === "light" || savedTheme === "dark") theme = savedTheme;
         } catch { /* Configuration validation explains malformed JSON. */ }
         try {
             const config = JSON.parse(text);
+            pmMode = pmMode || config?.PM_MODE === true;
             deploymentStarted = config?.status?.["deploy-start-ok"] === 1;
             const database = config?.vms?.[0]?.database;
             sqlDefaults = {
@@ -167,7 +174,7 @@ export function startWebServer(options: {
         } catch { /* Configuration validation explains malformed JSON. */ }
         return {
             config: text, ready: ready.ready && !busy(), error: credentialError || ready.error,
-            credentialError, tokenPresent: !!auth["gitlab-token"]?.trim(),
+            credentialError, tokenPresent: !!auth["gitlab-token"]?.trim(), PM_MODE: pmMode,
             deploymentStarted,
             theme,
             certificates: {
@@ -188,6 +195,8 @@ export function startWebServer(options: {
     const sourceMode = import.meta.url.endsWith(".ts");
     const alpine = readFileSync(sourceMode ? require.resolve("@alpinejs/csp/dist/cdn.min.js") : new URL("./assets/alpine.js", import.meta.url), "utf8");
     const pico = readFileSync(sourceMode ? require.resolve("@picocss/pico/css/pico.min.css") : new URL("./assets/pico.css", import.meta.url), "utf8");
+    const netsuiteTheme = readFileSync(new URL(sourceMode ? "./themes/netsuite-2026.css" : "./assets/netsuite-2026.css", import.meta.url), "utf8");
+    const oracleTheme = readFileSync(new URL(sourceMode ? "./themes/oracle-corporate-2026.css" : "./assets/oracle-corporate-2026.css", import.meta.url), "utf8");
     app.use("*", async (c, next) => {
         c.header("X-Content-Type-Options", "nosniff");
         c.header("Referrer-Policy", "no-referrer");
@@ -202,6 +211,8 @@ export function startWebServer(options: {
         ["/", "text/html", deploymentPage.html],
         ["/page.js", "text/javascript", deploymentPage.script],
         ["/page.css", "text/css", deploymentPage.style],
+        ["/themes/netsuite-2026.css", "text/css", netsuiteTheme],
+        ["/themes/oracle-corporate-2026.css", "text/css", oracleTheme],
         ["/alpine.js", "text/javascript", alpine],
         ["/pico.css", "text/css", pico],
     ]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
@@ -210,6 +221,13 @@ export function startWebServer(options: {
         c.header("Content-Type", "image/png");
         return c.body(new Uint8Array(favicon));
     });
+    for (const name of ["oracle-cover-dark.jpg", "oracle-cover-light.jpg"]) {
+        const art = readFileSync(new URL(sourceMode ? "./themes/" + name : "./assets/" + name, import.meta.url));
+        app.get("/themes/" + name, c => {
+            c.header("Content-Type", "image/jpeg");
+            return c.body(new Uint8Array(art));
+        });
+    }
     for (const name of ["Ubuntu-Light.ttf", "Ubuntu-Regular.ttf", "Ubuntu-Medium.ttf", "Ubuntu-Bold.ttf"]) {
         const font = readFileSync(new URL("./assets/fonts/" + name, import.meta.url));
         app.get("/fonts/" + name, c => {

@@ -98,8 +98,8 @@ export function main(args: string[] = process.argv.slice(2)): number {
     }
     const privateKeyPath = deploy ? verifyCertificates(process.env.SUITECONTAINER_PUBLIC_KEY, process.env.SUITECONTAINER_PRIVATE_KEY) : null;
     try {
-        if (config.suiteapps.some((repo) => !repo.localPath)) prepareToken(authPath);
-        cloneRepos(config.suiteapps);
+        if (!config.PM_MODE && config.suiteapps.some((repo) => !repo.localPath)) prepareToken(authPath);
+        cloneRepos(config.suiteapps, config.PM_MODE);
         if (deploy) {
             deployRepos(config, privateKeyPath!);
         } else {

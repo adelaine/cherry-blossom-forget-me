@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import { once } from "node:events";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
@@ -83,8 +82,6 @@ test("ANSI converter is self-contained in the served browser script", () => {
     new Function(deploymentPage.script);
 });
 
-const require = createRequire(import.meta.url);
-const { tokenIn, run: importToken } = require("../../setup/bootstrap/bootstrap-token.cjs");
 const record: MountRecord = { hostRoot: "/project", platform: "linux", local: {}, certificates: {} };
 const emptyAuth: Auth = { "gitlab-token": "", "suitecloud-certificates": { public: "", private: "", id: "" } };
 
@@ -425,27 +422,6 @@ test("local mount edits and removed external certificate mounts require relaunch
     assert.equal(credentialPath(record, "credentials/../outside.pem"), null);
     const windows: MountRecord = { hostRoot: "C:\\Project", platform: "win32", local: {}, certificates: {} };
     assert.equal(credentialPath(windows, "C:\\PROJECT\\credentials\\private.pem"), "/config/credentials/private.pem");
-});
-
-test("token discovery reads data rather than executing shell values and preserves existing credentials", () => {
-    assert.equal(tokenIn('[gitlab]\naccess_token = "example-token"'), "example-token");
-    assert.equal(tokenIn('env = { NEMS_GITLAB_TOKEN = "inline-token" }'), "inline-token");
-    assert.equal(tokenIn('env = { "GITLAB_PERSONAL_ACCESS_TOKEN" = "personal-token" }'), "personal-token");
-    assert.equal(tokenIn('env = { GITLAB_PAT = "pat-token" }'), "pat-token");
-    assert.equal(tokenIn('export GITLAB_TOKEN=literal-value # comment'), "literal-value");
-    const root = mkdtempSync(join(tmpdir(), "suitecontainer-token-"));
-    try {
-        const auth = join(root, "auth.json");
-        const toml = join(root, "config.toml");
-        const env = join(root, ".nems.env");
-        writeFileSync(auth, JSON.stringify(emptyAuth));
-        writeFileSync(toml, '[gitlab]\ntoken="preferred"');
-        writeFileSync(env, 'GITLAB_TOKEN=other');
-        importToken([auth, toml, env]);
-        assert.equal(JSON.parse(readFileSync(auth, "utf8"))["gitlab-token"], "preferred");
-        importToken([auth, env]);
-        assert.equal(JSON.parse(readFileSync(auth, "utf8"))["gitlab-token"], "preferred");
-    } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("unfinished settings reach the page; requests require session and same-origin credentials", async () => {

@@ -1,0 +1,11 @@
+The launcher downloads CPython packaged by python-build-standalone:
+https://github.com/astral-sh/python-build-standalone
+
+Downloaded archives are extracted without modification. Python and
+third-party license notices are retained inside each archive and its extracted
+runtime. Windows includes python/LICENSE.txt; macOS and Linux include
+python/lib/python3.13/LICENSE.txt.
+
+runtimes.tsv records each target's pinned version, release, upstream URL and
+SHA-256 digest. Runtime binaries are downloaded into the Git-ignored cache;
+they are not included in Git or the distribution ZIPs.
