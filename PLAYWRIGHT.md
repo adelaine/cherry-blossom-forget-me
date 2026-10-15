@@ -123,5 +123,5 @@ and relaunch SuiteContainer.
   mapping, account ID and target hostname. The remote browser connection does not
   supply NetSuite user credentials.
 
-The output-buffering fix is deferred. The app may withhold short progress messages
-even while the tests are running.
+Completed output lines appear as the app polls the runner. Partial lines may stay
+buffered until more output arrives so credentials split across writes remain redacted.

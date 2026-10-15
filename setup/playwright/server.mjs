@@ -60,7 +60,18 @@ function outputStream(stream) {
   const decoder = new StringDecoder('utf8');
   let pending = '';
   function drain(final = false) {
-    let end = final ? pending.length : Math.max(0, pending.length - secretOverlap);
+    // Flush completed lines even when they are shorter than the credential overlap.
+    let end = final ? pending.length : Math.max(0, pending.length - secretOverlap, pending.lastIndexOf('\n') + 1);
+    if (!final) {
+      for (const secret of secretValues) {
+        for (let length = Math.min(secret.length - 1, pending.length); length > 0; length--) {
+          if (pending.endsWith(secret.slice(0, length))) {
+            end = Math.min(end, pending.length - length);
+            break;
+          }
+        }
+      }
+    }
     // Keep credentials together, including when a child splits one across writes.
     for (const secret of secretValues) {
       const index = pending.lastIndexOf(secret, end - 1);
