@@ -28,5 +28,11 @@
             }
         }
     ],
-    "PM_MODE": false
+    "PM_MODE": false,
+    "playwright": {
+        "enabled": false,
+        "project": "",
+        "testFile": "",
+        "workers": 1
+    }
 }

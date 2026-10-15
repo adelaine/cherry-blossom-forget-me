@@ -21,6 +21,7 @@ import { decryptSqlPassword } from "./sql-password-crypto.ts";
 import { HeartbeatDeadline } from "./web-inactivity.ts";
 import { SftpService } from "./sftp-server.ts";
 import { RemoteSftpService } from "./sftp-remote.ts";
+import { PlaywrightClient } from "./playwright-client.ts";
 
 type Run = { state: "idle" | "running" | "succeeded" | "failed"; log: string; started?: string; finished?: string };
 
@@ -52,6 +53,7 @@ export function startWebServer(options: {
     sessionFile?: string; onStop?: () => void; signalHandlers?: boolean;
     sqlCommand?: string; sqlArgs?: string[]; sqlTimeoutMs?: number;
     inactivityNow?: () => number; inactivityCheckMs?: number;
+    playwrightUrl?: string; playwrightToken?: string;
 } = {}): Server {
     const configDirectory = options.configDirectory ?? "/config";
     const configPath = join(configDirectory, "suitecontainer.config.json");
@@ -76,6 +78,8 @@ export function startWebServer(options: {
     };
     const session = randomBytes(32).toString("hex");
     const passkey = randomBytes(32).toString("hex");
+    const runnerToken = options.playwrightToken ?? process.env.SUITECONTAINER_PLAYWRIGHT_TOKEN ?? "";
+    const playwright = new PlaywrightClient(options.playwrightUrl, runnerToken);
     const record: MountRecord = JSON.parse(readFileSync(join(credentials, "web-mounts.json"), "utf8"));
     const sftpService = (process.env.SUITECONTAINER_HOST_FQDN || "").toLowerCase().endsWith(".vm.eng.netsuite.com")
         ? new RemoteSftpService(credentials, record) : new SftpService(credentials, record);
@@ -89,14 +93,15 @@ export function startWebServer(options: {
     let sqlRun: { state: Run["state"]; output: string; host?: string; database?: string } = { state: "idle", output: "" };
     let sqlWorker: ChildProcess | undefined;
     let sqlPreparing = false;
+    let playwrightStarting = false;
     let worker: ChildProcess | undefined;
     let snapshot: string | undefined;
     let stopping = false;
     let generatedCertificates = false;
     const heartbeatDeadline = new HeartbeatDeadline(options.inactivityNow);
-    const secrets = new Set([passkey, session]);
-    const busy = () => sqlPreparing || run.state === "running" || sqlRun.state === "running";
-    const busyMessage = () => sqlPreparing ? "SQL credentials are being unlocked. Wait before making changes." : sqlRun.state === "running"
+    const secrets = new Set([passkey, session, runnerToken]);
+    const busy = () => sqlPreparing || playwrightStarting || playwright.active || run.state === "running" || sqlRun.state === "running";
+    const busyMessage = () => playwrightStarting || playwright.active ? "Playwright tests are running. Stop the tests or wait for them to finish before making changes." : sqlPreparing ? "SQL credentials are being unlocked. Wait before making changes." : sqlRun.state === "running"
         ? "SQL is running. Wait for its results before making changes."
         : "Deployment is running. Wait for its results before making changes.";
     const redact = (text: string) => {
@@ -157,6 +162,11 @@ export function startWebServer(options: {
         let relaunch = false;
         let theme: "light" | "dark" | undefined;
         let pmMode = !auth["gitlab-token"]?.trim();
+        let testConfig: Config | undefined;
+        let testConfigError = "";
+        try { testConfig = validateConfig(JSON.parse(text), false, auth); }
+        catch (error) { testConfigError = message(error); }
+        const testStatus = playwright.status(testConfig?.playwright);
         try {
             const savedTheme = JSON.parse(readFileSync(configPath, "utf8"))?.status?.theme;
             if (savedTheme === "light" || savedTheme === "dark") theme = savedTheme;
@@ -186,6 +196,10 @@ export function startWebServer(options: {
             sql: { ...sqlRun, output: redact(sqlRun.output), defaults: sqlDefaults, passwordHint: SQL_PASSWORD_HINT,
                 hasDefaultPassword: existsSync(sqlUserPath) || existsSync(sqlDefaultPath), preparing: sqlPreparing },
             sftp: sftpService.status(auth),
+            playwright: { ...testStatus, log: redact(testStatus.log),
+                state: playwrightStarting ? "running" : testStatus.state,
+                error: testConfigError || testStatus.error,
+                canRun: !testConfigError && testStatus.enabled && !!testStatus.settings.project && testStatus.available && !testStatus.relaunch && !busy() },
         };
     };
     const app = new Hono<{ Variables: { input: Record<string, unknown> } }>();
@@ -204,7 +218,10 @@ export function startWebServer(options: {
         // Classless Pico uses embedded SVG images for disclosure and form icons.
         c.header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
         const host = c.req.header("host") ?? "";
-        if (!/^(?:localhost|127\.0\.0\.1):\d+$/.test(host)) return reply(c, 403, { error: "Open the app through its localhost address." });
+        const internalToken = Buffer.from(c.req.header("authorization")?.replace(/^Bearer /, "") ?? "");
+        const expectedRunnerToken = Buffer.from(runnerToken);
+        const internalHealth = c.req.path === "/health" && !!runnerToken && internalToken.length === expectedRunnerToken.length && timingSafeEqual(internalToken, expectedRunnerToken);
+        if (!internalHealth && !/^(?:localhost|127\.0\.0\.1):\d+$/.test(host)) return reply(c, 403, { error: "Open the app through its localhost address." });
         await next();
     });
     for (const [path, contentType, content] of [
@@ -235,7 +252,9 @@ export function startWebServer(options: {
             return c.body(new Uint8Array(font));
         });
     }
-    app.get("/health", c => reply(c, 200, { ready: true }));
+    app.get("/health", c => reply(c, 200, c.req.query("activity") === "1" ? {
+        ready: true, busy: busy(), localBusy: sqlPreparing || playwrightStarting || run.state === "running" || sqlRun.state === "running",
+    } : { ready: true }));
     app.use("*", async (c, next) => {
         const supplied = Buffer.from(c.req.header("x-session-token") ?? "");
         const expected = Buffer.from(session);
@@ -255,7 +274,8 @@ export function startWebServer(options: {
     app.use("/api/*", async (c, next) => {
         if (c.req.method !== "POST") return reply(c, 404, { error: "Page not found." });
         if (stopping) return reply(c, 409, { error: "The app is stopping. Relaunch to continue." });
-        const background = ["/api/check", "/api/heartbeat", "/api/theme", "/api/sftp"].includes(c.req.path);
+        const background = ["/api/check", "/api/heartbeat", "/api/theme", "/api/sftp", "/api/playwright/cancel"].includes(c.req.path) ||
+            c.req.path === "/api/stop" && !sqlPreparing && run.state !== "running" && sqlRun.state !== "running";
         if (busy() && !background) return reply(c, 409, { error: busyMessage() });
         // Count every byte before side effects, including requests without Content-Length.
         const chunks: Uint8Array[] = [];
@@ -286,6 +306,29 @@ export function startWebServer(options: {
     app.post("/api/heartbeat", c => {
         heartbeatDeadline.heartbeat();
         return reply(c, 200, { alive: true });
+    });
+    app.post("/api/playwright/run", async c => {
+        const input = c.get("input");
+        if (typeof input.config !== "string") throw new Error("Enter configuration JSON.");
+        const config = validateConfig(JSON.parse(input.config), false, readAuth(authPath));
+        if (!config.playwright?.enabled || !config.playwright.project) throw new Error("Enable Playwright and choose its project directory before running tests.");
+        const settings = config.playwright;
+        const vm = config.vms[0];
+        if (!vm) throw new Error("Choose a target VM before running tests.");
+        const local = Object.fromEntries(config.suiteapps.filter(repo => repo.localPath).map(repo => [repo.directory, hostPath(record, repo.localPath!)]));
+        if ([...new Set([...Object.keys(local), ...Object.keys(record.local)])].some(name => local[name] !== record.local[name])) {
+            throw new Error("Save settings and relaunch SuiteContainer to mount the selected local checkouts.");
+        }
+        if (playwright.status(settings).relaunch) throw new Error("Save settings and relaunch SuiteContainer to mount the selected Playwright project.");
+        writeFileSync(configPath, JSON.stringify(JSON.parse(input.config), null, 4) + "\n");
+        playwrightStarting = true;
+        try { await playwright.start(settings, vm.url, vm.account); }
+        finally { playwrightStarting = false; }
+        return reply(c, 202, status());
+    });
+    app.post("/api/playwright/cancel", async c => {
+        await playwright.cancel();
+        return reply(c, 200, status());
     });
     app.post("/api/check", c => {
         const input = c.get("input");
@@ -468,7 +511,7 @@ export function startWebServer(options: {
         if (stopping) return;
         stopping = true;
         sftpService.dispose();
-        server.close(options.onStop ?? (() => process.exit(0)));
+        server.close(() => { void playwright.dispose().finally(options.onStop ?? (() => process.exit(0))); });
     };
     const inactivityTimer = setInterval(() => {
         if (!stopping && heartbeatDeadline.expired(busy() || sftpService.active)) stopApp();
@@ -476,6 +519,7 @@ export function startWebServer(options: {
     inactivityTimer.unref();
     server.once("close", () => clearInterval(inactivityTimer));
     server.once("close", () => sftpService.dispose());
+    server.once("close", () => { void playwright.dispose(); });
     server.requestTimeout = 15_000;
     server.once("close", () => sqlWorker?.kill("SIGKILL"));
     server.on("error", error => { console.error(message(error)); process.exitCode = 1; });
@@ -486,6 +530,7 @@ export function startWebServer(options: {
     const shutdown = () => {
         stopping = true;
         sftpService.dispose();
+        void playwright.dispose();
         sqlWorker?.kill("SIGKILL");
         if (worker?.pid) { try { process.kill(-worker.pid, "SIGTERM"); } catch { worker.kill("SIGTERM"); } }
         server.close();

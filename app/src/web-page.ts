@@ -68,6 +68,14 @@ export const deploymentPage = {
 </div>
 <article><h2>Deployment</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset class="grid" aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy</button>
 <button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><blockquote class="status-message" id="run-state" role="status" x-text="view.run_state.text">Loading…</blockquote><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
+<article><h2>Playwright tests</h2><p>Run your SuiteApp browser tests against Current VM. Configure test users and roles in your Playwright project.</p>
+<label for="playwright-enabled"><input id="playwright-enabled" type="checkbox" :disabled="view.playwright_enabled.disabled" @change="changeplaywright_enabled"> Enable test runner</label>
+<label for="playwright-project">Project directory inside repos</label><input id="playwright-project" spellcheck="false" placeholder="absi-nsn/test-pw" :disabled="view.playwright_project.disabled" @input="inputplaywright_project">
+<div class="grid"><div><label for="playwright-file">Test file (optional)</label><input id="playwright-file" spellcheck="false" placeholder="tests/example.spec.ts" :disabled="view.playwright_file.disabled" @input="inputplaywright_file"></div>
+<div><label for="playwright-workers">Parallel workers</label><input id="playwright-workers" type="number" min="1" max="16" step="1" value="1" :disabled="view.playwright_workers.disabled" @input="inputplaywright_workers"></div></div>
+<p><small>Save settings and relaunch after enabling the runner or changing the project directory. Leave Test file blank to run the configured project.</small></p>
+<fieldset class="grid" aria-label="Playwright actions"><button id="playwright-save" class="secondary" :disabled="view.playwright_save.disabled" @click="clickplaywright_save">Save test settings</button><button id="playwright-run" disabled :disabled="view.playwright_run.disabled" @click="clickplaywright_run">Run tests</button><button id="playwright-cancel" class="secondary outline" disabled :disabled="view.playwright_cancel.disabled" @click="clickplaywright_cancel">Stop tests</button></fieldset>
+<p id="playwright-message" role="status" x-text="view.playwright_message.text"></p><pre id="playwright-log" tabindex="0" aria-label="Playwright progress"></pre></article>
 </main></body></html>`,
     style: `${ansiStyles}
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Light.ttf') format('truetype');font-style:normal;font-weight:300;font-display:swap}
@@ -143,9 +151,9 @@ document.addEventListener('alpine:init', () => {
         { hidden: element.hidden, disabled: !!element.disabled, text: ['P', 'BLOCKQUOTE'].includes(element.tagName) ? element.textContent : '' },
       ])),
       ...Object.fromEntries([
-        ['change', 'theme-toggle'],['change', 'brand-theme-select'],
-        ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path'].map(id => ['input', id]),
-        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','sftp-recreate','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port'].map(id => ['click', id]),
+        ['change', 'theme-toggle'],['change', 'brand-theme-select'],['change', 'playwright-enabled'],
+        ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path','playwright-project','playwright-file','playwright-workers'].map(id => ['input', id]),
+        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','sftp-recreate','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port','playwright-save','playwright-run','playwright-cancel'].map(id => ['click', id]),
       ].map(([event, id]) => {
         const name = event + id.replaceAll('-', '_');
         return [name, () => handlers[name]()];
@@ -166,6 +174,7 @@ document.addEventListener('alpine:init', () => {
         let selectedTheme, themeSave;
         let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '';
         let sftpProbeTarget = '', sftpProbePending = false;
+        let playwrightEditing = false, playwrightSubmitting = false, playwrightError = '';
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
         const brandTheme = sessionStorage.getItem('suitecontainer-brand-theme');
         if (brandTheme === 'default') {
@@ -189,7 +198,7 @@ document.addEventListener('alpine:init', () => {
           view.connection_error.text = connectionMessage;
           view.connection_error.hidden = false;
           for (const control of document.querySelectorAll('button,input,textarea')) if (control.id) view[control.id.replaceAll('-', '_')].disabled = true;
-          if (!idleCloseScheduled && Date.now() - lastActivity >= ${ACTIVITY_GRACE_MS} && state?.run.state !== 'running' && state?.sql?.state !== 'running' && !state?.sql?.preparing && !sqlSubmitting && !['starting','running'].includes(state?.sftp?.state) && !sftpSubmitting) {
+          if (!idleCloseScheduled && Date.now() - lastActivity >= ${ACTIVITY_GRACE_MS} && state?.run.state !== 'running' && state?.sql?.state !== 'running' && !state?.sql?.preparing && !sqlSubmitting && state?.playwright?.state !== 'running' && !playwrightSubmitting && !['starting','running'].includes(state?.sftp?.state) && !sftpSubmitting) {
             idleCloseScheduled = true;
             setTimeout(() => {
               if (!connectionFailed || Date.now() - lastActivity < ${ACTIVITY_GRACE_MS}) { idleCloseScheduled = false; return; }
@@ -200,7 +209,7 @@ document.addEventListener('alpine:init', () => {
         async function api(path, data) {
           let response, result;
           try {
-            response = await fetch('/api/' + path, { signal:AbortSignal.timeout(path === 'sftp' ? 30000 : 10000), method: data === undefined ? 'GET' : 'POST', headers: {'X-Session-Token': session, ...(data === undefined ? {} : {'Content-Type':'application/json'})}, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
+            response = await fetch('/api/' + path, { signal:AbortSignal.timeout(path === 'sftp' || path === 'playwright/cancel' ? 30000 : path === 'playwright/run' ? 20000 : 10000), method: data === undefined ? 'GET' : 'POST', headers: {'X-Session-Token': session, ...(data === undefined ? {} : {'Content-Type':'application/json'})}, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
             result = await response.json();
           } catch { connectionLost(); throw new Error(connectionMessage); }
           if (response.status >= 500 || (!response.ok && result.error?.startsWith('The app is stopping'))) { connectionLost(); throw new Error(connectionMessage); }
@@ -221,7 +230,7 @@ document.addEventListener('alpine:init', () => {
             collapseSetupSections();
           }
           if (!editing) $('config').value = next.config;
-          const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
+          const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting || next.playwright?.state === 'running' || playwrightSubmitting;
           if (!credentialEditing) for (const key of ['public','private','id']) $(key).value = next.certificates[key] || '';
           view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token is found. SuiteContainer may still be used if you have a local copy of the container image and local copies of SuiteApps.';
           view.token_entry.hidden = next.tokenPresent && !changingToken;
@@ -231,10 +240,11 @@ document.addEventListener('alpine:init', () => {
           view.download.disabled = false;
           view.cert_message.text = next.certificates.error;
           view.validation.text = actionError || (busy
-            ? next.sql?.preparing ? 'Unlocking the saved SQL password. Please wait.' : next.sql?.state === 'running' || sqlSubmitting ? 'SQL is running. Wait for it to finish before deploying or changing settings.' : 'Deployment is running. Wait for it to finish before changing settings or credentials.'
+            ? next.playwright?.state === 'running' || playwrightSubmitting ? 'Playwright tests are running. Stop the tests or wait for them to finish before deploying or changing settings.' : next.sql?.preparing ? 'Unlocking the saved SQL password. Please wait.' : next.sql?.state === 'running' || sqlSubmitting ? 'SQL is running. Wait for it to finish before deploying or changing settings.' : 'Deployment is running. Wait for it to finish before changing settings or credentials.'
             : next.relaunch ? 'Relaunch required. Save your changes, stop this app, and start the launcher again.' : next.error || (credentialEditing ? 'Save your credential changes before deploying.' : editing ? 'Settings are ready.' : 'Ready to deploy.'));
           view.deploy.disabled = !next.ready || credentialEditing || busy;
           for (const key of ['save','credentials','stop','public','private','id','token','config','vm','change-token']) view[key.replaceAll('-', '_')].disabled = busy;
+          view.stop.disabled = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
           view.run_state.text = ({idle:'No deployment started.',running:'Deployment in progress…',succeeded:'Deployment completed.',failed:'Deployment failed. Review the message below, correct settings or credentials, and retry.'})[next.run.state];
           const log = $('log'); const bottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
           log.innerHTML = ansiToHtml(next.run.log);
@@ -246,6 +256,27 @@ document.addEventListener('alpine:init', () => {
           if (host) $('scrumbox-link').href = 'https://' + host + '/devhome';
           renderSql(next, busy);
           renderSftp(next);
+          renderPlaywright(next, busy);
+        }
+        function renderPlaywright(next, busy) {
+          const runner = next.playwright;
+          if (!playwrightEditing) {
+            let settings = runner?.settings || {};
+            try { settings = JSON.parse($('config').value).playwright || settings; } catch { /* Keep unfinished JSON edits. */ }
+            $('playwright-enabled').checked = settings.enabled === true;
+            $('playwright-project').value = settings.project || '';
+            $('playwright-file').value = settings.testFile || '';
+            $('playwright-workers').value = String(settings.workers || 1);
+          }
+          for (const id of ['playwright-enabled','playwright-project','playwright-file','playwright-workers','playwright-save']) view[id.replaceAll('-', '_')].disabled = busy;
+          view.playwright_run.disabled = busy || !runner?.canRun;
+          view.playwright_cancel.disabled = playwrightSubmitting || runner?.state !== 'running';
+          view.playwright_message.text = playwrightError || runner?.error || (playwrightEditing ? 'Test settings changed. Save before running tests.' : runner?.relaunch ? 'Save settings and relaunch SuiteContainer to use this test project.' : !runner?.enabled ? 'Enable the runner, save settings, and relaunch SuiteContainer.' : !runner.settings.project ? 'Choose the directory containing your Playwright configuration and lockfile.' : ({idle:'Ready to run tests.',running:'Playwright tests are running…',succeeded:'Playwright tests passed.',failed:'Playwright tests failed or were stopped. Review the output.'})[runner.state]);
+          const log = $('playwright-log');
+          const bottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
+          log.innerHTML = ansiToHtml(runner?.log || '');
+          applyAnsiColors(log);
+          if (bottom) log.scrollTop = log.scrollHeight;
         }
         function renderSftp(next) {
           if (connectionFailed) return;
@@ -383,6 +414,32 @@ document.addEventListener('alpine:init', () => {
           sessionStorage.setItem('suitecontainer-brand-theme', brand);
         });
         listen('config', 'input', () => { actionError = ''; editing = true; view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.'; view.deploy.disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350); });
+        const editPlaywright = () => {
+          playwrightError = '';
+          try {
+            const config = JSON.parse($('config').value);
+            config.playwright = { enabled:$('playwright-enabled').checked, project:$('playwright-project').value.trim(), testFile:$('playwright-file').value.trim(), workers:Number($('playwright-workers').value) };
+            $('config').value = JSON.stringify(config, null, 4);
+            editing = true; playwrightEditing = true;
+            clearTimeout(checking); checking = setTimeout(refresh, 350);
+            view.playwright_run.disabled = true;
+            view.playwright_message.text = 'Test settings changed. Save settings and relaunch if the project directory changed.';
+          } catch { playwrightError = 'Fix the configuration JSON in Settings before changing test settings.'; view.playwright_message.text = playwrightError; }
+        };
+        listen('playwright-enabled', 'change', editPlaywright);
+        for (const id of ['playwright-project','playwright-file','playwright-workers']) listen(id, 'input', editPlaywright);
+        for (const operation of ['run','cancel','save']) listen('playwright-' + operation, 'click', async () => {
+          if (playwrightSubmitting) return;
+          playwrightSubmitting = true; playwrightError = '';
+          if (state) render(state);
+          try {
+            const path = operation === 'save' ? 'settings' : 'playwright/' + operation;
+            const next = await api(path, operation === 'cancel' ? {} : {config:$('config').value});
+            if (operation !== 'cancel') { editing = false; playwrightEditing = false; }
+            render(next);
+          } catch (error) { playwrightError = error.message; }
+          finally { playwrightSubmitting = false; if (!stopped && state) render(state); }
+        });
         listen('vm', 'input', () => {
           actionError = '';
           try {

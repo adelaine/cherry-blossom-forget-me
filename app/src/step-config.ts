@@ -3,11 +3,13 @@ import { readAuth, type Auth } from "./step-auth.ts";
 
 export type SuiteApp = { url?: string; directory: string; branch?: string; localPath?: string };
 export type Vm = { account: string; url: string; database?: { user?: string; service?: string } };
+export type PlaywrightSettings = { enabled: boolean; project: string; testFile?: string; workers?: number };
 export type Config = {
     PM_MODE?: boolean;
     suiteapps: SuiteApp[];
     certificates?: { public: string; private: string; id: string };
     vms: Vm[];
+    playwright?: PlaywrightSettings;
     status?: { "deploy-start-ok"?: 0 | 1; theme?: "light" | "dark" };
 };
 
@@ -80,6 +82,24 @@ export function validateConfig(
         invalidConfig('The file needs a "suiteapps" list.');
     }
     const config = value as Config;
+    if (config.playwright !== undefined) {
+        const settings = config.playwright;
+        if (!settings || typeof settings !== "object" || Array.isArray(settings) || typeof settings.enabled !== "boolean" || typeof settings.project !== "string") {
+            invalidConfig("Playwright needs enabled (true or false) and a project directory relative to repos.");
+        }
+        const relativePath = (path: string) => path === "" ||
+            /^[A-Za-z0-9][A-Za-z0-9._ /-]*$/.test(path) && path === path.trim() &&
+            path.split("/").every(part => part !== "" && part !== "." && part !== ".." && !part.startsWith("."));
+        if (!relativePath(settings.project) || (settings.project && !config.suiteapps.some(repo => repo?.directory === settings.project.split("/")[0]))) {
+            invalidConfig("Playwright project must be inside a listed SuiteApp, for example absi-nsn/test-pw, without parent-directory segments.");
+        }
+        if (settings.testFile !== undefined && (typeof settings.testFile !== "string" || !relativePath(settings.testFile))) {
+            invalidConfig("Playwright testFile must be a relative test file path, or empty to run the project.");
+        }
+        if (settings.workers !== undefined && (!Number.isInteger(settings.workers) || settings.workers < 1 || settings.workers > 16)) {
+            invalidConfig("Playwright workers must be a whole number from 1 to 16.");
+        }
+    }
     if (config.PM_MODE !== undefined && typeof config.PM_MODE !== "boolean") {
         invalidConfig("The setting that controls local deployment must be true or false.");
     }

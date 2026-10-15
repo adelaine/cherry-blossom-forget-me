@@ -13,4 +13,6 @@ setup/*
 !setup/gitlab-askpass.sh
 !setup/sftp/
 !setup/sftp/start.sh
+!setup/playwright/
+!setup/playwright/**
 !setup/.containerignore

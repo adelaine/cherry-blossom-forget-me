@@ -1,6 +1,7 @@
 """Shared host bootstrap, run by the project's private Python interpreter."""
 import getpass
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -294,7 +295,7 @@ def build_image(machine):
             podman(*arguments)
 
 
-def start_web(name):
+def start_web(name, extra_arguments=()):
     host = ["--env", f"SUITECONTAINER_HOST_ROOT={PROJECT}", "--env", f"SUITECONTAINER_HOST_PLATFORM={HOST_PLATFORM}"]
     base = ["--mount", f"type=bind,src={PROJECT},dst=/project,ro=true", *host]
     target = podman("run", "--rm", "--cgroups=disabled", *base, IMAGE, "--web-ssh-target", capture=True).stdout.strip()
@@ -331,7 +332,46 @@ def start_web(name):
     arguments = ["run", "-d", "--name", name, "--label", f"{OWNER}={PROJECT}", "--cgroups=disabled", "--publish", "127.0.0.1::8080", "--publish", "127.0.0.1::8000", "--env", "SUITECONTAINER_SFTP=1"]
     if not (WINDOWS or MACOS):
         arguments += ["--env", f"SUITECONTAINER_HOST_FQDN={command('hostname', '-f', capture=True, optional=True).stdout.strip()}"]
-    podman(*arguments, *mounts, IMAGE, "--serve", capture=True)
+    podman(*arguments, *extra_arguments, *mounts, IMAGE, "--serve", capture=True)
+
+
+def assert_app_idle(name, runner_stopped=False):
+    # Older app images do not expose activity on /health. Read their authenticated
+    # state locally without returning a session token or application log to the host.
+    script = "const runnerStopped=" + json.dumps(runner_stopped) + ";\n" + """const health=await fetch('http://127.0.0.1:8080/health?activity=1',{signal:AbortSignal.timeout(5000)});
+if(!health.ok)process.exit(2);
+let state=await health.json();
+if(runnerStopped&&typeof state.localBusy==='boolean')state.busy=state.localBusy;
+else if(typeof state.busy!=='boolean'||runnerStopped){
+ const {readFileSync}=await import('node:fs');
+ const suffix=readFileSync('/tmp/suitecontainer-web-url','utf8').trim();
+ const token=new URL('http://localhost'+suffix).hash.slice(1);
+ const response=await fetch('http://127.0.0.1:8080/api/state',{headers:{'x-session-token':new URLSearchParams(token).get('session')||''},signal:AbortSignal.timeout(5000)});
+ if(!response.ok)process.exit(2);
+ state=await response.json();
+ if(typeof state.run?.state!=='string'||typeof state.sql?.state!=='string')process.exit(2);
+ state.busy=state.run.state==='running'||state.sql.state==='running'||state.sql.preparing===true||(!runnerStopped&&state.playwright?.state==='running');
+}
+console.log(state.busy?'busy':'idle');"""
+    result = podman("exec", name, "node", "--input-type=module", "-e", script, capture=True, optional=True)
+    if result.returncode or result.stdout.strip() != "idle":
+        raise RuntimeError("The app is busy or its activity could not be checked. The containers were left untouched. Wait for running jobs to finish, or use Stop app before relaunching.")
+
+
+def playwright_runner(name, machine, info):
+    config = json.loads((PROJECT / "suitecontainer.config.json").read_text(encoding="utf-8-sig"))
+    settings = config.get("playwright", {})
+    if not isinstance(settings, dict):
+        raise RuntimeError("The Playwright settings must be an object.")
+    previous = (info or {}).get("Config", {}).get("Env", [])
+    if settings.get("enabled") is not True and not any(item.startswith("SUITECONTAINER_PLAYWRIGHT_URL=") for item in previous):
+        return None
+    spec = importlib.util.spec_from_file_location("suitecontainer_playwright", Path(__file__).with_name("playwright.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.PlaywrightRunner(project=PROJECT, app_name=name, machine=machine, config=config, app_info=info,
+                                   podman=podman, command=command, windows=WINDOWS, macos=MACOS,
+                                   machine_path=machine_path, inspect_container=inspect, confirm_owner=confirm_owner, owner=OWNER)
 
 
 def open_page(name):
@@ -376,17 +416,16 @@ def main():
     machine = start_machine()
     name = container_name()
     info = inspect(name)
-    if info and info.get("State", {}).get("Running"):
+    if info:
         confirm_owner(info)
     source_available = (PROJECT / "app/package.json").is_file() and (PROJECT / "setup/Containerfile").is_file()
     shared_image_mode = pm_mode()
     build_from_source = source_available and not shared_image_mode
-    if info and info.get("State", {}).get("Running") and not build_from_source:
-        open_page(name)
-        return
+    running = bool(info and info.get("State", {}).get("Running"))
+    runner = playwright_runner(name, machine, info)
     if build_from_source:
         build_image(machine)
-    else:
+    elif not running:
         image = podman("image", "exists", IMAGE, optional=True)
         archive = PROJECT / "container-image/suitecontainer-workspace.tar"
         if image.returncode == 1 and archive.is_file():
@@ -401,17 +440,34 @@ def main():
             build_image(machine)
         elif image.returncode:
             raise RuntimeError("Could not check the local SuiteCloud image. Check the Podman connection and retry.")
-    if info and info.get("State", {}).get("Running"):
+    replace_app = False
+    if running and build_from_source:
         current_image = podman("image", "inspect", IMAGE, "--format", "{{.Id}}", capture=True).stdout.strip().removeprefix("sha256:")
         running_image = str(info.get("Image") or "").removeprefix("sha256:")
         if not current_image or not running_image:
             raise RuntimeError("Could not compare the running app with the updated image. The running app was left untouched.")
-        if current_image != running_image:
-            print("Replacing the running app with the updated image...", flush=True)
-            podman("stop", name)
-            start_web(name)
-    else:
-        start_web(name)
+        replace_app = current_image != running_image
+    if runner:
+        runner.plan(shared_image_mode)
+        replace_app = replace_app or runner.app_changed
+    if running and (replace_app or (runner and runner.runner_changed)):
+        runner_stopped = bool(runner and runner.enabled and (not runner.info or not runner.info.get("State", {}).get("Running")))
+        assert_app_idle(name, runner_stopped=runner_stopped)
+    if runner and (replace_app or runner.runner_changed):
+        runner.assert_idle()
+    if runner:
+        runner.prepare_resources()
+    if running and replace_app:
+        print("Restarting the app with its updated container settings...", flush=True)
+        podman("stop", name)
+        # App shutdown also stops its runner. Recreate that runner only after the
+        # old app has exited, so shutdown cannot stop the replacement container.
+        if runner and runner.enabled:
+            runner.runner_changed = True
+    if runner:
+        runner.apply()
+    if not running or replace_app:
+        start_web(name, runner.app_arguments if runner else ())
     open_page(name)
 
 
