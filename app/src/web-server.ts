@@ -319,7 +319,7 @@ export function startWebServer(options: {
         if ([...new Set([...Object.keys(local), ...Object.keys(record.local)])].some(name => local[name] !== record.local[name])) {
             throw new Error("Save settings and relaunch SuiteContainer to mount the selected local checkouts.");
         }
-        if (playwright.status(settings).relaunch) throw new Error("Save settings and relaunch SuiteContainer to mount the selected Playwright project.");
+        if (playwright.status(settings).relaunch) throw new Error("Save settings and relaunch SuiteContainer to use the selected Playwright project and browser.");
         writeFileSync(configPath, JSON.stringify(JSON.parse(input.config), null, 4) + "\n");
         playwrightStarting = true;
         try { await playwright.start(settings, vm.url, vm.account); }

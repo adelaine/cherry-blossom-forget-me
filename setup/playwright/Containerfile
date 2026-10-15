@@ -37,8 +37,37 @@ RUN --mount=type=secret,id=npm-ca,mode=0444 \
     && mkdir -p /workspace /pnpm/store /run/playwright \
     && rm -f /tmp/suitecontainer-apt.conf
 
+# SuiteApp CI configurations select the branded Chrome channel on Linux x64.
+RUN --mount=type=secret,id=npm-ca,mode=0444 \
+    set -eu; \
+    set --; \
+    if [ "$(dpkg --print-architecture)" = amd64 ]; then \
+      if [ -f /run/secrets/npm-ca ]; then \
+        export CURL_CA_BUNDLE=/run/secrets/npm-ca; \
+        set -- -o Acquire::https::CaInfo=/run/secrets/npm-ca; \
+      fi; \
+      apt-get "$@" update \
+      && curl --fail --show-error --location \
+           https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+           --output /tmp/google-chrome.deb \
+      && apt-get "$@" install -y --no-install-recommends /tmp/google-chrome.deb \
+      && rm -f /tmp/google-chrome.deb \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+RUN --mount=type=secret,id=npm-ca,mode=0444 \
+    set -eu; \
+    set --; \
+    if [ -f /run/secrets/npm-ca ]; then \
+      set -- -o Acquire::https::CaInfo=/run/secrets/npm-ca; \
+    fi; \
+    apt-get "$@" update \
+    && apt-get "$@" install -y --no-install-recommends openssh-server \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY setup/playwright/start.sh /opt/suitecontainer-playwright/start.sh
 COPY setup/playwright/server.mjs /opt/suitecontainer-playwright/server.mjs
+COPY setup/playwright/sshd_config /opt/suitecontainer-playwright/sshd_config
 RUN chmod 755 /opt/suitecontainer-playwright/start.sh
 
 WORKDIR /workspace

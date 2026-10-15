@@ -14,11 +14,12 @@ if (!token) {
 const tokenHash = createHash('sha256').update(token).digest();
 const workspace = '/workspace';
 const configuredProject = process.env.SUITECONTAINER_PLAYWRIGHT_PROJECT || '';
+const configuredBrowser = process.env.SUITECONTAINER_PLAYWRIGHT_BROWSER || 'container';
 const logLimit = 512 * 1024;
 const bodyLimit = 16 * 1024;
 const secrets = new Set([token]);
 let logBuffer = Buffer.alloc(0);
-let state = { state: 'idle', project: configuredProject };
+let state = { state: 'idle', project: configuredProject, browser: configuredBrowser };
 let activeJob = null;
 let stopping = false;
 let watchdogTimer;
@@ -176,7 +177,9 @@ function runCommand(job, args, options) {
     appendLog(`\n$ pnpm ${args.join(' ')}\n`);
     const child = spawn('pnpm', args, {
       cwd: options.project,
-      env: { ...process.env, CI: '1', REMOTE_ENV: options.host, COMPANY_ID: options.account, npm_config_store_dir: '/pnpm/store' },
+      env: { ...process.env, CI: '1', REMOTE_ENV: options.host, COMPANY_ID: options.account, npm_config_store_dir: '/pnpm/store',
+        PLAYWRIGHT_REMOTE_WS_ENDPOINT: configuredBrowser === 'local-chrome' ? process.env.PLAYWRIGHT_REMOTE_WS_ENDPOINT : '',
+        ...(configuredBrowser === 'local-chrome' ? { PW_CHANNEL: 'chrome' } : {}) },
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
@@ -199,8 +202,9 @@ async function runJob(job, options) {
   try {
     const commands = [
       ['install', '--frozen-lockfile', '--store-dir=/pnpm/store'],
-      ['exec', 'playwright', 'install'],
-      ['exec', 'playwright', 'test', ...(options.testFile ? [options.testFile] : []), `--workers=${options.workers}`],
+      ...(configuredBrowser === 'local-chrome' ? [] : [['exec', 'playwright', 'install']]),
+      ['exec', 'playwright', 'test', ...(options.testFile ? [options.testFile] : []), `--workers=${options.workers}`,
+        ...(configuredBrowser === 'local-chrome' ? ['--headed'] : [])],
     ];
     for (const args of commands) {
       if (job.cancelled || !await runCommand(job, args, options)) return;
@@ -289,7 +293,7 @@ const server = createServer(async (request, response) => {
       const options = await validateRun(await readJson(request));
       if (activeJob || stopping) throw new RequestError(409, 'The runner is busy or stopping.');
       logBuffer = Buffer.alloc(0);
-      state = { state: 'running', project: configuredProject, started: new Date().toISOString() };
+      state = { state: 'running', project: configuredProject, browser: configuredBrowser, started: new Date().toISOString() };
       const job = { child: null, cancelled: false, done: null };
       activeJob = job;
       job.done = runJob(job, options);

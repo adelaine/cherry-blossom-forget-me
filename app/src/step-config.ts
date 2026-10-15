@@ -3,7 +3,8 @@ import { readAuth, type Auth } from "./step-auth.ts";
 
 export type SuiteApp = { url?: string; directory: string; branch?: string; localPath?: string };
 export type Vm = { account: string; url: string; database?: { user?: string; service?: string } };
-export type PlaywrightSettings = { enabled: boolean; project: string; testFile?: string; workers?: number };
+export type PlaywrightBrowser = "container" | "local-chrome";
+export type PlaywrightSettings = { enabled: boolean; project: string; browser?: PlaywrightBrowser; testFile?: string; workers?: number };
 export type Config = {
     PM_MODE?: boolean;
     suiteapps: SuiteApp[];
@@ -98,6 +99,9 @@ export function validateConfig(
         }
         if (settings.workers !== undefined && (!Number.isInteger(settings.workers) || settings.workers < 1 || settings.workers > 16)) {
             invalidConfig("Playwright workers must be a whole number from 1 to 16.");
+        }
+        if (settings.browser !== undefined && settings.browser !== "container" && settings.browser !== "local-chrome") {
+            invalidConfig('Playwright browser must be "container" or "local-chrome".');
         }
     }
     if (config.PM_MODE !== undefined && typeof config.PM_MODE !== "boolean") {

@@ -1,9 +1,10 @@
-import type { PlaywrightSettings } from "./step-config.ts";
+import type { PlaywrightBrowser, PlaywrightSettings } from "./step-config.ts";
 
 type RunnerState = {
     state: "idle" | "running" | "succeeded" | "failed";
     log: string;
     project: string;
+    browser?: PlaywrightBrowser;
     started?: string;
     finished?: string;
 };
@@ -35,9 +36,10 @@ export class PlaywrightClient {
 
     status(settings?: PlaywrightSettings) {
         const enabled = settings?.enabled === true;
-        const relaunch = enabled && (!this.url || this.available && settings.project !== this.run.project);
+        const browser = settings?.browser ?? "container";
+        const relaunch = enabled && (!this.url || this.available && (settings.project !== this.run.project || browser !== (this.run.browser ?? "container")));
         return { ...this.run, available: this.available, enabled, relaunch,
-            settings: settings ?? { enabled: false, project: "", testFile: "", workers: 1 },
+            settings: { ...(settings ?? { enabled: false, project: "", testFile: "", workers: 1 }), browser },
             error: this.error || (enabled && !this.url ? "Save settings and relaunch SuiteContainer to start the test runner." : "") };
     }
 

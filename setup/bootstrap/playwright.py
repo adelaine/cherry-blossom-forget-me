@@ -1,5 +1,6 @@
 """Host orchestration for the optional, isolated Playwright runner."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -82,6 +83,9 @@ class PlaywrightRunner:
 
     def configuration(self):
         settings = self.config.get("playwright", {})
+        self.browser = settings.get("browser", "container")
+        if self.browser not in ("container", "local-chrome"):
+            raise RuntimeError("Playwright browser must be container or local-chrome.")
         configured = settings.get("project", "")
         if not isinstance(configured, str):
             raise RuntimeError("The Playwright project must be a directory relative to repos.")
@@ -241,8 +245,11 @@ class PlaywrightRunner:
         app_environment = {"SUITECONTAINER_PLAYWRIGHT_URL": endpoint, "SUITECONTAINER_PLAYWRIGHT_TOKEN": token}
         runner_environment = {**npm_environment, "SUITECONTAINER_PLAYWRIGHT_TOKEN": token,
                               "SUITECONTAINER_PLAYWRIGHT_PROJECT": self.test_project,
+                              "SUITECONTAINER_PLAYWRIGHT_BROWSER": self.browser,
                               "SUITECONTAINER_PLAYWRIGHT_APP_URL": f"http://{self.app_name}:8080",
                               "NPM_CONFIG_USERCONFIG": f"{RUNTIME}/npmrc"}
+        if self.browser == "local-chrome":
+            runner_environment["PLAYWRIGHT_REMOTE_WS_ENDPOINT"] = "ws://127.0.0.1:9222/"
         for key in ("NO_PROXY", "no_proxy"):
             runner_environment[key] = ",".join(filter(None, (npm_environment.get(key), "localhost,127.0.0.1", self.app_name, self.name)))
         if ca:
@@ -252,6 +259,11 @@ class PlaywrightRunner:
         digest = hashlib.sha256(json.dumps([local_paths, self.package_directories, npmrc, ca, runner_environment], sort_keys=True).encode()).hexdigest()
         self.directory = self.project / ".cache/playwright" / digest
         self.directory.mkdir(parents=True, exist_ok=True)
+        if self.browser == "local-chrome":
+            spec = importlib.util.spec_from_file_location("suitecontainer_playwright_ssh", Path(__file__).with_name("playwright_ssh.py"))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            module.prepare_ssh(self.directory / "ssh")
         self.write_private(self.directory / "npmrc", npmrc)
         if ca:
             self.write_private(self.directory / "ca.pem", ca)
@@ -298,6 +310,9 @@ class PlaywrightRunner:
             mounts += ["--mount", f"type=volume,src={volume},dst=/workspace/{directory}/node_modules"]
         if (self.directory / "ca.pem").is_file():
             mounts += ["--mount", f"type=bind,src={self.directory / 'ca.pem'},dst={RUNTIME}/ca.pem,ro=true"]
+        if self.browser == "local-chrome":
+            mounts += ["--mount", f"type=bind,src={self.directory / 'ssh'},dst={RUNTIME}/ssh,ro=true",
+                       "--publish", "127.0.0.1::2222"]
         if self.info:
             if self.info.get("State", {}).get("Running"):
                 self.podman("stop", self.name, capture=True)
@@ -306,3 +321,5 @@ class PlaywrightRunner:
         self.podman("run", "-d", "--name", self.name, "--network", self.network,
                     "--label", f"{self.owner}={self.project}", "--label", f"{CONFIG_LABEL}={self.fingerprint}",
                     "--cgroups=disabled", "--init", "--shm-size=1g", "--env-file", self.directory / "runner.env", *mounts, IMAGE, capture=True)
+        if self.browser == "local-chrome":
+            print("For local Chrome, start the laptop Playwright server and SSH forward described in PLAYWRIGHT.md.", flush=True)

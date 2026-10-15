@@ -32,6 +32,7 @@
     "playwright": {
         "enabled": false,
         "project": "",
+        "browser": "container",
         "testFile": "",
         "workers": 1
     }
