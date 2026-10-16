@@ -25,7 +25,7 @@ def discover_package_directories(checkouts, configured_project):
     """Find dependency mounts without following links outside registered checkouts."""
     if not configured_project:
         return []
-    packages = {configured_project}
+    packages = set()
     excluded = {".git", "node_modules", ".cache", ".pnpm-store"}
 
     def linked(path):
@@ -36,8 +36,10 @@ def discover_package_directories(checkouts, configured_project):
 
     for directory, checkout in checkouts:
         checkout = Path(checkout)
-        if linked(checkout) or not checkout.is_dir():
+        if linked(checkout) or not checkout.is_dir() or not (checkout / ".git").exists():
             continue
+        if PurePosixPath(configured_project).parts[0] == directory:
+            packages.add(configured_project)
         boundary = checkout.resolve()
         for current, children, files in os.walk(checkout, topdown=True, followlinks=False, onerror=unreadable):
             current = Path(current)
