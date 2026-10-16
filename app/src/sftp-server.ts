@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createConnection } from "node:net";
-import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Auth } from "./step-auth.ts";
 import { hostPath, type MountRecord } from "./web-mounts.ts";
@@ -50,8 +50,6 @@ export class SftpService {
         if (ssh.error) throw new Error(ssh.error);
         if (!ssh.identities.length || !ssh.identities.some(file => existsSync(file.path)))
             throw new Error("No SSH private key was found for this host scrumbox. Check laptop SSH access and relaunch SuiteContainer.");
-        if (!ssh.knownHosts.length || !ssh.knownHosts.every(file => existsSync(file.path)))
-            throw new Error("No SSH trust file was found for this host scrumbox. Connect to it from your laptop, verify its host key, then relaunch SuiteContainer.");
         if (!/^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(scrumboxHost)) throw new Error("Set Current VM before starting the SFTP tunnel.");
         const generation = ++this.generation;
         this.state = "starting"; this.tunnelState = "starting"; this.error = "";
@@ -102,24 +100,29 @@ export class SftpService {
                 } finally { privateKey.fill(0); }
             }
             if (!loaded) throw new Error("The detected SSH keys need a passphrase, laptop agent, or hardware device. That authentication is not supported inside SuiteContainer yet.");
+            const trustDirectory = join(this.credentials, "sftp");
+            const knownHosts = join(trustDirectory, "known_hosts");
+            mkdirSync(trustDirectory, { recursive: true });
+            closeSync(openSync(knownHosts, "a", 0o600));
             const options = ssh.certificates.flatMap(file => ["-o", `CertificateFile=${file.path}`]);
             if (ssh.hostKeyAlias) options.push("-o", `HostKeyAlias=${ssh.hostKeyAlias}`);
-            const tunnel = spawn("ssh", ["-F", "/dev/null", "-N", "-T", "-v", "-o", "BatchMode=yes",
-                "-o", "IdentityFile=none", "-o", `IdentityAgent=${agentSocket}`, "-o", "StrictHostKeyChecking=yes",
-                "-o", `UserKnownHostsFile=${ssh.knownHosts.map(file => file.path).join(" ")}`, "-o", "GlobalKnownHostsFile=/dev/null",
+            const tunnelArgs = ["-F", "/dev/null", "-N", "-T", "-v", "-o", "BatchMode=yes",
+                "-o", "IdentityFile=none", "-o", `IdentityAgent=${agentSocket}`, "-o", "StrictHostKeyChecking=accept-new",
+                "-o", `UserKnownHostsFile=${knownHosts}`, "-o", "GlobalKnownHostsFile=/dev/null",
                 "-o", "ExitOnForwardFailure=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30",
                 "-o", "ServerAliveCountMax=3", ...options, "-p", String(ssh.port), "-l", ssh.user,
-                "-R", `127.0.0.1:${auth.sftp.port}:127.0.0.1:8000`, ssh.hostname],
-                { stdio: ["ignore", "ignore", "pipe"] });
-            this.tunnel = tunnel;
-            let stderr = "";
-            const failure = () => /Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/.test(stderr)
-                ? "The deployment scrumbox SSH host key is not trusted. Verify it on your laptop and relaunch SuiteContainer."
-                : /Permission denied/.test(stderr) ? "The detected SSH keys cannot log in to the deployment scrumbox. Check laptop SSH access and retry."
-                : /remote port forwarding failed/.test(stderr) ? "The deployment scrumbox port is already in use or SSH forwarding is denied. Stop the existing tunnel or choose another port."
-                : "Cannot connect the SFTP tunnel. Check deployment scrumbox access and retry.";
-            await new Promise<void>((resolveReady, reject) => {
+                "-R", `127.0.0.1:${auth.sftp.port}:127.0.0.1:8000`, ssh.hostname];
+            const changedKeyMessage = "The deployment scrumbox SSH host key changed.";
+            const connectTunnel = () => new Promise<void>((resolveReady, reject) => {
+                const tunnel = spawn("ssh", tunnelArgs, { stdio: ["ignore", "ignore", "pipe"] });
+                this.tunnel = tunnel;
+                let stderr = "";
                 let confirmed = false;
+                const failure = () => /Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/.test(stderr)
+                    ? changedKeyMessage
+                    : /Permission denied/.test(stderr) ? "The detected SSH keys cannot log in to the deployment scrumbox. Check laptop SSH access and retry."
+                    : /remote port forwarding failed/.test(stderr) ? "The deployment scrumbox port is already in use or SSH forwarding is denied. Stop the existing tunnel or choose another port."
+                    : "Cannot connect the SFTP tunnel. Check deployment scrumbox access and retry.";
                 const timer = setTimeout(() => reject(new Error("The SSH tunnel did not become ready. Check deployment scrumbox access and retry.")), 20_000);
                 const rejectStart = (message: string) => { clearTimeout(timer); if (!confirmed) reject(new Error(message)); else if (this.tunnel === tunnel) this.fail(message); };
                 tunnel.on("error", () => rejectStart("SSH could not start inside SuiteContainer."));
@@ -129,6 +132,18 @@ export class SftpService {
                     if (!confirmed && stderr.includes("remote forward success")) { confirmed = true; clearTimeout(timer); resolveReady(); }
                 });
             });
+            try {
+                await connectTunnel();
+            } catch (error) {
+                if (!(error instanceof Error) || error.message !== changedKeyMessage) throw error;
+                ensureCurrent();
+                this.tunnel = undefined;
+                const host = ssh.hostKeyAlias || (ssh.port === 22 ? ssh.hostname : `[${ssh.hostname}]:${ssh.port}`);
+                const removed = spawnSync("ssh-keygen", ["-R", host, "-f", knownHosts], { stdio: "ignore", timeout: 5000 });
+                if (removed.error || removed.status !== 0)
+                    throw new Error("The saved scrumbox SSH host key could not be replaced.");
+                await connectTunnel();
+            }
             ensureCurrent();
             this.state = "running"; this.tunnelState = "running";
             const hostKey = this.status(auth).hostKey;

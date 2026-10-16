@@ -126,7 +126,7 @@ SFTP uses the first target in `vms`. Open **SFTP**, enter a username and passwor
 
 The SFTP server runs inside SuiteContainer. An SSH tunnel forwards the configured port on the deployment scrumbox's loopback address to this server. Leave the local folder field blank to share `sftp-files` beside `repos`, or enter an absolute path to another folder. File access is read-only. Changing the folder requires stopping the app and relaunching it to refresh its mounts.
 
-The launcher detects the host's SSH settings for `nsbuild@vms[0].url` and mounts the available key and trust files read-only. At least one SSH key must work without a passphrase. Host SSH agents, hardware keys, jump hosts, and proxy commands are not supported in this mode. After changing SSH configuration or Current VM, stop the app and relaunch it to refresh the detected settings.
+The launcher detects the host's SSH settings for `nsbuild@vms[0].url` and mounts the available key files read-only. For local file sharing, SuiteContainer saves the scrumbox SSH host key in `credentials/sftp/known_hosts`. If that key changes, SuiteContainer replaces its saved entry and retries the tunnel once. This automatic replacement is intended for controlled environments where scrumboxes are periodically redeployed. At least one SSH key must work without a passphrase. Host SSH agents, hardware keys, jump hosts, and proxy commands are not supported in this mode. After changing SSH configuration or Current VM, stop the app and relaunch it to refresh the detected settings.
 
 Keep the computer and SuiteContainer running while NetSuite uses the shared files. **Stop SFTP** closes both the local server and its tunnel. Stop SFTP before changing its settings.
 
