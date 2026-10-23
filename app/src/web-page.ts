@@ -20,7 +20,7 @@ export const deploymentPage = {
 <body><main class="container" x-data="deployment" x-cloak>
 <div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select"><select id="brand-theme-select" aria-label="Appearance" @change="changebrand_theme_select"><option value="default">Default</option><option value="netsuite-2026" selected>NetSuite 2026</option><option value="oracle-corporate-2026">Oracle Corporate 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"></label><button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></div>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
-<header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Complete setup once, then deploy SuiteApps or open a tool below.</p></hgroup></header>
+<header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your scrumbox address, complete your credentials, then deploy your SuiteApps.</p></hgroup></header>
 <nav class="section-nav" aria-label="Jump to a section" @click="jumpsection"><span>Jump to</span><a href="#credentials-section">Setup</a><a href="#suiteapps-section">SuiteApps</a><a href="#deployment-section">Deploy</a><a href="#sql-section">SQL</a><a href="#sftp-section">SFTP</a></nav>
 
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
