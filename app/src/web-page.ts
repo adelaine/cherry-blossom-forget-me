@@ -91,7 +91,7 @@ button{--pico-border-radius:2rem;--pico-font-weight:500}
 .brand-theme-picker select{margin:0}
 .theme-toggle{display:flex;align-items:center;gap:0.5rem;width:fit-content;margin:0 0 0.6rem;font-family:system-ui,"Segoe UI",sans-serif,var(--pico-font-family-emoji)}
 .theme-toggle input{margin:0}
-.section-nav{display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:0.5rem 1.5rem;padding-block:0.75rem;margin-block:1.5rem;border-block:1px solid var(--pico-muted-border-color)}
+.section-nav{position:sticky;top:0;z-index:10;background:var(--pico-background-color);display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:0.5rem 1.5rem;margin-block:1.5rem;padding:0 2rem}
 .section-nav>span{font-size:0.85rem;color:var(--pico-muted-color)}
 .section-nav>a{padding:0.25rem;text-decoration:none}
 :is(section,article,details)[id]{scroll-margin-top:1rem}
@@ -126,7 +126,7 @@ details>summary{--pico-primary:light-dark(#876400,#c79400);--pico-accordion-clos
 details>summary::after{display:none}
 details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
 details[open]>summary::before{transform:rotate(90deg)}
-@media(min-width:768px){.tool-sections:not(:has(.setup-section[open])){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.tool-sections>article{min-width:0}.tool-sections:not(:has(.setup-section[open]))>article{margin:0}}
+@media(min-width:768px){.tool-sections:not(:has(.setup-section[open])){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.tool-sections>article{min-width:0;margin-top:0}.tool-sections:not(:has(.setup-section[open]))>article{margin:0}}
 .setup-section{margin-bottom:0}
 .setup-section>summary h2{margin:0}
 .setup-section[open]>summary{margin-bottom:1.5rem}
@@ -183,6 +183,7 @@ document.addEventListener('alpine:init', () => {
         event.preventDefault();
         if (target.tagName === 'DETAILS') target.open = true;
         if (target.id === 'credentials-section') document.getElementById('vm-section').open = true;
+        target.style.scrollMarginTop = 'calc(' + event.currentTarget.offsetHeight + 'px + 1rem)';
         target.scrollIntoView({block:'start'});
       },
       // Pico styles semantic elements. Alpine owns control availability and status.
