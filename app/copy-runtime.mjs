@@ -36,4 +36,5 @@ copyFileSync(join(appDirectory, "src/themes/oracle-cover-dark.jpg"), join(output
 copyFileSync(join(appDirectory, "src/themes/oracle-cover-light.jpg"), join(outputDirectory, "assets/oracle-cover-light.jpg"));
 cpSync(join(appDirectory, "src/assets/fonts"), join(outputDirectory, "assets/fonts"), { recursive: true });
 copyFileSync(join(appDirectory, "src/assets/favicon.png"), join(outputDirectory, "assets/favicon.png"));
+copyFileSync(join(appDirectory, "src/assets/advanced-configuration.png"), join(outputDirectory, "assets/advanced-configuration.png"));
 writeFileSync(join(outputDirectory, "package.json"), JSON.stringify({ type: "module" }) + "\n");

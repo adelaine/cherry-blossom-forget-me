@@ -221,6 +221,11 @@ export function startWebServer(options: {
         c.header("Content-Type", "image/png");
         return c.body(new Uint8Array(favicon));
     });
+    const configurationArt = readFileSync(new URL("./assets/advanced-configuration.png", import.meta.url));
+    app.get("/advanced-configuration.png", c => {
+        c.header("Content-Type", "image/png");
+        return c.body(new Uint8Array(configurationArt));
+    });
     for (const [name, contentType] of [
         ["oracle-cover-dark.jpg", "image/jpeg"], ["oracle-cover-light.jpg", "image/jpeg"],
         ["netsuite-divider-dark.jpg", "image/jpeg"],
