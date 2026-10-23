@@ -16,23 +16,29 @@ const lightTheme = `
 
 export const deploymentPage = {
     html: `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><link id="brand-theme-stylesheet" rel="stylesheet" href="/themes/oracle-corporate-2026.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><link id="brand-theme-stylesheet" rel="stylesheet" href="/themes/netsuite-2026.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
-<div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select"><select id="brand-theme-select" @change="changebrand_theme_select"><option value="default">Default</option><option value="oracle-corporate-2026" selected>Oracle Corporate 2026</option><option value="netsuite-2026">NetSuite 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"><span aria-hidden="true">☾</span></label></div>
+<div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select"><select id="brand-theme-select" aria-label="Appearance" @change="changebrand_theme_select"><option value="default">Default</option><option value="netsuite-2026" selected>NetSuite 2026</option><option value="oracle-corporate-2026">Oracle Corporate 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"></label><button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></div>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
 <header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your scrumbox address, complete your credentials, then deploy your SuiteApps.</p></hgroup></header>
+<nav class="section-nav" aria-label="Jump to a section" @click="jumpsection"><span>Jump to</span><a href="#credentials-section">Setup</a><a href="#suiteapps-section">SuiteApps</a><a href="#deployment-section">Deploy</a><a href="#sql-section">SQL</a><a href="#sftp-section">SFTP</a></nav>
+
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
 <div class="setup-sections">
-<article><details class="setup-section" id="credentials-section" open><summary><h2>Credentials</h2></summary><ol class="credential-steps" role="list"><li><h3>GitLab token</h3><blockquote class="status-message" id="token-state" x-text="view.token_state.text"></blockquote><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></li>
-<li><h3>Certificate paths</h3><details id="cert-details"><summary>View file paths</summary><p>Changing paths requires relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
+<section id="credentials-section" aria-labelledby="setup-heading"><h2 id="setup-heading">Setup</h2><article class="credentials-card"><ol class="credential-steps" role="list">
+<li><details class="setup-section" id="vm-section" open><summary><span>VM<small>Choose your scrumbox</small></span></summary><div class="grid"><div><label for="vm">Current VM (scrumbox domain)</label><input id="vm" aria-describedby="vm-help" placeholder="your-scrumbox.vm.eng.netsuite.com" :disabled="view.vm.disabled" @input="inputvm"></div><div><label for="vm-account">NetSuite account ID</label><input id="vm-account" spellcheck="false" :disabled="view.vm_account.disabled" @input="inputvm_account"></div></div><p id="vm-help"><small>Enter only the domain, without <code>https://</code>. SQL and SFTP use the first configured VM.</small></p></details></li>
+<li><details class="setup-section" id="certificates-section"><summary><span>Certificates<small>Generate, register, and save your certificate ID</small></span></summary><details id="cert-details"><summary>View certificate paths</summary><p>If you have existing certificates, you may override the generated certificates. Changing paths requires relaunching.</p><label for="public">Public certificate path</label><input id="public" :disabled="view.public.disabled" @input="inputpublic"><label for="private">Private key path</label><input id="private" :disabled="view.private.disabled" @input="inputprivate"></details>
 <fieldset class="grid" aria-label="Certificate actions"><button class="secondary outline" id="generate" :disabled="view.generate.disabled" @click="clickgenerate">Generate new certificates</button>
 <button class="secondary" id="download" hidden :hidden="view.download.hidden" :disabled="view.download.disabled" @click="clickdownload">Download public certificate</button></fieldset>
-<p id="cert-message" x-text="view.cert_message.text"></p><div id="registration"><p>Register the public certificate on your scrumbox: open <strong>Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup</strong>, select SuiteCloud Development Integration and the appropriate entity and role, and upload <strong>public.pem</strong>. Paste the certificate ID generated by NetSuite below.</p><p><a id="scrumbox-link" hidden target="_blank" rel="noopener noreferrer" :hidden="view.scrumbox_link.hidden">Open scrumbox</a> <a href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0422011927.html" target="_blank" rel="noopener noreferrer">NetSuite setup guide</a></p></div>
-</li><li><h3>Current VM</h3><label for="vm">Current VM (scrumbox domain)</label><input id="vm" aria-describedby="vm-help" placeholder="your-scrumbox.vm.eng.netsuite.com" :disabled="view.vm.disabled" @input="inputvm"><p id="vm-help"><small>Enter only the domain, without <code>https://</code>. Click Save credentials to update settings.</small></p>
-<label for="id">Certificate ID assigned by NetSuite</label><input id="id" :disabled="view.id.disabled" @input="inputid"><p><small>This is the ID given by NetSuite when you uploaded the certificate.</small></p></li></ol><fieldset><button id="credentials" :disabled="view.credentials.disabled" @click="clickcredentials">Save credentials</button></fieldset><p id="credential-message" role="status" x-text="view.credential_message.text"></p></details></article>
-<article><details class="setup-section" id="settings-section" open><summary><h2>Settings</h2></summary><p>Check the settings below. Additional scrumboxes may be entered under <code>vms</code>. SQL and SFTP use settings from the first entry.</p>
+<p id="cert-message" x-text="view.cert_message.text"></p><div id="registration"><p>Register the public certificate on your scrumbox:</p><ol><li>Open <strong>Setup → Integration → Manage Authentication → OAuth 2.0 Client Credentials (M2M) Setup</strong>.</li><li>Select <strong>SuiteCloud Development Integration</strong> and the appropriate entity and role.</li><li>Upload <strong>public.pem</strong>.</li><li>Paste the certificate ID generated by NetSuite below.</li><li>Enable <strong>Custom Records</strong>.</li></ol><nav class="quick-links" aria-label="Certificate setup links"><a href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0422011927.html" target="_blank" rel="noopener noreferrer">NetSuite Guide</a><span class="scrumbox-links" id="scrumbox-links" hidden :hidden="view.scrumbox_links.hidden"><span>Scrumbox:</span><a id="scrumbox-link" target="_blank" rel="noopener noreferrer">Devhome</a><a id="scrumbox-oauth-link" target="_blank" rel="noopener noreferrer">OAuth2.0 Client</a><a id="scrumbox-features-link" target="_blank" rel="noopener noreferrer">Enable Features</a></span></nav></div>
+<label for="id">Certificate ID assigned by NetSuite</label><input id="id" :disabled="view.id.disabled" @input="inputid"><p><small>This is the ID given by NetSuite when you uploaded the certificate.</small></p></details></li>
+<li><details class="setup-section" id="admindocs-section"><summary><span>AdminDocs<small>Configure Features and Preferences</small></span></summary><aside class="setup-hint" aria-labelledby="bank-connectivity-heading"><h3 id="bank-connectivity-heading">Bank Connectivity Testing</h3><ol><li>In <strong>Canary</strong>, enable <code>SUITE_SCRIPT_SFTP_ALLOW_INTERNAL_IPS</code>.</li><li>In <strong>AdminDocs &gt; Enable Features</strong>, set <q>Minimum amount of minutes required between successful FI Connectivity imports of the same Format Profile:</q> to <code>0</code>.</li></ol></aside><nav class="quick-links" aria-label="Bank Connectivity testing links"><span class="scrumbox-links" id="scrumbox-admin-links" hidden :hidden="view.scrumbox_admin_links.hidden"><span>Scrumbox:</span><a id="scrumbox-admin-devhome-link" target="_blank" rel="noopener noreferrer">Devhome</a><a id="scrumbox-admin-link" target="_blank" rel="noopener noreferrer">AdminDocs</a><a id="scrumbox-canary-link" target="_blank" rel="noopener noreferrer">Canary</a></span></nav></details></li>
+<li><details class="setup-section" id="token-section"><summary><span>GitLab token<small>Used to clone SuiteApps from GitLab</small></span></summary><blockquote class="status-message" id="token-state" x-text="view.token_state.text"></blockquote><button class="secondary outline" id="change-token" hidden :hidden="view.change_token.hidden" :disabled="view.change_token.disabled" @click="clickchange_token">Change GitLab token</button><div id="token-entry" :hidden="view.token_entry.hidden"><label for="token">GitLab token</label><input id="token" type="password" autocomplete="off" placeholder="Paste your token" :disabled="view.token.disabled" @input="inputtoken"></div></details></li>
+</ol><div class="credentials-footer"><fieldset><button id="credentials" :disabled="view.credentials.disabled" @click="clickcredentials">Save credentials</button></fieldset><p id="credential-message" role="status" x-text="view.credential_message.text"></p></div></article></section>
+<section id="suiteapps-section" aria-labelledby="suiteapps-heading"><h2 id="suiteapps-heading">SuiteApps</h2><article class="suiteapps-card"><div id="suiteapp-blocks"><template x-for="app in suiteapps" :key="app.index"><div class="suiteapp-block"><div class="suiteapp-fields"><label><span x-text="app.title"></span><input :aria-label="app.urlLabel" type="text" inputmode="url" spellcheck="false" autocomplete="off" placeholder="https://gitlab.eng.netsuite.com/team/suiteapp.git" :data-index="app.index" data-field="url" :value="app.url" :disabled="suiteappsDisabled" @input="inputsuiteapp"></label><label>Branch<input type="text" spellcheck="false" autocomplete="off" placeholder="Default branch" :data-index="app.index" data-field="branch" :value="app.branch" :disabled="suiteappsDisabled" @input="inputsuiteapp"></label><button type="button" class="suiteapp-remove secondary outline" :data-index="app.index" :aria-label="app.removeLabel" :title="app.removeLabel" :disabled="suiteappsDisabled" @click="removesuiteapp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></svg></button></div><small class="suiteapp-local" x-text="app.localNote"></small></div></template><p class="suiteapps-empty" x-show="suiteapps.length === 0">No SuiteApps added yet. Add one to get started.</p></div><div class="suiteapps-footer"><button type="button" class="secondary outline" id="add-suiteapp" disabled :disabled="view.add_suiteapp.disabled" @click="clickadd_suiteapp">+ Add SuiteApp</button><button type="button" id="save-suiteapps" disabled :disabled="view.save_suiteapps.disabled" @click="clicksave_suiteapps">Save SuiteApps</button></div><p id="suiteapps-message" role="status" x-text="view.suiteapps_message.text"></p></article>
+<article><details class="setup-section" id="settings-section"><summary><h2>Advanced configuration</h2></summary><div  class="advanced-configuration-art"><img src="/advanced-configuration.png" alt="Three dragon heads labeled Auto-Deploy, Supporting Tools, and Configuration, with a playful Configuration head." width="1158" height="1338" loading="lazy"></div><div class="advanced-configuration-intro"><p>Edit local checkout paths, custom directories, and other options here. Additional scrumboxes may be entered under <code>vms</code>. SQL and SFTP use settings from the first entry.</p></div>
 <label for="config">Configuration JSON</label><textarea id="config" spellcheck="false" rows="22" :disabled="view.config.disabled" @input="inputconfig"></textarea><fieldset><button id="save" :disabled="view.save.disabled" @click="clicksave">Save settings</button></fieldset><p id="settings-message" role="status" x-text="view.settings_message.text"></p></details></article>
-<article><details class="setup-section" id="sql-section"><summary><h2>SQL</h2></summary>
+</section><section aria-labelledby="tools-heading"><h2 id="tools-heading">Tools</h2><div class="tool-sections"><article><details class="setup-section" id="sql-section"><summary><h2>SQL queries</h2></summary>
 <div class="grid"><div><label for="sql-account">User</label><input id="sql-account" autocomplete="off" spellcheck="false" :disabled="view.sql_account.disabled" @input="inputsql_account"></div>
 <div><label for="sql-database">Service Name</label><input id="sql-database" autocomplete="off" spellcheck="false" :disabled="view.sql_database.disabled" @input="inputsql_database"></div></div>
 <div class="grid"><div><label for="sql-password">Password</label><input id="sql-password" type="password" autocomplete="off" :disabled="view.sql_password.disabled" @input="inputsql_password"></div>
@@ -40,7 +46,7 @@ export const deploymentPage = {
 <p>Enter SQL password, or answer the hint to use the default password. Entering one clears the other.</p><p id="sql-unlock-availability" hidden :hidden="view.sql_unlock_availability.hidden" x-text="view.sql_unlock_availability.text"></p>
 <label for="sql-statement">SQL statement</label><textarea id="sql-statement" rows="8" spellcheck="false" placeholder="SELECT * FROM your_table;" :disabled="view.sql_statement.disabled" @input="inputsql_statement"></textarea>
 <fieldset><button id="sql-run" disabled :disabled="view.sql_run.disabled" @click="clicksql_run">Run SQL</button></fieldset><p id="sql-message" role="status" x-text="view.sql_message.text"></p><pre id="sql-output" tabindex="0" aria-label="SQL results"></pre></details></article>
-<article><details class="setup-section" id="sftp-section"><summary><h2>SFTP</h2></summary>
+<article><details class="setup-section" id="sftp-section"><summary><h2>SFTP file sharing</h2></summary>
 <p id="sftp-description" x-text="view.sftp_description.text"></p>
 <fieldset class="grid" aria-label="SFTP actions"><button id="sftp-start" disabled :disabled="view.sftp_start.disabled" @click="clicksftp_start">Start SFTP</button><button id="sftp-stop" class="secondary outline" disabled :disabled="view.sftp_stop.disabled" @click="clicksftp_stop">Stop SFTP</button><button id="sftp-save" class="secondary" disabled :disabled="view.sftp_save.disabled" @click="clicksftp_save">Save settings</button></fieldset>
 <button id="sftp-recreate" hidden :hidden="view.sftp_recreate.hidden" :disabled="view.sftp_recreate.disabled" @click="clicksftp_recreate">Recreate SFTP</button>
@@ -65,9 +71,6 @@ export const deploymentPage = {
 <p id="sftp-copy-message" role="status" x-text="view.sftp_copy_message.text"></p>
 </details>
 </details></article>
-</div>
-<article><h2>Deployment</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset class="grid" aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy</button>
-<button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></fieldset><blockquote class="status-message" id="run-state" role="status" x-text="view.run_state.text">Loading…</blockquote><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
 <article><h2>Playwright tests</h2><p>Run your SuiteApp browser tests against Current VM. Configure test users and roles in your Playwright project.</p>
 <label for="playwright-enabled"><input id="playwright-enabled" type="checkbox" :disabled="view.playwright_enabled.disabled" @change="changeplaywright_enabled"> Enable test runner</label>
 <label for="playwright-project">Project directory inside repos</label><input id="playwright-project" spellcheck="false" placeholder="absi-nsn/test-pw" :disabled="view.playwright_project.disabled" @input="inputplaywright_project">
@@ -77,6 +80,8 @@ export const deploymentPage = {
 <p><small>Save settings and relaunch after enabling the runner or changing the project directory or browser. Leave Test file blank to run the configured project.</small></p>
 <fieldset class="grid" aria-label="Playwright actions"><button id="playwright-save" class="secondary" :disabled="view.playwright_save.disabled" @click="clickplaywright_save">Save test settings</button><button id="playwright-run" disabled :disabled="view.playwright_run.disabled" @click="clickplaywright_run">Run tests</button><button id="playwright-cancel" class="secondary outline" disabled :disabled="view.playwright_cancel.disabled" @click="clickplaywright_cancel">Stop tests</button></fieldset>
 <p id="playwright-message" role="status" x-text="view.playwright_message.text"></p><pre id="playwright-log" tabindex="0" aria-label="Playwright progress"></pre></article>
+</div></section></div>
+<article id="deployment-section"><h2>Deploy SuiteApps</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy SuiteApps</button></fieldset><blockquote class="status-message" id="run-state" role="status" x-text="view.run_state.text">Loading…</blockquote><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
 </main></body></html>`,
     style: `${ansiStyles}
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Light.ttf') format('truetype');font-style:normal;font-weight:300;font-display:swap}
@@ -91,30 +96,69 @@ h1,h2,h3,h4,h5,h6{--pico-font-weight:400}
 header>hgroup>h1::before{display:block;content:"";height:100px;width:100px;float:left;background-image:url(/favicon.png)}
 mark{--pico-mark-gradient:var(--suite-mark-gradient,linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05)));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
 button{--pico-border-radius:2rem;--pico-font-weight:500}
-.theme-controls{display:flex;align-items:flex-end;justify-content:flex-end;gap:1rem;flex-wrap:wrap}
+.theme-controls{display:flex;align-items:center;justify-content:flex-end;gap:1rem;flex-wrap:wrap}
+.theme-controls>button{margin:0}
 .brand-theme-picker{min-width:13rem;margin:0}
 .brand-theme-picker select{margin:0}
 .theme-toggle{display:flex;align-items:center;gap:0.5rem;width:fit-content;margin:0 0 0.6rem;font-family:system-ui,"Segoe UI",sans-serif,var(--pico-font-family-emoji)}
 .theme-toggle input{margin:0}
+.section-nav{position:sticky;top:0;z-index:10;background:var(--pico-background-color)}
+.section-nav,.quick-links{display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:0.5rem 1.5rem;margin-block:1.5rem;padding:0 2rem}
+.section-nav>span{font-size:0.85rem;color:var(--pico-muted-color)}
+.section-nav>a,.quick-links a{padding:0.25rem;text-decoration:none}
+.scrumbox-links{display:flex;align-items:center;flex-wrap:wrap;gap:0.25rem 0.75rem;min-width:0}
+.scrumbox-links>a{white-space:nowrap}
+.scrumbox-links>a~a{border-inline-start:1px solid var(--pico-muted-color);padding-inline-start:0.75rem}
+:is(section,article,details)[id]{scroll-margin-top:1rem}
 article{margin:2rem auto;padding:1.5rem}
+.setup-sections>section{margin-block:2rem}
+.setup-sections>section>h2{margin-bottom:1rem}
+.credentials-card,.suiteapps-card{padding:0;margin-top:0;overflow:hidden}
 .credential-steps{list-style:none;padding:0;counter-reset:credential-step}
-.credential-steps>li{position:relative;counter-increment:credential-step;padding-inline-start:3rem;padding-block-end:1.5rem}
-.credential-steps>li::before{content:counter(credential-step);position:absolute;inset-inline-start:0;inset-block-start:0;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;background:var(--pico-secondary-background);color:var(--pico-secondary-inverse);font-weight:500}
-.credential-steps>li:not(:last-child)::after{content:"";position:absolute;inset-inline-start:1rem;inset-block:2.25rem 0.25rem;width:0;border-inline-start:1px solid var(--pico-secondary-border)}
-.credential-steps>li p:has(>small){margin-top:-1rem;margin-bottom:2rem;}
+.credential-steps{margin:0}
+.credential-steps>li{position:relative;counter-increment:credential-step;padding:1.25rem 1.5rem 1.25rem 4.5rem;margin:0;border-bottom:1px solid var(--pico-muted-border-color)}
+.credential-steps>li::before{content:counter(credential-step);position:absolute;inset-inline-start:1.25rem;inset-block-start:1.1rem;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;background:var(--pico-secondary-background);color:var(--pico-secondary-inverse);font-weight:500}
+.credential-steps>li::after{display:none}
+.credential-steps summary small{display:block;margin-top:0.25rem;color:var(--pico-muted-color);font-size:0.8rem;font-weight:300}
+.setup-hint{padding:1rem;border-inline-start:3px solid var(--pico-primary);background-color:color-mix(in srgb,var(--pico-primary) 8%,var(--pico-card-background-color));border-radius:0 var(--pico-border-radius) var(--pico-border-radius) 0;margin-bottom:var(--pico-spacing)}
+.setup-hint h3{font-size:1rem;margin:0 0 0.75rem}
+.setup-hint ol{margin-bottom:0;padding-inline-start:1.25rem}
+.setup-hint li{display:list-item;padding:0}
+.setup-hint li+li{margin-top:0.75rem}
+.setup-hint code{overflow-wrap:anywhere;word-break:break-word}
+.credentials-footer,.suiteapps-footer{padding:1.25rem 1.5rem}
+.credentials-footer fieldset{margin:0}
+.suiteapp-block{padding:1.5rem;border-bottom:1px solid var(--pico-muted-border-color)}
+.suiteapps-footer{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.suiteapp-fields{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) 2.75rem;align-items:end;gap:1.25rem}
+.suiteapp-fields label{min-width:0;margin-bottom:0}
+.suiteapp-fields input{margin-bottom:0}
+.suiteapp-remove{display:inline-flex;align-items:center;justify-content:center;width:2.75rem;height:3.25rem;padding:0;margin:0;border:0;border-radius:0.25rem;box-shadow:none;color:var(--pico-secondary);background:transparent}
+.suiteapp-remove svg{width:1.25rem;height:1.25rem;pointer-events:none}
+.suiteapp-remove:enabled:hover{color:var(--pico-del-color);background:color-mix(in srgb,var(--pico-del-color) 10%,transparent)}
+.suiteapp-remove:focus-visible{outline:2px solid var(--pico-primary);outline-offset:2px}
+.suiteapp-local{display:block;margin-top:0.5rem;color:var(--pico-muted-color);overflow-wrap:anywhere}
+.suiteapp-local:empty{display:none}
+.suiteapps-empty{padding:1.5rem;margin:0;color:var(--pico-muted-color)}
+.suiteapps-footer button{margin:0}
+#suiteapps-message{padding:0 1.5rem 1.25rem}
 details>summary{--pico-primary:light-dark(#876400,#c79400);--pico-accordion-close-summary-color:var(--pico-primary);--pico-accordion-open-summary-color:var(--pico-primary);--pico-accordion-active-summary-color:var(--pico-primary);display:flex;align-items:center;gap:0.75rem;font-weight:500}
 details>summary::after{display:none}
 details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
 details[open]>summary::before{transform:rotate(90deg)}
-@media(min-width:768px){
-.setup-sections:not(:has(>article>.setup-section[open])){display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;margin-block:2rem}
-.setup-sections:not(:has(>article>.setup-section[open]))>article{margin:0;padding:1.5rem;min-width:0}
-}
+@media(min-width:768px){.tool-sections:not(:has(.setup-section[open])){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.tool-sections>article{min-width:0;margin-top:0}.tool-sections:not(:has(.setup-section[open]))>article{margin:0}}
 .setup-section{margin-bottom:0}
 .setup-section>summary h2{margin:0}
 .setup-section[open]>summary{margin-bottom:1.5rem}
+#settings-section{position:relative}
+.advanced-configuration-art{display:none;height:auto}
+#settings-section[open]>.advanced-configuration-art{display:block;position:absolute;inset-block-start:-0.5rem;inset-inline-end:0;width:14rem;max-width:100%;overflow:hidden;max-height:10rem}
+#settings-section[open]>summary{padding-inline-end:16rem}
+.advanced-configuration-intro{padding-inline-end:16rem;}
+@media(max-width:575px){#settings-section[open]>summary{padding-inline-end:0}#settings-section[open]>.advanced-configuration-art{position:static;width:14rem;margin:0 auto 1.5rem}.advanced-configuration-intro{padding-inline-end:0;min-height:0}}
 :is(input:not([type="checkbox"]),textarea):enabled{background-color:light-dark(#fff,#111)}
-@media(max-width:575px){article{padding:1rem}.credential-steps>li{padding-inline-start:2.5rem}}
+@media(max-width:575px){article{padding:1rem}.credentials-card,.suiteapps-card{padding:0}.credential-steps>li{padding:1rem}.credential-steps>li::before{inset-inline-start:1rem;inset-block-start:0.9rem}.credential-steps .setup-section>summary{padding-inline-start:3rem}.suiteapp-fields{grid-template-columns:minmax(0,1fr) 2.75rem;gap:0.75rem}.suiteapp-fields>label:first-child{grid-column:1/-1}.suiteapp-block,.suiteapps-footer,.credentials-footer{padding:1rem}.theme-controls{gap:0.75rem}.brand-theme-picker{min-width:0;flex:1 1 12rem}mark{font-size:1.8rem}header>hgroup>h1::before{width:3.5rem;height:3.5rem;background-size:contain}.section-nav,.quick-links{gap:0.5rem 1rem}}
+@media(pointer:coarse){.section-nav>a,.quick-links a,.suiteapp-remove{min-height:44px;display:inline-flex;align-items:center}}
 [x-cloak],[hidden]{display:none!important}
 main :is(p,blockquote):empty{display:none}
 .status-message{--pico-primary:light-dark(#9236a4,#cd68e0);color:var(--pico-primary)}
@@ -131,7 +175,7 @@ textarea{font-family:var(--pico-font-family-monospace)}
 .sftp-connection-port{grid-column:2;grid-row:3}
 .sftp-connection-password{grid-column:1;grid-row:3}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;max-height:32rem;overflow:auto;line-height:1.55;background-color:light-dark(#f0eee8,#000);color:light-dark(#343d48,#c8cdd6);color-scheme:inherit;border:1px solid light-dark(#d7d5cf,transparent)}
-pre#log{min-height:24rem;}
+pre#log{min-height:4rem;}
 pre :is(.ansi-fg-2,.ansi-fg-10){color:light-dark(#008447,#38d98a)}
 pre :is(.ansi-fg-3,.ansi-fg-11){color:light-dark(#946200,#f1ca53)}
 pre :is(.ansi-fg-4,.ansi-fg-12){color:light-dark(#1b65c9,#69a9ff)}
@@ -146,6 +190,21 @@ document.addEventListener('alpine:init', () => {
     const handlers = {};
     const listen = (id, event, handler) => { handlers[event + id.replaceAll('-', '_')] = handler; };
     return {
+      suiteapps: [],
+      suiteappsDisabled: true,
+      inputsuiteapp(event) { handlers.inputsuiteapp(event); },
+      removesuiteapp(event) { handlers.clicksuiteapp(event); },
+      jumpsection(event) {
+        const link = event.target.closest('a');
+        if (!link) return;
+        const target = document.getElementById(link.hash.slice(1));
+        if (!target) return;
+        event.preventDefault();
+        if (target.tagName === 'DETAILS') target.open = true;
+        if (target.id === 'credentials-section') document.getElementById('vm-section').open = true;
+        target.style.scrollMarginTop = 'calc(' + event.currentTarget.offsetHeight + 'px + 1rem)';
+        target.scrollIntoView({block:'start'});
+      },
       // Pico styles semantic elements. Alpine owns control availability and status.
       view: Object.fromEntries([...document.querySelectorAll('main [id]')].map(element => [
         element.id.replaceAll('-', '_'),
@@ -153,13 +212,14 @@ document.addEventListener('alpine:init', () => {
       ])),
       ...Object.fromEntries([
         ['change', 'theme-toggle'],['change', 'brand-theme-select'],['change', 'playwright-enabled'],['change', 'playwright-browser'],
-        ...['config','vm','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path','playwright-project','playwright-file','playwright-workers'].map(id => ['input', id]),
-        ...['sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','sftp-recreate','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port','playwright-save','playwright-run','playwright-cancel'].map(id => ['click', id]),
+        ...['config','vm','vm-account','public','private','id','token','sql-account','sql-database','sql-password','sql-unlock','sql-statement','sftp-user','sftp-port','sftp-password','sftp-path','playwright-project','playwright-file','playwright-workers'].map(id => ['input', id]),
+        ...['add-suiteapp','save-suiteapps','sql-run','change-token','save','credentials','generate','deploy','download','stop','sftp-start','sftp-stop','sftp-save','sftp-recreate','copy-sftp-url','copy-sftp-key','copy-sftp-user','copy-sftp-port','playwright-save','playwright-run','playwright-cancel'].map(id => ['click', id]),
       ].map(([event, id]) => {
         const name = event + id.replaceAll('-', '_');
         return [name, () => handlers[name]()];
       })),
       init() {
+        const component = this;
         const view = this.view;
         const $ = id => document.getElementById(id);
         const fragment = new URLSearchParams(location.hash.slice(1));
@@ -168,7 +228,7 @@ document.addEventListener('alpine:init', () => {
         history.replaceState(null, '', location.pathname);
         let sectionsInitialized = false, lastDeploymentStarted;
         const collapseSetupSections = () => {
-          for (const id of ['credentials-section','settings-section','sql-section','sftp-section']) $(id).open = false;
+          for (const id of ['vm-section','certificates-section','admindocs-section','token-section','settings-section','sql-section','sftp-section']) $(id).open = false;
         };
         let state, editing = false, stopped = false, checking, credentialEditing = false, changingToken = false, sqlSubmitting = false, sqlDefaultsApplied = false, sqlDefaultsHost, sqlAccountEdited = false, sqlDatabaseEdited = false, sqlRequestError = '';
         let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false, actionError = '';
@@ -176,14 +236,15 @@ document.addEventListener('alpine:init', () => {
         let sftpEditing = false, sftpSubmitting = false, sftpRequestError = '', sftpNotice = '';
         let sftpProbeTarget = '', sftpProbePending = false;
         let playwrightEditing = false, playwrightSubmitting = false, playwrightError = '';
+        let suiteappsText, suiteappsError = false;
         const systemTheme = matchMedia('(prefers-color-scheme: dark)');
         const brandTheme = sessionStorage.getItem('suitecontainer-brand-theme');
         if (brandTheme === 'default') {
           $('brand-theme-select').value = brandTheme;
           $('brand-theme-stylesheet').media = 'not all';
-        } else if (brandTheme === 'netsuite-2026') {
+        } else if (brandTheme === 'netsuite-2026' || brandTheme === 'oracle-corporate-2026') {
           $('brand-theme-select').value = brandTheme;
-          $('brand-theme-stylesheet').href = '/themes/netsuite-2026.css';
+          $('brand-theme-stylesheet').href = '/themes/' + brandTheme + '.css';
         }
         function applyTheme(theme) {
           if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
@@ -196,6 +257,7 @@ document.addEventListener('alpine:init', () => {
         function connectionLost() {
           if (stopped) return;
           connectionFailed = true;
+          component.suiteappsDisabled = true;
           view.connection_error.text = connectionMessage;
           view.connection_error.hidden = false;
           for (const control of document.querySelectorAll('button,input,textarea')) if (control.id) view[control.id.replaceAll('-', '_')].disabled = true;
@@ -232,8 +294,9 @@ document.addEventListener('alpine:init', () => {
           }
           if (!editing) $('config').value = next.config;
           const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting || next.playwright?.state === 'running' || playwrightSubmitting;
+          renderSuiteapps(busy);
           if (!credentialEditing) for (const key of ['public','private','id']) $(key).value = next.certificates[key] || '';
-          view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token is found. SuiteContainer may still be used if you have a local copy of the container image and local copies of SuiteApps.';
+          view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token found. SuiteContainer may still be used if you have local copies of SuiteApps.';
           view.token_entry.hidden = next.tokenPresent && !changingToken;
           view.change_token.hidden = !next.tokenPresent || changingToken;
           view.generate.disabled = busy;
@@ -244,17 +307,25 @@ document.addEventListener('alpine:init', () => {
             ? next.playwright?.state === 'running' || playwrightSubmitting ? 'Playwright tests are running. Stop the tests or wait for them to finish before deploying or changing settings.' : next.sql?.preparing ? 'Unlocking the saved SQL password. Please wait.' : next.sql?.state === 'running' || sqlSubmitting ? 'SQL is running. Wait for it to finish before deploying or changing settings.' : 'Deployment is running. Wait for it to finish before changing settings or credentials.'
             : next.relaunch ? 'Relaunch required. Save your changes, stop this app, and start the launcher again.' : next.error || (credentialEditing ? 'Save your credential changes before deploying.' : editing ? 'Settings are ready.' : 'Ready to deploy.'));
           view.deploy.disabled = !next.ready || credentialEditing || busy;
-          for (const key of ['save','credentials','stop','public','private','id','token','config','vm','change-token']) view[key.replaceAll('-', '_')].disabled = busy;
+          for (const key of ['save','credentials','stop','public','private','id','token','config','vm','vm-account','change-token']) view[key.replaceAll('-', '_')].disabled = busy;
           view.stop.disabled = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
           view.run_state.text = ({idle:'No deployment started.',running:'Deployment in progress…',succeeded:'Deployment completed.',failed:'Deployment failed. Review the message below, correct settings or credentials, and retry.'})[next.run.state];
           const log = $('log'); const bottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
           log.innerHTML = ansiToHtml(next.run.log);
           applyAnsiColors(log);
           if (bottom) log.scrollTop = log.scrollHeight;
-          try { $('vm').value = JSON.parse($('config').value).vms?.[0]?.url || ''; } catch { /* Keep the Current VM value until the JSON is valid. */ }
+          try { const vm = JSON.parse($('config').value).vms?.[0]; $('vm').value = vm?.url || ''; $('vm-account').value = vm?.account || ''; } catch { /* Keep the VM fields until the JSON is valid. */ }
           const host = currentVmHost();
-          view.scrumbox_link.hidden = !host;
-          if (host) $('scrumbox-link').href = 'https://' + host + '/devhome';
+          view.scrumbox_links.hidden = !host;
+          view.scrumbox_admin_links.hidden = !host;
+          if (host) for (const [id, path] of [
+            ['scrumbox-link','/devhome'],
+            ['scrumbox-admin-devhome-link','/devhome'],
+            ['scrumbox-admin-link','/internal/admin/admin.nl'],
+            ['scrumbox-canary-link','/internal/admin/canary/canarydefinition.nl'],
+            ['scrumbox-oauth-link','/app/oauth2/clientcredentials/setup.nl'],
+            ['scrumbox-features-link','/app/setup/features.nl'],
+          ]) $(id).href = 'https://' + host + path;
           renderSql(next, busy);
           renderSftp(next);
           renderPlaywright(next, busy);
@@ -280,6 +351,97 @@ document.addEventListener('alpine:init', () => {
           applyAnsiColors(log);
           if (bottom) log.scrollTop = log.scrollHeight;
         }
+        function suiteappConfig() {
+          const config = JSON.parse($('config').value);
+          if (!config || typeof config !== 'object' || Array.isArray(config) || !Array.isArray(config.suiteapps) ||
+              config.suiteapps.some(app => !app || typeof app !== 'object' || Array.isArray(app))) {
+            throw new Error('Fix the SuiteApps list in Advanced configuration before editing SuiteApps.');
+          }
+          return config;
+        }
+        function directoryFromUrl(value) {
+          // Accept both HTTPS and GitLab's existing git@host:path SSH syntax.
+          return value.trim().split(/[?#]/)[0].replace(/\\/+$/, '').split(/[/:]/).pop().replace(/\\.git$/i, '');
+        }
+        function suiteappView(app, index) {
+          const url = typeof app.url === 'string' ? app.url : '';
+          const directory = typeof app.directory === 'string' ? app.directory : '';
+          return { index, url, branch:typeof app.branch === 'string' ? app.branch : '',
+            title:directory || 'New SuiteApp', urlLabel:(directory || 'New SuiteApp') + ' GitLab URL', directory:directory || 'determined from the GitLab URL',
+            directoryNote:directory && directory !== directoryFromUrl(url) ? ' · configured in Advanced configuration' : ' · automatic',
+            localNote:app.localPath ? 'Local checkout: ' + app.localPath + '. Manage it in Advanced configuration.' : '',
+            removeLabel:'Remove SuiteApp ' + (index + 1) };
+        }
+        function renderSuiteapps(busy) {
+          try {
+            const config = suiteappConfig();
+            if (suiteappsText !== $('config').value) {
+              component.suiteapps = config.suiteapps.map(suiteappView);
+              suiteappsText = $('config').value;
+            }
+            component.suiteappsDisabled = busy;
+            view.add_suiteapp.disabled = busy;
+            view.save_suiteapps.disabled = busy;
+            if (suiteappsError) view.suiteapps_message.text = '';
+            suiteappsError = false;
+          } catch {
+            component.suiteappsDisabled = true;
+            view.add_suiteapp.disabled = true;
+            view.save_suiteapps.disabled = true;
+            suiteappsError = true;
+            view.suiteapps_message.text = 'Fix the configuration JSON in Advanced configuration to edit SuiteApps. Your JSON edits are preserved.';
+          }
+        }
+        function settingsChanged() {
+          actionError = '';
+          editing = true;
+          view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.';
+          view.deploy.disabled = true;
+          clearTimeout(checking);
+          checking = setTimeout(refresh, 350);
+        }
+        function writeSuiteapps(config) {
+          $('config').value = JSON.stringify(config, null, 4);
+          settingsChanged();
+          view.suiteapps_message.text = 'SuiteApps changed. Save SuiteApps, or click Deploy to save and deploy.';
+        }
+        listen('suiteapp', 'input', event => {
+          if (component.suiteappsDisabled) return;
+          const input = event.currentTarget;
+          const index = Number(input.dataset.index);
+          const config = suiteappConfig();
+          const app = config.suiteapps[index];
+          if (input.dataset.field === 'url') {
+            const url = input.value.trim();
+            if (url) { app.url = url; app.directory = directoryFromUrl(url); }
+            else { delete app.url; if (!app.localPath) app.directory = ''; }
+          } else {
+            const branch = input.value.trim();
+            if (branch) app.branch = branch;
+            else delete app.branch;
+          }
+          writeSuiteapps(config);
+          // Keep the active input mounted while typing and while state polls arrive.
+          const item = suiteappView(app, index);
+          item[input.dataset.field] = input.value;
+          Object.assign(component.suiteapps[index], item);
+          suiteappsText = $('config').value;
+        });
+        listen('suiteapp', 'click', event => {
+          if (component.suiteappsDisabled) return;
+          const config = suiteappConfig();
+          config.suiteapps.splice(Number(event.currentTarget.dataset.index), 1);
+          writeSuiteapps(config);
+          renderSuiteapps(false);
+        });
+        listen('add-suiteapp', 'click', () => {
+          if (component.suiteappsDisabled) return;
+          const config = suiteappConfig();
+          config.suiteapps.push({url:'',directory:''});
+          writeSuiteapps(config);
+          renderSuiteapps(false);
+          component.$nextTick(() => $('suiteapp-blocks').querySelector('.suiteapp-block:last-of-type input')?.focus());
+        });
         function renderSftp(next) {
           if (connectionFailed) return;
           const sftp = next.sftp;
@@ -407,7 +569,7 @@ document.addEventListener('alpine:init', () => {
         });
         listen('brand-theme-select', 'change', () => {
           const choice = $('brand-theme-select').value;
-          const brand = choice === 'default' || choice === 'netsuite-2026' ? choice : 'oracle-corporate-2026';
+          const brand = choice === 'default' || choice === 'oracle-corporate-2026' ? choice : 'netsuite-2026';
           if (brand === 'default') $('brand-theme-stylesheet').media = 'not all';
           else {
             $('brand-theme-stylesheet').href = '/themes/' + brand + '.css';
@@ -415,7 +577,7 @@ document.addEventListener('alpine:init', () => {
           }
           sessionStorage.setItem('suitecontainer-brand-theme', brand);
         });
-        listen('config', 'input', () => { actionError = ''; editing = true; view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.'; view.deploy.disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350); });
+        listen('config', 'input', () => { settingsChanged(); renderSuiteapps(view.config.disabled); });
         const editPlaywright = () => {
           playwrightError = '';
           try {
@@ -443,20 +605,19 @@ document.addEventListener('alpine:init', () => {
           } catch (error) { playwrightError = error.message; }
           finally { playwrightSubmitting = false; if (!stopped && state) render(state); }
         });
-        listen('vm', 'input', () => {
+        for (const [id, field] of [['vm','url'],['vm-account','account']]) listen(id, 'input', () => {
           actionError = '';
           try {
             const config = JSON.parse($('config').value);
-            if (!config || typeof config !== 'object' || Array.isArray(config) || (config.vms !== undefined && !Array.isArray(config.vms))) throw new Error('Fix the configuration JSON in Settings before changing Current VM.');
+            if (!config || typeof config !== 'object' || Array.isArray(config) || (config.vms !== undefined && !Array.isArray(config.vms))) throw new Error('Invalid VM settings.');
             config.vms ??= [];
             config.vms[0] ??= {account:'000071',url:''};
-            if (typeof config.vms[0] !== 'object' || Array.isArray(config.vms[0])) throw new Error('Fix the first VM in Settings before changing Current VM.');
-            config.vms[0].url = $('vm').value.trim();
+            if (typeof config.vms[0] !== 'object' || Array.isArray(config.vms[0])) throw new Error('Invalid first VM.');
+            config.vms[0][field] = $(id).value.trim();
             $('config').value = JSON.stringify(config, null, 4);
-            editing = true; view.deploy.disabled = true; clearTimeout(checking); checking = setTimeout(refresh, 350);
-            view.settings_message.text = 'Settings changed. Save settings, or click Deploy to save and deploy.';
-            view.credential_message.text = 'VM address changed. Save credentials or settings to keep it.';
-          } catch { view.credential_message.text = 'Fix the configuration JSON in Settings before changing Current VM.'; view.deploy.disabled = true; }
+            settingsChanged();
+            view.credential_message.text = 'VM settings changed. Save credentials or settings to keep them.';
+          } catch { view.credential_message.text = 'Fix the configuration JSON in Advanced configuration before changing the VM.'; view.deploy.disabled = true; }
         });
         for (const key of ['public','private','id','token']) listen(key, 'input', () => { actionError = ''; credentialEditing = true; view.credential_message.text = 'Credentials changed. Click Save credentials before deploying.'; view.deploy.disabled = true; });
         for (const [key, target] of [['url','sftp-netsuite-url'],['key','sftp-host-key'],['user','sftp-netsuite-user'],['port','sftp-netsuite-port']]) {
@@ -511,6 +672,7 @@ document.addEventListener('alpine:init', () => {
           finally { sqlSubmitting = false; if (!stopped) render(state); }
         });
         listen('change-token', 'click', () => { changingToken = true; view.token_entry.hidden = false; view.change_token.hidden = true; $('token').focus(); });
+        action('save-suiteapps', async () => { const next = await api('settings', {config:$('config').value}); editing = false; render(next); view.suiteapps_message.text = 'SuiteApps saved.'; view.settings_message.text = 'Settings saved.'; }, 'suiteapps-message');
         action('save', async () => { render(await api('settings', {config:$('config').value})); editing = false; view.settings_message.text = 'Settings saved.'; }, 'settings-message');
         action('credentials', async () => { const data = Object.fromEntries(['public','private','id','token'].map(key => [key,$(key).value])); data.config = $('config').value; const next = await api('credentials',data); credentialEditing = false; editing = false; changingToken = false; $('token').value = ''; render(next); view.credential_message.text = 'Credentials and settings saved.'; view.settings_message.text = 'Settings saved.'; }, 'credential-message');
         action('generate', async () => { if ((state.certificates.hasExisting || credentialEditing) && !confirm('Generate new certificates? Old certificates saved by this app will not be preserved, and the saved certificate ID will be cleared. Files stored elsewhere are not changed. Register the new public certificate on your scrumbox before deploying.')) return; const next = await api('generate',{replace:true}); for (const key of ['public','private','id']) $(key).value = next.certificates[key] || ''; credentialEditing = !!$('token').value.trim(); render(next); $('cert-details').open = true; view.credential_message.text = 'New certificates saved. Download the public certificate, register it on your scrumbox, then enter the assigned certificate ID and click Save credentials.'; }, 'credential-message');
@@ -519,6 +681,7 @@ document.addEventListener('alpine:init', () => {
         action('stop', async () => {
           await api('stop',{});
           stopped = true;
+          component.suiteappsDisabled = true;
           view.theme_toggle.disabled = true;
           view.run_state.text = 'App stopped. Attempting to close this page…';
           for (const button of document.querySelectorAll('button')) if (button.id) view[button.id.replaceAll('-', '_')].disabled = true;

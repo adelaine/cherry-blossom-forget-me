@@ -119,6 +119,36 @@ class LauncherTests(unittest.TestCase):
                 if host == "linux":
                     self.assertIn("ssh -N -L", self.output.getvalue())
 
+    def test_prefers_internal_base_image(self):
+        bootstrap.main()
+        self.assertEqual(self.calls_with("pull"), [["podman", "pull", "--retry=0", bootstrap.DEVELOPER_IMAGE]])
+        self.assertIn(f"SUITECONTAINER_BASE_IMAGE={bootstrap.DEVELOPER_IMAGE}", self.calls_with("build")[0])
+
+    def test_falls_back_to_public_base_image(self):
+        self.failure = bootstrap.DEVELOPER_IMAGE, 125
+        bootstrap.main()
+        self.assertEqual([call[-1] for call in self.calls_with("pull")], [bootstrap.DEVELOPER_IMAGE, bootstrap.BASE_IMAGE])
+        self.assertIn(f"SUITECONTAINER_BASE_IMAGE={bootstrap.BASE_IMAGE}", self.calls_with("build")[0])
+        self.assertTrue(self.calls_with("--serve"))
+
+    def test_stops_when_both_base_images_are_unavailable(self):
+        self.failure = "pull", 125
+        with self.assertRaises(subprocess.CalledProcessError):
+            bootstrap.main()
+        self.assertEqual(len(self.calls_with("pull")), 2)
+        self.assertFalse(self.calls_with("build"))
+        self.assertFalse(self.calls_with("--serve"))
+
+    def test_pulls_base_image_inside_wsl(self):
+        machine = {"Name": "fixture-machine", "VMType": "wsl"}
+        with patch.object(bootstrap, "podman", side_effect=[
+            subprocess.CompletedProcess([], 125, "", ""),
+            subprocess.CompletedProcess([], 0, "", ""),
+        ]) as podman:
+            self.assertEqual(bootstrap.select_base_image(machine), bootstrap.BASE_IMAGE)
+        for call, image in zip(podman.call_args_list, (bootstrap.DEVELOPER_IMAGE, bootstrap.BASE_IMAGE)):
+            self.assertEqual(call.args, ("machine", "ssh", "fixture-machine", "--", f"podman pull --retry=0 {image}"))
+
     def test_creates_first_run_files_without_prompts(self):
         bootstrap.main()
         self.assertTrue((self.root / "credentials/auth.json").is_file())
@@ -166,7 +196,7 @@ class LauncherTests(unittest.TestCase):
         os.environ["NSX_NPM_TOKEN"] = "test-token"
         with self.host("windows"):
             bootstrap.main()
-        ssh = [call for call in self.calls if call[1:3] == ["machine", "ssh"]][0]
+        ssh = [call for call in self.calls if call[1:3] == ["machine", "ssh"] and call[-1].startswith("podman build ")][0]
         self.assertIn("fixture-machine", ssh)
         self.assertIn("id=npm-token,src=/mnt/", ssh[-1])
         self.assertNotIn("test-token", ssh[-1])

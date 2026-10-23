@@ -5,7 +5,7 @@ import { createAdaptorServer } from "@hono/node-server";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, chmodSync, copyFileSync, constants } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync, chmodSync, copyFileSync, constants } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -115,8 +115,7 @@ export function startWebServer(options: {
     };
     const certificateState = (auth: Auth) => {
         const certs = auth["suitecloud-certificates"];
-        const mounted = Object.keys(record.certificates).length > 0 ||
-            readdirSync(credentials, { recursive: true }).some(name => /\.(pem|key|cer|crt)$/i.test(String(name)));
+        const generatedFilesExist = ["public.pem", "private.pem"].some(name => existsSync(join(credentials, name)));
         let error = "";
         let publicPath: string | null = null;
         let privatePath: string | null = null;
@@ -128,9 +127,9 @@ export function startWebServer(options: {
                 if (!publicPath || !privatePath) error = "Save credentials, stop the app, and run the launcher again to use these certificate files. You can also generate a new pair here.";
                 else { try { verifyCertificates(publicPath, privatePath); } catch (e) { error = message(e); } }
             }
-        } else if (mounted) error = "Certificate files already exist. Enter both paths in Certificate paths and save credentials, or generate and register a new pair.";
+        } else if (generatedFilesExist) error = "Certificate files already exist. Enter both paths in Certificate paths and save credentials, or generate and register a new pair.";
         else error = "Click Generate certificates, download and register the public certificate on your scrumbox, then enter its assigned certificate ID and save credentials.";
-        return { hasExisting: mounted || !!certs?.public || !!certs?.private, error, publicPath, privatePath };
+        return { hasExisting: generatedFilesExist || !!certs?.public || !!certs?.private, error, publicPath, privatePath };
     };
     const readiness = (text: string) => {
         try {
@@ -238,10 +237,18 @@ export function startWebServer(options: {
         c.header("Content-Type", "image/png");
         return c.body(new Uint8Array(favicon));
     });
-    for (const name of ["oracle-cover-dark.jpg", "oracle-cover-light.jpg"]) {
+    const configurationArt = readFileSync(new URL("./assets/advanced-configuration.png", import.meta.url));
+    app.get("/advanced-configuration.png", c => {
+        c.header("Content-Type", "image/png");
+        return c.body(new Uint8Array(configurationArt));
+    });
+    for (const [name, contentType] of [
+        ["oracle-cover-dark.jpg", "image/jpeg"], ["oracle-cover-light.jpg", "image/jpeg"],
+        ["netsuite-divider-dark.jpg", "image/jpeg"],
+    ] as const) {
         const art = readFileSync(new URL(sourceMode ? "./themes/" + name : "./assets/" + name, import.meta.url));
         app.get("/themes/" + name, c => {
-            c.header("Content-Type", "image/jpeg");
+            c.header("Content-Type", contentType);
             return c.body(new Uint8Array(art));
         });
     }

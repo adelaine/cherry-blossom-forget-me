@@ -1,4 +1,6 @@
-FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24 AS build
+# Oracle Linux 9 provides Instant Client packages for both x86_64 and aarch64.
+ARG SUITECONTAINER_BASE_IMAGE=container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24
+FROM ${SUITECONTAINER_BASE_IMAGE} AS build
 
 # Include the container's system trust store when npm connects to internal registries.
 ENV NODE_OPTIONS="--use-system-ca"
@@ -15,16 +17,25 @@ COPY app/src ./src
 COPY app/copy-runtime.mjs ./copy-runtime.mjs
 RUN npm run build
 
-FROM container-registry.eng.netsuite.com/oracle/oraclelinux10-nodejs:24
+FROM ${SUITECONTAINER_BASE_IMAGE}
 
 ENV NODE_OPTIONS="--use-system-ca"
 
 USER root
-RUN if command -v dnf >/dev/null 2>&1; then \
-      dnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel oracle-instantclient-release-26ai-el10 \
+# Configure the repository directly because the release RPM is not available
+# for every architecture. Let the package manager select native client RPMs.
+RUN printf '%s\n' \
+      '[ol9_oracle_instantclient23]' \
+      'name=Oracle Instant Client for Oracle Linux 9 ($basearch)' \
+      'baseurl=https://yum.oracle.com/repo/OracleLinux/OL9/oracle/instantclient23/$basearch/' \
+      'gpgcheck=1' \
+      'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-oracle' \
+      'enabled=1' > /etc/yum.repos.d/oracle-instantclient.repo \
+    && if command -v dnf >/dev/null 2>&1; then \
+      dnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel \
       && dnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus && dnf clean all; \
     else \
-      microdnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel oracle-instantclient-release-26ai-el10 \
+      microdnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel \
       && microdnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus && microdnf clean all; \
     fi
 RUN sqlplus -V
