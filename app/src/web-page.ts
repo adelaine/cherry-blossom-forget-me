@@ -18,10 +18,10 @@ export const deploymentPage = {
     html: `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><link id="brand-theme-stylesheet" rel="stylesheet" href="/themes/netsuite-2026.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
-<div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select"><select id="brand-theme-select" aria-label="Appearance" @change="changebrand_theme_select"><option value="default">Default</option><option value="netsuite-2026" selected>NetSuite 2026</option><option value="oracle-corporate-2026">Oracle Corporate 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"></label><button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></div>
+<div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select"><select id="brand-theme-select" aria-label="Appearance" @change="changebrand_theme_select"><option value="default">Default</option><option value="netsuite-2026" selected>NetSuite 2026</option><option value="oracle-corporate-2026">Oracle Corporate 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"></label></div>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
 <header><hgroup><h1><mark>SuiteContainer</mark></h1><p>Set your scrumbox address, complete your credentials, then deploy your SuiteApps.</p></hgroup></header>
-<nav class="section-nav" aria-label="Jump to a section" @click="jumpsection"><span>Jump to</span><a href="#credentials-section">Setup</a><a href="#suiteapps-section">SuiteApps</a><a href="#deployment-section">Deploy</a><a href="#sql-section">SQL</a><a href="#sftp-section">SFTP</a></nav>
+<nav class="section-nav" aria-label="Jump to a section" @click="jumpsection"><span>Jump to</span><a href="#credentials-section">Setup</a><a href="#suiteapps-section">SuiteApps</a><a href="#deployment-section">Deploy</a><a href="#sql-section">SQL</a><a href="#sftp-section">SFTP</a><a href="#playwright-section">Playwright</a><button id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></nav>
 
 <p id="connection-error" role="alert" hidden :hidden="view.connection_error.hidden" x-text="view.connection_error.text"></p>
 <div class="setup-sections">
@@ -71,7 +71,7 @@ export const deploymentPage = {
 <p id="sftp-copy-message" role="status" x-text="view.sftp_copy_message.text"></p>
 </details>
 </details></article>
-<article><h2>Playwright tests</h2><p>Run your SuiteApp browser tests against Current VM. Configure test users and roles in your Playwright project.</p>
+<article><details class="setup-section" id="playwright-section"><summary><h2>Playwright tests</h2></summary><p>Run your SuiteApp browser tests against Current VM. Configure test users and roles in your Playwright project.</p>
 <label for="playwright-enabled"><input id="playwright-enabled" type="checkbox" :disabled="view.playwright_enabled.disabled" @change="changeplaywright_enabled"> Enable test runner</label>
 <label for="playwright-project">Project directory inside repos</label><input id="playwright-project" spellcheck="false" placeholder="absi-nsn/test-pw" :disabled="view.playwright_project.disabled" @input="inputplaywright_project">
 <label for="playwright-browser">Browser</label><select id="playwright-browser" :disabled="view.playwright_browser.disabled" @change="changeplaywright_browser"><option value="container">Container browser</option><option value="local-chrome">Local Chrome (separate window)</option></select>
@@ -79,7 +79,7 @@ export const deploymentPage = {
 <div><label for="playwright-workers">Parallel workers</label><input id="playwright-workers" type="number" min="1" max="16" step="1" value="1" :disabled="view.playwright_workers.disabled" @input="inputplaywright_workers"></div></div>
 <p><small>Save settings and relaunch after enabling the runner or changing the project directory or browser. Leave Test file blank to run the configured project.</small></p>
 <fieldset class="grid" aria-label="Playwright actions"><button id="playwright-save" class="secondary" :disabled="view.playwright_save.disabled" @click="clickplaywright_save">Save test settings</button><button id="playwright-run" disabled :disabled="view.playwright_run.disabled" @click="clickplaywright_run">Run tests</button><button id="playwright-cancel" class="secondary outline" disabled :disabled="view.playwright_cancel.disabled" @click="clickplaywright_cancel">Stop tests</button></fieldset>
-<p id="playwright-message" role="status" x-text="view.playwright_message.text"></p><pre id="playwright-log" tabindex="0" aria-label="Playwright progress"></pre></article>
+<p id="playwright-message" role="status" x-text="view.playwright_message.text"></p><pre id="playwright-log" tabindex="0" aria-label="Playwright progress"></pre></details></article>
 </div></section></div>
 <article id="deployment-section"><h2>Deploy SuiteApps</h2><p id="validation" role="status" x-text="view.validation.text"></p><fieldset aria-label="Deployment actions"><button id="deploy" disabled :disabled="view.deploy.disabled" @click="clickdeploy">Deploy SuiteApps</button></fieldset><blockquote class="status-message" id="run-state" role="status" x-text="view.run_state.text">Loading…</blockquote><pre id="log" tabindex="0" aria-label="Deployment progress"></pre></article>
 </main></body></html>`,
@@ -97,13 +97,13 @@ header>hgroup>h1::before{display:block;content:"";height:100px;width:100px;float
 mark{--pico-mark-gradient:var(--suite-mark-gradient,linear-gradient(to right,rgb(215.4,140.8,210.2),rgb(184.5,153,237.75),rgb(156.6,165.3,232.6),rgb(142.75,168.95,240.05)));background:var(--pico-mark-gradient);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:2.5rem;}
 button{--pico-border-radius:2rem;--pico-font-weight:500}
 .theme-controls{display:flex;align-items:center;justify-content:flex-end;gap:1rem;flex-wrap:wrap}
-.theme-controls>button{margin:0}
+.section-nav>button{margin:0 0 0 auto;width:auto;border:none;--pico-border-radius:0.25rem;padding:0.25rem 1rem;font-size:0.9em}
 .brand-theme-picker{min-width:13rem;margin:0}
 .brand-theme-picker select{margin:0}
 .theme-toggle{display:flex;align-items:center;gap:0.5rem;width:fit-content;margin:0 0 0.6rem;font-family:system-ui,"Segoe UI",sans-serif,var(--pico-font-family-emoji)}
 .theme-toggle input{margin:0}
 .section-nav{position:sticky;top:0;z-index:10;background:var(--pico-background-color)}
-.section-nav,.quick-links{display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:0.5rem 1.5rem;margin-block:1.5rem;padding:0 2rem}
+.section-nav,.quick-links{display:flex;justify-content:flex-start;align-items:center;flex-wrap:wrap;gap:0.5rem 1.5rem;margin-block:1.5rem;padding:0.25rem 2rem}
 .section-nav>span{font-size:0.85rem;color:var(--pico-muted-color)}
 .section-nav>a,.quick-links a{padding:0.25rem;text-decoration:none}
 .scrumbox-links{display:flex;align-items:center;flex-wrap:wrap;gap:0.25rem 0.75rem;min-width:0}
@@ -146,7 +146,7 @@ details>summary{--pico-primary:light-dark(#876400,#c79400);--pico-accordion-clos
 details>summary::after{display:none}
 details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
 details[open]>summary::before{transform:rotate(90deg)}
-@media(min-width:768px){.tool-sections:not(:has(.setup-section[open])){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.tool-sections>article{min-width:0;margin-top:0}.tool-sections:not(:has(.setup-section[open]))>article{margin:0}}
+@media(min-width:768px){.tool-sections:not(:has(.setup-section[open])){display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.tool-sections>article{min-width:0;margin-top:0}.tool-sections:not(:has(.setup-section[open]))>article{margin:0}}
 .setup-section{margin-bottom:0}
 .setup-section>summary h2{margin:0}
 .setup-section[open]>summary{margin-bottom:1.5rem}
@@ -228,7 +228,7 @@ document.addEventListener('alpine:init', () => {
         history.replaceState(null, '', location.pathname);
         let sectionsInitialized = false, lastDeploymentStarted;
         const collapseSetupSections = () => {
-          for (const id of ['vm-section','certificates-section','admindocs-section','token-section','settings-section','sql-section','sftp-section']) $(id).open = false;
+          for (const id of ['vm-section','certificates-section','admindocs-section','token-section','settings-section','sql-section','sftp-section','playwright-section']) $(id).open = false;
         };
         let state, editing = false, stopped = false, checking, credentialEditing = false, changingToken = false, sqlSubmitting = false, sqlDefaultsApplied = false, sqlDefaultsHost, sqlAccountEdited = false, sqlDatabaseEdited = false, sqlRequestError = '';
         let lastActivity = Date.now(), heartbeatPending = false, connectionFailed = false, idleCloseScheduled = false, actionError = '';
@@ -344,7 +344,8 @@ document.addEventListener('alpine:init', () => {
           for (const id of ['playwright-enabled','playwright-project','playwright-browser','playwright-file','playwright-workers','playwright-save']) view[id.replaceAll('-', '_')].disabled = busy;
           view.playwright_run.disabled = busy || !runner?.canRun;
           view.playwright_cancel.disabled = playwrightSubmitting || runner?.state !== 'running';
-          view.playwright_message.text = playwrightError || runner?.error || (playwrightEditing ? 'Test settings changed. Save before running tests.' : runner?.relaunch ? 'Save settings and relaunch SuiteContainer to use this test project and browser.' : !runner?.enabled ? 'Enable the runner, save settings, and relaunch SuiteContainer.' : !runner.settings.project ? 'Choose the directory containing your Playwright configuration and lockfile.' : ({idle:'Ready to run tests.',running:'Playwright tests are running…',succeeded:'Playwright tests passed.',failed:'Playwright tests failed or were stopped. Review the output.'})[runner.state]);
+          const runnerError = playwrightError || runner?.error;
+          view.playwright_message.text = runnerError ? ([next.error, actionError].includes(runnerError) ? '' : runnerError) : (playwrightEditing ? 'Test settings changed. Save before running tests.' : runner?.relaunch ? 'Save settings and relaunch SuiteContainer to use this test project and browser.' : !runner?.enabled ? 'Enable the runner, save settings, and relaunch SuiteContainer.' : !runner.settings.project ? 'Choose the directory containing your Playwright configuration and lockfile.' : ({idle:'Ready to run tests.',running:'Playwright tests are running…',succeeded:'Playwright tests passed.',failed:'Playwright tests failed or were stopped. Review the output.'})[runner.state]);
           const log = $('playwright-log');
           const bottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
           log.innerHTML = ansiToHtml(runner?.log || '');

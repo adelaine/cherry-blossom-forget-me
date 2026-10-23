@@ -162,10 +162,6 @@ body {
   background-repeat: no-repeat;
 }
 
-main .theme-controls > button {
-  background-color: var(--pico-card-background-color);
-}
-
 main mark {
   background: none;
   color: var(--pico-color);
