@@ -286,7 +286,7 @@ document.addEventListener('alpine:init', () => {
           const busy = next.run.state === 'running' || next.sql?.state === 'running' || next.sql?.preparing || sqlSubmitting;
           renderSuiteapps(busy);
           if (!credentialEditing) for (const key of ['public','private','id']) $(key).value = next.certificates[key] || '';
-          view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token is found. SuiteContainer may still be used if you have a local copy of the container image and local copies of SuiteApps.';
+          view.token_state.text = next.tokenPresent ? 'GitLab token saved.' : 'No GitLab token found. SuiteContainer may still be used if you have local copies of SuiteApps.';
           view.token_entry.hidden = next.tokenPresent && !changingToken;
           view.change_token.hidden = !next.tokenPresent || changingToken;
           view.generate.disabled = busy;

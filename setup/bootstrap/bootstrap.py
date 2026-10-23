@@ -22,6 +22,8 @@ WINDOWS = sys.platform == "win32"
 MACOS = sys.platform == "darwin"
 HOST_PLATFORM = "win32" if WINDOWS else "linux"
 IMAGE = "suitecontainer-workspace"
+DEVELOPER_IMAGE = "container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24"
+BASE_IMAGE = "ghcr.io/oracle/oraclelinux9-nodejs:24"
 OWNER = "suitecontainer.project"
 
 
@@ -216,12 +218,7 @@ def pm_mode():
         config = json.loads((PROJECT / "suitecontainer.config.json").read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         config = {}
-    try:
-        auth = json.loads((PROJECT / "credentials/auth.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        auth = {}
-    token = auth.get("gitlab-token") if isinstance(auth, dict) else None
-    return (isinstance(config, dict) and config.get("PM_MODE") is True) or not isinstance(token, str) or not token.strip()
+    return isinstance(config, dict) and config.get("PM_MODE") is True
 
 
 def machine_path(path):
@@ -231,7 +228,24 @@ def machine_path(path):
     return f"/mnt/{path[0].lower()}/{path[3:].replace(chr(92), '/')}"
 
 
+def build_podman(machine, *arguments, **kwargs):
+    if machine and machine.get("VMType") == "wsl":
+        return podman("machine", "ssh", machine["Name"], "--", shlex.join(["podman", *arguments]), **kwargs)
+    return podman(*arguments, **kwargs)
+
+
+def select_base_image(machine):
+    print("Checking the internal base image...", flush=True)
+    result = build_podman(machine, "pull", "--retry=0", DEVELOPER_IMAGE, capture=True, optional=True)
+    if not result.returncode:
+        return DEVELOPER_IMAGE
+    print("The internal base image could not be pulled. Trying Oracle's public image...", flush=True)
+    build_podman(machine, "pull", "--retry=0", BASE_IMAGE)
+    return BASE_IMAGE
+
+
 def build_image(machine):
+    base_image = select_base_image(machine)
     with tempfile.TemporaryDirectory(prefix="suitecontainer-build-") as directory:
         directory = Path(directory)
         environment = os.environ
@@ -282,16 +296,13 @@ def build_image(machine):
         convert = machine_path if wsl else str
         for identifier, path in files.items():
             secrets += ["--secret", f"id={identifier},src={convert(path)}"]
-        arguments = ["build", *secrets, "-f", convert(PROJECT / "setup/Containerfile"), "--ignorefile", convert(PROJECT / "setup/.containerignore"), "--build-arg", "SUITECLOUD_CLI_ACCEPT_LICENSE=true"]
+        arguments = ["build", "--build-arg", f"SUITECONTAINER_BASE_IMAGE={base_image}", *secrets, "-f", convert(PROJECT / "setup/Containerfile"), "--ignorefile", convert(PROJECT / "setup/.containerignore"), "--build-arg", "SUITECLOUD_CLI_ACCEPT_LICENSE=true"]
         if not (WINDOWS or MACOS):
             environment.setdefault("SUITECLOUD_PROXY", "http://proxy.eng.netsuite.com:80")
             arguments += ["--build-arg", "SUITECLOUD_PROXY"]
         arguments += ["-t", IMAGE, convert(PROJECT)]
         print("Preparing the SuiteCloud container...", flush=True)
-        if wsl:
-            podman("machine", "ssh", machine["Name"], "--", shlex.join(["podman", *arguments]))
-        else:
-            podman(*arguments)
+        build_podman(machine, *arguments)
 
 
 def start_web(name):

@@ -1,5 +1,6 @@
 # Oracle Linux 9 provides Instant Client packages for both x86_64 and aarch64.
-FROM container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24 AS build
+ARG SUITECONTAINER_BASE_IMAGE=container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24
+FROM ${SUITECONTAINER_BASE_IMAGE} AS build
 
 # Include the container's system trust store when npm connects to internal registries.
 ENV NODE_OPTIONS="--use-system-ca"
@@ -16,7 +17,7 @@ COPY app/src ./src
 COPY app/copy-runtime.mjs ./copy-runtime.mjs
 RUN npm run build
 
-FROM container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24
+FROM ${SUITECONTAINER_BASE_IMAGE}
 
 ENV NODE_OPTIONS="--use-system-ca"
 
