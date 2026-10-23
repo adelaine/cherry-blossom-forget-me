@@ -332,7 +332,8 @@ test("certificate generation is explicit, deployment uses snapshots, and a faile
     const config = { suiteapps: [{ directory: "app", url: "https://gitlab.eng.netsuite.com/team/app.git" }], vms: [{ account: "000071", url: "scrumbox.vm.eng.netsuite.com" }] };
     const configFile = join(root, "suitecontainer.config.json");
     writeFileSync(configFile, JSON.stringify(config));
-    writeFileSync(join(root, "credentials/auth.json"), JSON.stringify(emptyAuth));
+    writeFileSync(join(root, "credentials/auth.json"), JSON.stringify({ ...emptyAuth,
+        "suitecloud-certificates": { public: "/outside/public.pem", private: "/outside/private.pem", id: "" } }));
     const outsidePublic = join(root, "external-public.pem");
     const outsidePrivate = join(root, "external-private.pem");
     writeFileSync(outsidePublic, "external public");

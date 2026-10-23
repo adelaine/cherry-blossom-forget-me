@@ -16,7 +16,7 @@ const lightTheme = `
 
 export const deploymentPage = {
     html: `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><link id="brand-theme-stylesheet" rel="stylesheet" href="/themes/oracle-corporate-2026.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>SuiteCloud deployment</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/pico.css"><link rel="stylesheet" href="/page.css"><link id="brand-theme-stylesheet" rel="stylesheet" href="/themes/netsuite-2026.css"><script src="/page.js" defer></script><script src="/alpine.js" defer></script></head>
 <body><main class="container" x-data="deployment" x-cloak>
 <div class="theme-controls"><label class="brand-theme-picker" for="brand-theme-select"><select id="brand-theme-select" aria-label="Appearance" @change="changebrand_theme_select"><option value="default">Default</option><option value="netsuite-2026" selected>NetSuite 2026</option><option value="oracle-corporate-2026">Oracle Corporate 2026</option></select></label><label class="theme-toggle" for="theme-toggle"><input id="theme-toggle" type="checkbox" role="switch" aria-label="Dark theme" :disabled="view.theme_toggle.disabled" @change="changetheme_toggle"></label><button class="contrast outline" id="stop" :disabled="view.stop.disabled" @click="clickstop">Stop app</button></div>
 <p id="theme-message" role="status" x-text="view.theme_message.text"></p>
@@ -233,9 +233,9 @@ document.addEventListener('alpine:init', () => {
         if (brandTheme === 'default') {
           $('brand-theme-select').value = brandTheme;
           $('brand-theme-stylesheet').media = 'not all';
-        } else if (brandTheme === 'netsuite-2026') {
+        } else if (brandTheme === 'netsuite-2026' || brandTheme === 'oracle-corporate-2026') {
           $('brand-theme-select').value = brandTheme;
-          $('brand-theme-stylesheet').href = '/themes/netsuite-2026.css';
+          $('brand-theme-stylesheet').href = '/themes/' + brandTheme + '.css';
         }
         function applyTheme(theme) {
           if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;

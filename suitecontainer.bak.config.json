@@ -1,0 +1,40 @@
+{
+    "suiteapps": [
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/absi-nsn.git",
+            "directory": "absi-nsn",
+            "branch": "develop",
+            "localPath": ""
+        },
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bsp-nsn.git",
+            "directory": "bsp-nsn",
+            "localPath": ""
+        },
+        {
+            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bank-feeds-nsn.git",
+            "directory": "bank-feeds-nsn",
+            "branch": "develop",
+            "localPath": ""
+        }
+    ],
+    "vms": [
+        {
+            "url": "lazarorodrigf587-runbox-multacct-dusa1-001.vm.eng.netsuite.com",
+            "account": "11733971",
+            "database": {
+                "service": "singletonpdb",
+                "user": "shared"
+            }
+        }
+    ],
+    "playwright": {
+        "enabled": true,
+        "project": "absi-nsn/FileCabinet/SuiteApps/com.netsuite.autobankstmtimport/test/test-pw",
+        "testFile": "",
+        "workers": 1,
+        "browser": "local-chrome"
+    },
+    "status": {
+    }
+}
