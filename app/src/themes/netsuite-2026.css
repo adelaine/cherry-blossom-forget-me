@@ -29,6 +29,10 @@
   --netsuite-coral: #ff8675;
   --netsuite-green: #86b596;
   --netsuite-red: #c74634;
+  --netsuite-background-art: url("/themes/netsuite-divider-dark.jpg");
+  --netsuite-background-mask: linear-gradient(90deg, var(--pico-background-color), transparent 75%);
+  --netsuite-background-size: cover;
+  --netsuite-background-position: center;
   --netsuite-summary-color: var(--netsuite-yellow);
   --netsuite-status-color: #c5a2d5;
   /* --pico-font-family-sans-serif: "NetSuite Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif; */
@@ -68,8 +72,10 @@
   --pico-code-color: #fff;
 }
 
-/* The presentation has a dark canvas; these companion colors keep the app's light toggle useful. */
+/* Light mode uses a plain canvas. */
 :root[data-theme="light"] {
+  --netsuite-background-art: none;
+  --netsuite-background-mask: none;
   --netsuite-summary-color: #305e73;
   --netsuite-status-color: #664675;
   --pico-background-color: #edf3f5;
@@ -108,6 +114,8 @@
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
+    --netsuite-background-art: none;
+    --netsuite-background-mask: none;
     --netsuite-summary-color: #305e73;
     --netsuite-status-color: #664675;
     --pico-background-color: #edf3f5;
@@ -147,6 +155,15 @@
 
 body {
   background: var(--pico-background-color);
+  background-image: var(--netsuite-background-mask), var(--netsuite-background-art);
+  background-size: cover, var(--netsuite-background-size);
+  background-position: center, var(--netsuite-background-position);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+main .theme-controls > button {
+  background-color: var(--pico-card-background-color);
 }
 
 main mark {

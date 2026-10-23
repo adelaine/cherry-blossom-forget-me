@@ -30,6 +30,7 @@ for (const name of ["hono", "@hono/node-server"]) {
 copyFileSync(require.resolve("@alpinejs/csp/dist/cdn.min.js"), join(outputDirectory, "assets/alpine.js"));
 copyFileSync(require.resolve("@picocss/pico/css/pico.min.css"), join(outputDirectory, "assets/pico.css"));
 copyFileSync(join(appDirectory, "src/themes/netsuite-2026.css"), join(outputDirectory, "assets/netsuite-2026.css"));
+copyFileSync(join(appDirectory, "src/themes/netsuite-divider-dark.jpg"), join(outputDirectory, "assets/netsuite-divider-dark.jpg"));
 copyFileSync(join(appDirectory, "src/themes/oracle-corporate-2026.css"), join(outputDirectory, "assets/oracle-corporate-2026.css"));
 copyFileSync(join(appDirectory, "src/themes/oracle-cover-dark.jpg"), join(outputDirectory, "assets/oracle-cover-dark.jpg"));
 copyFileSync(join(appDirectory, "src/themes/oracle-cover-light.jpg"), join(outputDirectory, "assets/oracle-cover-light.jpg"));

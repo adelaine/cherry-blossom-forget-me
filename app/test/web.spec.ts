@@ -670,7 +670,7 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
     assert.equal(JSON.parse(sent.config).vms[0].url, "changed.vm.eng.netsuite.com");
     await runInNewContext("refresh()", context);
     assert.match(element("sql-message").textContent, /Connection input is invalid/);
-    assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') > deploymentPage.html.indexOf('Configuration JSON'));
-    assert.ok(deploymentPage.html.indexOf('<h2>SQL</h2>') < deploymentPage.html.indexOf('<h2>Deployment</h2>'));
+    assert.ok(deploymentPage.html.indexOf('<h2>SQL queries</h2>') > deploymentPage.html.indexOf('Configuration JSON'));
+    assert.ok(deploymentPage.html.indexOf('<h2>SQL queries</h2>') < deploymentPage.html.indexOf('<h2>Deploy SuiteApps</h2>'));
     assert.ok(!deploymentPage.html.includes('id="sql-target"'));
 });

@@ -221,10 +221,13 @@ export function startWebServer(options: {
         c.header("Content-Type", "image/png");
         return c.body(new Uint8Array(favicon));
     });
-    for (const name of ["oracle-cover-dark.jpg", "oracle-cover-light.jpg"]) {
+    for (const [name, contentType] of [
+        ["oracle-cover-dark.jpg", "image/jpeg"], ["oracle-cover-light.jpg", "image/jpeg"],
+        ["netsuite-divider-dark.jpg", "image/jpeg"],
+    ] as const) {
         const art = readFileSync(new URL(sourceMode ? "./themes/" + name : "./assets/" + name, import.meta.url));
         app.get("/themes/" + name, c => {
-            c.header("Content-Type", "image/jpeg");
+            c.header("Content-Type", contentType);
             return c.body(new Uint8Array(art));
         });
     }
