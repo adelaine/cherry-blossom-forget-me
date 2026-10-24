@@ -24,7 +24,7 @@ if (
 }
 // Each build owns its emitted files. Do not remove another build's output.
 const siteDirectory = join(appDirectory, "site");
-const siteOutput = join(outputDirectory, "site", "src");
+const siteOutput = join(outputDirectory, "site", "public");
 mkdirSync(join(siteOutput, "assets"), { recursive: true });
 
 const require = createRequire(join(appDirectory, "package.json"));
@@ -57,16 +57,12 @@ for (const name of ["hono", "@hono/node-server"]) {
     });
 }
 // Keep frontend paths identical in source and compiled server modules.
-cpSync(join(siteDirectory, "src/assets"), join(siteOutput, "assets"), {
+cpSync(join(siteDirectory, "public/assets"), join(siteOutput, "assets"), {
     recursive: true,
 });
-cpSync(join(siteDirectory, "src/themes"), join(siteOutput, "themes"), {
+cpSync(join(siteDirectory, "public/themes"), join(siteOutput, "themes"), {
     recursive: true,
 });
-copyFileSync(
-    require.resolve("@alpinejs/csp/dist/cdn.min.js"),
-    join(siteOutput, "assets/alpine.js"),
-);
 copyFileSync(
     require.resolve("@picocss/pico/css/pico.min.css"),
     join(siteOutput, "assets/pico.css"),

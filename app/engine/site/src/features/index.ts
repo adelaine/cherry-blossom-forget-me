@@ -1,7 +1,6 @@
-import { credentials } from "./credentials.ts";
-import { suiteapps } from "./suiteapps.ts";
-import { deployment } from "./deployment.ts";
-import { settings } from "./settings.ts";
+import { credentials } from "./credentials.tsx";
+import { suiteapps } from "./suiteapps.tsx";
+import { deployment } from "./deployment.tsx";
+import { settings } from "./settings.tsx";
 
-// Initialize shared settings before their consumers.
-export const features = [settings, credentials, suiteapps, deployment];
+export const features = [credentials, suiteapps, settings, deployment];

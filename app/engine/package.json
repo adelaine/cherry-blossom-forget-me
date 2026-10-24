@@ -3,8 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "node ../setup/node/copy-runtime.mjs . && tsc -p tsconfig.build.json",
-        "typecheck": "tsc -p tsconfig.json",
+        "build": "vite build --config site/vite.config.ts && node ../setup/node/copy-runtime.mjs . && tsc -p tsconfig.build.json",
+        "typecheck": "tsc -p tsconfig.json && tsc -p site/tsconfig.json",
         "dev": "vite --config server/vite.config.ts",
         "start": "node dist/install.js --serve",
         "sftp": "node --experimental-strip-types server/src/sftp.ts",
@@ -14,20 +14,18 @@
         "lint": "cd .. && oxlint engine/site engine/server setup/node setup/playwright",
         "lint:fix": "npm run lint -- --fix",
         "test": "npm run test:client && npm run test:server",
-        "test:client": "node --experimental-strip-types --test \"site/test/**/*.spec.ts\"",
+        "test:client": "tsx --tsconfig site/tsconfig.json --test \"site/test/**/*.spec.ts\"",
         "test:server": "node --experimental-strip-types --test \"server/test/**/*.spec.ts\""
     },
     "dependencies": {
-        "@alpinejs/csp": "^3.17.4",
         "@hono/node-server": "^2.1.3",
         "@picocss/pico": "^2.1.1",
-        "alpinejs": "^3.17.4",
         "hono": "^4.13.12",
-        "oxlint": "^1.89.0"
+        "oxlint": "^1.89.0",
+        "preact": "^11.0.2"
     },
     "devDependencies": {
         "@hono/vite-dev-server": "0.26.1",
-        "@types/alpinejs": "^3.17.0",
         "@types/node": "^24.19.1",
         "prettier": "3.9.10",
         "tsx": "^4.23.0",

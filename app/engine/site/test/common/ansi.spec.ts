@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ansiToHtml, ansiStyles, applyAnsiColors } from "../../src/common/ansi.ts";
-import { deploymentPage } from "../../src/web-page.ts";
+import { siteStyle } from "../../src/styles.ts";
 
 test("ANSI log rendering escapes HTML and uses fixed CSS classes", () => {
     assert.equal(
@@ -129,9 +129,5 @@ test("ANSI RGB rendering assigns only validated CSS properties", () => {
         backgroundColor: "#ff0080",
     });
     assert.deepEqual(spans[1]!.style, {});
-    const browserApply = new Function(
-        `${deploymentPage.script.split("document.addEventListener('alpine:init'")[0]} return applyAnsiColors;`,
-    )();
-    browserApply(root);
-    assert.ok(deploymentPage.script.includes("applyAnsiColors(log)"));
+    assert.ok(siteStyle.includes(ansiStyles));
 });

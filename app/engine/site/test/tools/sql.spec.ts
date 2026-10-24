@@ -1,8 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
-import { deploymentPage } from "../../src/web-page.ts";
-import { initializeBrowser } from "../browser-harness.ts";
+import { browserHtml, initializeBrowser } from "../browser-harness.ts";
 
 const sqlConfig = {
     suiteapps: [],
@@ -96,6 +95,7 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
     element("sql-account").value = "OTHER_ACCOUNT";
     element("sql-account").input();
     element("sql-password").value = sqlInput.password;
+    element("sql-password").input();
     element("sql-statement").value = sqlInput.sql;
     element("sql-statement").input();
     assert.equal(element("sql-run").disabled, false);
@@ -122,7 +122,10 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
         element("sql-output").textContent,
         "<script>query data</script>",
     );
-    assert.equal(element("sql-output").innerHTML, undefined);
+    assert.equal(
+        element("sql-output").innerHTML,
+        "&lt;script&gt;query data&lt;/script&gt;",
+    );
     assert.equal(element("sql-run").disabled, false);
     assert.equal(element("sql-password").value, sqlInput.password);
     const changed = {
@@ -149,14 +152,14 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
         /Connection input is invalid/,
     );
     assert.ok(
-        deploymentPage.html.indexOf("<h2>SQL queries</h2>") >
-            deploymentPage.html.indexOf("Configuration JSON"),
+        browserHtml(context).indexOf("<h2>SQL queries</h2>") >
+            browserHtml(context).indexOf("Configuration JSON"),
     );
     assert.ok(
-        deploymentPage.html.indexOf("<h2>SQL queries</h2>") <
-            deploymentPage.html.indexOf("<h2>Deploy SuiteApps</h2>"),
+        browserHtml(context).indexOf("<h2>SQL queries</h2>") <
+            browserHtml(context).indexOf("<h2>Deploy SuiteApps</h2>"),
     );
-    assert.ok(!deploymentPage.html.includes('id="sql-target"'));
+    assert.ok(!browserHtml(context).includes('id="sql-target"'));
 });
 
 test("the browser offers separate masked manual and unlock fields and sends only the chosen credential", async () => {
@@ -204,6 +207,7 @@ test("the browser offers separate masked manual and unlock fields and sends only
     initializeBrowser(context);
     await new Promise((resolve) => setImmediate(resolve));
     element("sql-statement").value = "SELECT 1 FROM dual;";
+    element("sql-statement").input();
     element("sql-password").value = "manual-password";
     element("sql-password").input();
     assert.equal(element("sql-run").disabled, false);
@@ -226,9 +230,9 @@ test("the browser offers separate masked manual and unlock fields and sends only
     await runInNewContext("refresh()", context);
     assert.equal(element("sql-unlock").disabled, true);
     assert.equal(element("sql-run").disabled, false);
-    assert.match(deploymentPage.html, /id="sql-unlock" type="password"/);
+    assert.match(browserHtml(context), /id="sql-unlock" type="password"/);
     assert.match(
-        deploymentPage.html,
+        browserHtml(context),
         /<div class="grid"><div><label for="sql-password">[\s\S]*?<div><label for="sql-unlock">[\s\S]*?<\/div><\/div>/,
     );
     element("sql-account").value = "MANUAL_USER";

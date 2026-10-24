@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
+import { act } from "preact/test-utils";
 import { initializeBrowser } from "../browser-harness.ts";
 
 test("Stop app closes after five seconds only on success and explains blocked closure", async () => {
@@ -80,7 +81,7 @@ test("Stop app closes after five seconds only on success and explains blocked cl
                 element("run-state").textContent,
                 /Attempting to close this page/,
             );
-            timers[0]!.callback();
+            act(() => timers[0]!.callback());
             assert.equal(closes, 1);
             assert.match(
                 element("run-state").textContent,

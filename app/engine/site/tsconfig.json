@@ -1,0 +1,9 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "jsxImportSource": "preact",
+        "lib": ["ESNext", "DOM", "DOM.Iterable"],
+        "rootDir": ".."
+    },
+    "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "vite.config.ts"]
+}

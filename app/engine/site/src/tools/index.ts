@@ -1,5 +1,5 @@
-import { sql } from "./sql.ts";
-import { sftp } from "./sftp.ts";
-import { playwright } from "./playwright.ts";
+import { sql } from "./sql.tsx";
+import { sftp } from "./sftp.tsx";
+import { playwright } from "./playwright.tsx";
 
 export const tools = [sql, sftp, playwright];

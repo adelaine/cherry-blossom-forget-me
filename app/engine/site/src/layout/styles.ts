@@ -3,7 +3,7 @@ import type { SiteModule } from "../common/module.ts";
 // Preserve the cascade positions of extracted module rules.
 const shared = [
     {
-        "order": 0,
+        order: 0,
         style: `.ansi-bold{font-weight:bold}.ansi-fg-0{color:#000000}.ansi-bg-0{background-color:#000000}.ansi-fg-1{color:#cd3131}.ansi-bg-1{background-color:#cd3131}.ansi-fg-2{color:#0dbc79}.ansi-bg-2{background-color:#0dbc79}.ansi-fg-3{color:#e5e510}.ansi-bg-3{background-color:#e5e510}.ansi-fg-4{color:#2472c8}.ansi-bg-4{background-color:#2472c8}.ansi-fg-5{color:#bc3fbc}.ansi-bg-5{background-color:#bc3fbc}.ansi-fg-6{color:#11a8cd}.ansi-bg-6{background-color:#11a8cd}.ansi-fg-7{color:#e5e5e5}.ansi-bg-7{background-color:#e5e5e5}.ansi-fg-8{color:#666666}.ansi-bg-8{background-color:#666666}.ansi-fg-9{color:#f14c4c}.ansi-bg-9{background-color:#f14c4c}.ansi-fg-10{color:#23d18b}.ansi-bg-10{background-color:#23d18b}.ansi-fg-11{color:#f5f543}.ansi-bg-11{background-color:#f5f543}.ansi-fg-12{color:#3b8eea}.ansi-bg-12{background-color:#3b8eea}.ansi-fg-13{color:#d670d6}.ansi-bg-13{background-color:#d670d6}.ansi-fg-14{color:#29b8db}.ansi-bg-14{background-color:#29b8db}.ansi-fg-15{color:#ffffff}.ansi-bg-15{background-color:#ffffff}
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Light.ttf') format('truetype');font-style:normal;font-weight:300;font-display:swap}
 @font-face{font-family:Ubuntu;src:url('/fonts/Ubuntu-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}
@@ -57,16 +57,16 @@ article{margin:2rem auto;padding:1.5rem}
 .setup-sections>section{margin-block:2rem}
 .setup-sections>section>h2{margin-bottom:1rem}
 .credentials-card,.suiteapps-card{padding:0;margin-top:0;overflow:hidden}
-`
+`,
     },
     {
-        "order": 2,
+        order: 2,
         style: `.credentials-footer,.suiteapps-footer{padding:1.25rem 1.5rem}
 .credentials-footer fieldset{margin:0}
-`
+`,
     },
     {
-        "order": 4,
+        order: 4,
         style: `details>summary{--pico-primary:light-dark(#876400,#c79400);--pico-accordion-close-summary-color:var(--pico-primary);--pico-accordion-open-summary-color:var(--pico-primary);--pico-accordion-active-summary-color:var(--pico-primary);display:flex;align-items:center;gap:0.75rem;font-weight:500}
 details>summary::after{display:none}
 details>summary::before{content:"";flex:0 0 0.9rem;height:0.9rem;background:currentColor;clip-path:polygon(0 0,100% 50%,0 100%)}
@@ -75,22 +75,22 @@ details[open]>summary::before{transform:rotate(90deg)}
 .setup-section{margin-bottom:0}
 .setup-section>summary h2{margin:0}
 .setup-section[open]>summary{margin-bottom:1.5rem}
-`
+`,
     },
     {
-        "order": 6,
+        order: 6,
         style: `:is(input:not([type="checkbox"]),textarea):enabled{background-color:light-dark(#fff,#111)}
 @media(max-width:575px){article{padding:1rem}.credentials-card,.suiteapps-card{padding:0}.credential-steps>li{padding:1rem}.credential-steps>li::before{inset-inline-start:1rem;inset-block-start:0.9rem}.credential-steps .setup-section>summary{padding-inline-start:3rem}.suiteapp-fields{grid-template-columns:minmax(0,1fr) 2.75rem;gap:0.75rem}.suiteapp-fields>label:first-child{grid-column:1/-1}.suiteapp-block,.suiteapps-footer,.credentials-footer{padding:1rem}.theme-controls{gap:0.75rem}.brand-theme-picker{min-width:0;flex:1 1 12rem}mark{font-size:1.8rem}header>hgroup>h1::before{width:3.5rem;height:3.5rem;background-size:contain}.section-nav,.quick-links{gap:0.5rem 1rem}}
 @media(pointer:coarse){.section-nav>a,.quick-links a,.suiteapp-remove{min-height:44px;display:inline-flex;align-items:center}}
-[x-cloak],[hidden]{display:none!important}
+[hidden]{display:none!important}
 main :is(p,blockquote):empty{display:none}
 .status-message{--pico-primary:light-dark(#9236a4,#cd68e0);color:var(--pico-primary)}
 blockquote.status-message{--pico-primary:light-dark(#9236a4,#cd68e0);--pico-blockquote-border-color:var(--pico-primary);margin:0 0 var(--pico-typography-spacing-vertical);padding:0.25rem 1.5rem;color:var(--pico-primary);border-radius:0.25rem;background-color:color-mix(in srgb,var(--pico-primary) 8%,transparent)}
 textarea{font-family:var(--pico-font-family-monospace)}
-`
+`,
     },
     {
-        "order": 8,
+        order: 8,
         style: `pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;max-height:32rem;overflow:auto;line-height:1.55;background-color:light-dark(#f0eee8,#000);color:light-dark(#343d48,#c8cdd6);color-scheme:inherit;border:1px solid light-dark(#d7d5cf,transparent)}
 pre#log{min-height:4rem;}
 pre :is(.ansi-fg-2,.ansi-fg-10){color:light-dark(#008447,#38d98a)}
@@ -99,11 +99,21 @@ pre :is(.ansi-fg-4,.ansi-fg-12){color:light-dark(#1b65c9,#69a9ff)}
 pre :is(.ansi-fg-5,.ansi-fg-13){color:light-dark(#8545b7,#ca91ff)}
 pre :is(.ansi-fg-6,.ansi-fg-14){color:light-dark(#007f9b,#40d2ef)}
 pre :is(.ansi-fg-7,.ansi-fg-15){color:light-dark(#343d48,#c8cdd6)}
-`
-    }
+`,
+    },
 ];
 
 export function pageStyles(modules: readonly SiteModule[]): string {
-    return [...shared, ...modules.filter(module => module.style).map(module => ({order:module.styleOrder ?? 0, style:module.style!}))]
-        .sort((left, right) => left.order - right.order).map(part => part.style).join("");
+    return [
+        ...shared,
+        ...modules
+            .filter((module) => module.style)
+            .map((module) => ({
+                order: module.styleOrder ?? 0,
+                style: module.style!,
+            })),
+    ]
+        .sort((left, right) => left.order - right.order)
+        .map((part) => part.style)
+        .join("");
 }

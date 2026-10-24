@@ -1,7 +1,7 @@
 import { type Server } from "node:http";
 import { createRequire } from "node:module";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { Hono } from "hono";
 import { createAdaptorServer } from "@hono/node-server";
 import { deploymentPage } from "../../site/src/web-page.ts";
@@ -264,32 +264,51 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
                   '<script type="module" src="/@vite/client"></script></head>',
               )
             : deploymentPage.html;
-    const alpine = readFileSync(
-        sourceMode
-            ? require.resolve("@alpinejs/csp/dist/cdn.min.js")
-            : new URL("../../site/src/assets/alpine.js", import.meta.url),
-        "utf8",
-    );
     const pico = readFileSync(
         sourceMode
             ? require.resolve("@picocss/pico/css/pico.min.css")
-            : new URL("../../site/src/assets/pico.css", import.meta.url),
+            : new URL("../../site/public/assets/pico.css", import.meta.url),
         "utf8",
     );
     for (const [path, contentType, content] of [
         ["/", "text/html", html],
-        ["/page.js", "text/javascript", deploymentPage.script],
-        ["/page.css", "text/css", deploymentPage.style],
-        ["/alpine.js", "text/javascript", alpine],
         ["/pico.css", "text/css", pico],
     ])
         app.get(path!, (c) => {
             c.header("Content-Type", contentType + "; charset=utf-8");
             return c.body(content!);
         });
+    const frontendAssets = new URL(
+        sourceMode ? "../../dist/site/assets/" : "../../site/assets/",
+        import.meta.url,
+    );
+    // Redirecting the module entry preserves the base URL for generated chunks.
+    // Vite serves these two public routes directly in development.
+    app.get("/page.js", (c) => c.redirect("/assets/page.js", 307));
+    app.get("/page.css", (c) => {
+        const path = new URL("page.css", frontendAssets);
+        if (!existsSync(path)) return c.notFound();
+        c.header("Content-Type", "text/css; charset=utf-8");
+        return c.body(readFileSync(path, "utf8"));
+    });
+    app.get("/assets/:name", (c) => {
+        const name = c.req.param("name");
+        if (!/^[A-Za-z0-9_.-]+\.(?:js|css|png|jpg|svg|woff2?|ttf)$/.test(name))
+            return c.notFound();
+        const path = new URL(name, frontendAssets);
+        if (!existsSync(path)) return c.notFound();
+        const extension = name.slice(name.lastIndexOf(".") + 1);
+        const contentTypes: Record<string, string> = {
+            js: "text/javascript", css: "text/css", png: "image/png",
+            jpg: "image/jpeg", svg: "image/svg+xml", woff: "font/woff",
+            woff2: "font/woff2", ttf: "font/ttf",
+        };
+        c.header("Content-Type", contentTypes[extension]!);
+        return c.body(new Uint8Array(readFileSync(path)));
+    });
     for (const name of ["netsuite-2026.css", "oracle-corporate-2026.css"]) {
         const content = readFileSync(
-            new URL("../../site/src/themes/" + name, import.meta.url),
+            new URL("../../site/public/themes/" + name, import.meta.url),
             "utf8",
         );
         app.get("/themes/" + name, (c) => {
@@ -299,7 +318,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
     }
     for (const name of ["favicon.png", "advanced-configuration.png"]) {
         const content = readFileSync(
-            new URL("../../site/src/assets/" + name, import.meta.url),
+            new URL("../../site/public/assets/" + name, import.meta.url),
         );
         app.get("/" + name, (c) => {
             c.header("Content-Type", "image/png");
@@ -312,7 +331,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         "netsuite-divider-dark.jpg",
     ]) {
         const content = readFileSync(
-            new URL("../../site/src/themes/" + name, import.meta.url),
+            new URL("../../site/public/themes/" + name, import.meta.url),
         );
         app.get("/themes/" + name, (c) => {
             c.header("Content-Type", "image/jpeg");
@@ -326,7 +345,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         "Ubuntu-Bold.ttf",
     ]) {
         const content = readFileSync(
-            new URL("../../site/src/assets/fonts/" + name, import.meta.url),
+            new URL("../../site/public/assets/fonts/" + name, import.meta.url),
         );
         app.get("/fonts/" + name, (c) => {
             c.header("Content-Type", "font/ttf");

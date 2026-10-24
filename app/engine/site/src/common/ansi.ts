@@ -1,4 +1,4 @@
-// Keep this function self-contained: its compiled source also runs in the browser.
+// Escape untrusted output before adding the limited ANSI formatting markup.
 export function ansiToHtml(input: string): string {
     let foreground: number | string | undefined;
     let background: number | string | undefined;

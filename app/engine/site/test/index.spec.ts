@@ -1,26 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
+import { readFileSync } from "node:fs";
 import { ACTIVITY_GRACE_MS } from "../../server/src/web-inactivity.ts";
 import { ansiToHtml, ansiStyles } from "../src/common/ansi.ts";
 import { deploymentPage } from "../src/web-page.ts";
+import { siteStyle } from "../src/styles.ts";
 import { initializeBrowser } from "./browser-harness.ts";
 
-test("ANSI converter is self-contained in the served browser script", () => {
-    const browserConverter = new Function(
-        `${deploymentPage.script.split("document.addEventListener('alpine:init'")[0]} return ansiToHtml;`,
-    )();
+test("ANSI converter and styles are included in the compiled browser assets", () => {
+    const script = readFileSync(new URL("../../dist/site/assets/page.js", import.meta.url), "utf8");
     assert.equal(
-        browserConverter("\x1b[31m<red>"),
         ansiToHtml("\x1b[31m<red>"),
+        '<span class="ansi-fg-1">&lt;red&gt;</span>',
     );
-    assert.ok(
-        deploymentPage.script.includes(
-            "log.innerHTML = ansiToHtml(next.run.log)",
-        ),
-    );
-    assert.ok(deploymentPage.style.includes(ansiStyles));
-    new Function(deploymentPage.script);
+    assert.ok(script.includes("data-ansi-fg"));
+    assert.ok(siteStyle.includes(ansiStyles));
+    assert.ok(deploymentPage.html.includes('type="module" src="/page.js"'));
 });
 
 test("browser heartbeat follows real activity, stops after fifteen minutes, and reports server loss without losing edits", async () => {

@@ -70,6 +70,7 @@ test("Current VM preserves accounts and other scrumboxes, synchronizes JSON edit
     runInNewContext("render(state)", context);
     assert.equal(element("vm").value, edited.vms[0].url);
     element("config").value = "invalid JSON";
+    element("config").input();
     element("vm").input();
     assert.equal(element("config").value, "invalid JSON");
     assert.match(
