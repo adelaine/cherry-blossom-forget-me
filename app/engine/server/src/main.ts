@@ -197,13 +197,13 @@ export class ServerLifecycle {
         return this.disposing;
     }
 }
-export function createServerLifecycle(
+export const createServerLifecycle = (
     options: ServerOptions = {},
-): ServerLifecycle {
+): ServerLifecycle => {
     return new ServerLifecycle(options);
-}
+};
 
-function equal(supplied: string, expected: string): boolean {
+const equal = (supplied: string, expected: string): boolean => {
     const left = Buffer.from(supplied);
     const right = Buffer.from(expected);
     return (
@@ -211,9 +211,9 @@ function equal(supplied: string, expected: string): boolean {
         left.length === right.length &&
         timingSafeEqual(left, right)
     );
-}
+};
 
-export function createApplication(lifecycle: ServerLifecycle): ApiApp {
+export const createApplication = (lifecycle: ServerLifecycle): ApiApp => {
     const app: ApiApp = new Hono();
     const failure = (error: unknown) =>
         structuredError(error, (text) =>
@@ -273,7 +273,14 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
     for (const [path, contentType, content] of [
         ["/", "text/html", html],
         ["/pico.css", "text/css", pico],
-        ["/styles.css", "text/css", readFileSync(new URL("../../site/public/styles.css", import.meta.url), "utf8")],
+        [
+            "/styles.css",
+            "text/css",
+            readFileSync(
+                new URL("../../site/public/styles.css", import.meta.url),
+                "utf8",
+            ),
+        ],
     ])
         app.get(path!, (c) => {
             c.header("Content-Type", contentType + "; charset=utf-8");
@@ -300,9 +307,14 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         if (!existsSync(path)) return c.notFound();
         const extension = name.slice(name.lastIndexOf(".") + 1);
         const contentTypes: Record<string, string> = {
-            js: "text/javascript", css: "text/css", png: "image/png",
-            jpg: "image/jpeg", svg: "image/svg+xml", woff: "font/woff",
-            woff2: "font/woff2", ttf: "font/ttf",
+            js: "text/javascript",
+            css: "text/css",
+            png: "image/png",
+            jpg: "image/jpeg",
+            svg: "image/svg+xml",
+            woff: "font/woff",
+            woff2: "font/woff2",
+            ttf: "font/ttf",
         };
         c.header("Content-Type", contentTypes[extension]!);
         return c.body(new Uint8Array(readFileSync(path)));
@@ -492,9 +504,9 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         return c.json(failure(error), status as 400);
     });
     return app;
-}
+};
 
-export function startWebServer(options: ServerOptions = {}): Server {
+export const startWebServer = (options: ServerOptions = {}): Server => {
     const lifecycle = createServerLifecycle(options);
     const app = createApplication(lifecycle);
     const server = createAdaptorServer({ fetch: app.fetch }) as Server;
@@ -536,14 +548,14 @@ export function startWebServer(options: ServerOptions = {}): Server {
         });
     }
     return server;
-}
+};
 
 export default {
-    fetch(
+    fetch: (
         request: Request,
         env: { lifecycle: ServerLifecycle },
         executionCtx?: unknown,
-    ) {
+    ) => {
         if (!env?.lifecycle)
             throw new Error(
                 "The outer server lifecycle must be injected before handling requests.",

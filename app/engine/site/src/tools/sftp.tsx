@@ -12,7 +12,7 @@ type SftpDraft = {
 };
 type CopyField = "url" | "key" | "user" | "port";
 
-export function Sftp() {
+export const Sftp = () => {
     const runtime = useSite();
     const status = runtime.snapshot?.sftp;
     const remote = status && "mode" in status ? status : undefined;
@@ -150,14 +150,14 @@ export function Sftp() {
         };
     }, [probeTarget, runtime, runtime.stopped, runtime.connectionFailed]);
 
-    function edit(changes: Partial<SftpDraft>) {
+    const edit = (changes: Partial<SftpDraft>) => {
         if (disabled) return;
         setDraft({ ...fields, ...changes });
         setRequestError("");
         setNotice("");
-    }
+    };
 
-    async function act(operation: "start" | "stop" | "save" | "recreate") {
+    const act = async (operation: "start" | "stop" | "save" | "recreate") => {
         if (
             submitting.current ||
             unavailable ||
@@ -222,9 +222,9 @@ export function Sftp() {
             submitting.current = false;
             runtime.setPending("sftp", false);
         }
-    }
+    };
 
-    async function copy(field: CopyField) {
+    const copy = async (field: CopyField) => {
         setCopyMessage("");
         try {
             await navigator.clipboard.writeText(values[field]);
@@ -244,7 +244,7 @@ export function Sftp() {
                     "Could not copy. Select the value and copy it manually.",
                 );
         }
-    }
+    };
 
     return (
         <article>
@@ -541,7 +541,7 @@ export function Sftp() {
             </details>
         </article>
     );
-}
+};
 
 export const sftp: SiteModule = {
     id: "sftp",

@@ -4,7 +4,7 @@ import type { SiteModule } from "../common/module.ts";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage } from "../common/state.ts";
 
-export function Settings() {
+export const Settings = () => {
     const runtime = useSite();
     const details = useRef<HTMLDetailsElement>(null);
     const request = useRef<AbortController | undefined>(undefined);
@@ -21,7 +21,7 @@ export function Settings() {
             details.current.open = false;
     }, [runtime.collapseVersion]);
 
-    async function save() {
+    const save = async () => {
         if (runtime.disabled || submitting.current) return;
         submitting.current = true;
         runtime.setPending("settings", true);
@@ -44,7 +44,7 @@ export function Settings() {
             submitting.current = false;
             runtime.setPending("settings", false);
         }
-    }
+    };
 
     return (
         <article>
@@ -97,7 +97,7 @@ export function Settings() {
             </details>
         </article>
     );
-}
+};
 
 export const settings: SiteModule = {
     id: "settings",

@@ -16,7 +16,7 @@ type CredentialDraft = {
 };
 type VmDraft = { url: string; account: string };
 
-export function Credentials() {
+export const Credentials = () => {
     const runtime = useSite();
     const next = runtime.snapshot;
     const [draft, setDraft] = useState<CredentialDraft>();
@@ -31,10 +31,13 @@ export function Credentials() {
     const tokenSection = useRef<HTMLDetailsElement>(null);
     const certificateDetails = useRef<HTMLDetailsElement>(null);
     const tokenInput = useRef<HTMLInputElement>(null);
-    const download = useRef<{
-        url: string;
-        timer: ReturnType<typeof setTimeout>;
-    } | undefined>(undefined);
+    const download = useRef<
+        | {
+              url: string;
+              timer: ReturnType<typeof setTimeout>;
+          }
+        | undefined
+    >(undefined);
     const vmDisplay = useRef<VmDraft>({ url: "", account: "" });
     const vmSource = useRef<string | undefined>(undefined);
     const values: CredentialDraft = draft || {
@@ -88,7 +91,7 @@ export function Credentials() {
         if (changingToken) tokenInput.current?.focus();
     }, [changingToken]);
 
-    function editVm(field: keyof VmDraft, value: string) {
+    const editVm = (field: keyof VmDraft, value: string) => {
         if (disabled) return;
         runtime.setActionError("");
         try {
@@ -115,9 +118,9 @@ export function Credentials() {
                 "Fix the configuration JSON in Advanced configuration before changing the VM.",
             );
         }
-    }
+    };
 
-    function editCredential(field: keyof CredentialDraft, value: string) {
+    const editCredential = (field: keyof CredentialDraft, value: string) => {
         if (disabled) return;
         setDraft({ ...values, [field]: value });
         runtime.setCredentialEditing(true);
@@ -125,12 +128,12 @@ export function Credentials() {
         setMessage(
             "Credentials changed. Click Save credentials before deploying.",
         );
-    }
+    };
 
-    async function perform(
+    const perform = async (
         operation: string,
         action: (signal: AbortSignal) => Promise<void>,
-    ) {
+    ) => {
         if (disabled || submitting.current) return;
         submitting.current = true;
         setPending(operation);
@@ -147,9 +150,9 @@ export function Credentials() {
             if (!controller.signal.aborted) setPending("");
             runtime.setPending("credentials", false);
         }
-    }
+    };
 
-    function save() {
+    const save = () => {
         const text = runtime.configText;
         return perform("save", async (signal) => {
             const result = await runtime.api(
@@ -165,9 +168,9 @@ export function Credentials() {
             runtime.saved(result, text);
             setMessage("Credentials and settings saved.");
         });
-    }
+    };
 
-    function generate() {
+    const generate = () => {
         if (
             (next?.certificates.hasExisting || runtime.credentialEditing) &&
             !confirm(
@@ -197,9 +200,9 @@ export function Credentials() {
                 "New certificates saved. Download the public certificate, register it on your scrumbox, then enter the assigned certificate ID and click Save credentials.",
             );
         });
-    }
+    };
 
-    function downloadCertificate() {
+    const downloadCertificate = () => {
         return perform("download", async (signal) => {
             const response = await runtime.request(
                 "certificate",
@@ -226,7 +229,7 @@ export function Credentials() {
                 }, 1000),
             };
         });
-    }
+    };
 
     return (
         <section id="credentials-section" aria-labelledby="setup-heading">
@@ -619,7 +622,7 @@ export function Credentials() {
             </article>
         </section>
     );
-}
+};
 
 export const credentials: SiteModule = {
     id: "credentials",

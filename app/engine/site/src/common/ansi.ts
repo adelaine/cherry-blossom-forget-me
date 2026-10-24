@@ -1,5 +1,5 @@
 // Escape untrusted output before adding the limited ANSI formatting markup.
-export function ansiToHtml(input: string): string {
+export const ansiToHtml = (input: string): string => {
     let foreground: number | string | undefined;
     let background: number | string | undefined;
     let bold = false;
@@ -162,10 +162,10 @@ export function ansiToHtml(input: string): string {
     }
     emit(input.slice(start));
     return output;
-}
+};
 
 // Individual CSS property assignments retain the page's strict style-src policy.
-export function applyAnsiColors(root: HTMLElement): void {
+export const applyAnsiColors = (root: HTMLElement): void => {
     for (const span of root.querySelectorAll<HTMLElement>(
         "[data-ansi-fg], [data-ansi-bg]",
     )) {
@@ -176,7 +176,7 @@ export function applyAnsiColors(root: HTMLElement): void {
         if (background && /^#[0-9a-f]{6}$/.test(background))
             span.style.backgroundColor = background;
     }
-}
+};
 
 const colors = [
     "#000000",

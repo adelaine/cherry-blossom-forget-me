@@ -13,5 +13,9 @@
         "rootDir": ".",
         "outDir": "./dist"
     },
-    "include": ["server/src/**/*.ts", "site/src/index.ts", "site/src/web-page.ts"]
+    "include": [
+        "server/src/**/*.ts",
+        "site/src/index.ts",
+        "site/src/web-page.ts"
+    ]
 }

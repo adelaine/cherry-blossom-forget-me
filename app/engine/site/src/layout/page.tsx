@@ -5,7 +5,7 @@ import { SiteProvider, SiteRuntime, useSite } from "../common/runtime.ts";
 import { errorMessage, parseConfiguration } from "../common/state.ts";
 import { modules } from "../modules.ts";
 
-function Appearance() {
+const Appearance = () => {
     const runtime = useSite();
     const [selectedTheme, setSelectedTheme] = useState<string>();
     const [systemDark, setSystemDark] = useState(false);
@@ -46,7 +46,7 @@ function Appearance() {
         if (brand !== "default") stylesheet.href = "/themes/" + brand + ".css";
     }, [brand]);
 
-    async function changeTheme(checked: boolean) {
+    const changeTheme = async (checked: boolean) => {
         if (runtime.stopped || runtime.connectionFailed) return;
         const next = checked ? "dark" : "light";
         setSelectedTheme(next);
@@ -76,7 +76,7 @@ function Appearance() {
         } catch (error) {
             if (!controller.signal.aborted) setMessage(errorMessage(error));
         }
-    }
+    };
     return (
         <>
             <div class="theme-controls">
@@ -120,9 +120,9 @@ function Appearance() {
             </p>
         </>
     );
-}
+};
 
-function Contributions({ items }: { items: readonly SiteModule[] }) {
+const Contributions = ({ items }: { items: readonly SiteModule[] }) => {
     return (
         <>
             {items.map(({ id, Component }) => (
@@ -130,13 +130,13 @@ function Contributions({ items }: { items: readonly SiteModule[] }) {
             ))}
         </>
     );
-}
+};
 
-export function Page({
+export const Page = ({
     inventory = modules,
 }: {
     inventory?: readonly SiteModule[];
-}) {
+}) => {
     const runtime = useSite();
     const slot = (name: SiteModule["slot"]) =>
         inventory.filter(
@@ -235,18 +235,18 @@ export function Page({
             <Contributions items={slot("deployment")} />
         </main>
     );
-}
+};
 
-export function App({
+export const App = ({
     runtime,
     inventory,
 }: {
     runtime: SiteRuntime;
     inventory?: readonly SiteModule[];
-}) {
+}) => {
     return (
         <SiteProvider runtime={runtime}>
             <Page inventory={inventory} />
         </SiteProvider>
     );
-}
+};

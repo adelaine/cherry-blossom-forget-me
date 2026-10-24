@@ -5,7 +5,7 @@ import { useSite } from "../common/runtime.ts";
 import { errorMessage } from "../common/state.ts";
 import { AnsiLog } from "../common/log.tsx";
 
-export function Deployment() {
+export const Deployment = () => {
     const runtime = useSite();
     const next = runtime.snapshot;
     const request = useRef<AbortController | undefined>(undefined);
@@ -18,7 +18,7 @@ export function Deployment() {
         [],
     );
 
-    async function deploy() {
+    const deploy = async () => {
         if (
             runtime.disabled ||
             runtime.credentialEditing ||
@@ -47,7 +47,7 @@ export function Deployment() {
             submitting.current = false;
             runtime.setPending("deployment", false);
         }
-    }
+    };
 
     const validation =
         runtime.actionError ||
@@ -106,7 +106,7 @@ export function Deployment() {
             />
         </article>
     );
-}
+};
 
 export const deployment: SiteModule = {
     id: "deployment",

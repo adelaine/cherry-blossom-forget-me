@@ -5,12 +5,12 @@ export interface ApiEnvironment {
     fetch: typeof fetch;
 }
 
-export function createSiteApi(
+export const createSiteApi = (
     environment: ApiEnvironment,
     connectionLost: () => void,
     requestSucceeded: () => void,
     connectionMessage: string,
-) {
+) => {
     const fragment = new URLSearchParams(environment.location.hash.slice(1));
     const session =
         fragment.get("session") ||
@@ -28,12 +28,12 @@ export function createSiteApi(
             "-" +
             Math.random().toString(36).slice(2);
 
-    async function request(
+    const request = async (
         path: string,
         data?: unknown,
         idempotencyKey?: string,
         signal?: AbortSignal,
-    ): Promise<Response> {
+    ): Promise<Response> => {
         const mutation =
             data !== undefined &&
             !["check", "validate", "heartbeat"].includes(path);
@@ -86,13 +86,13 @@ export function createSiteApi(
         }
         if (path !== "heartbeat") requestSucceeded();
         return response;
-    }
-    async function api<T>(
+    };
+    const api = async <T>(
         path: string,
         data?: unknown,
         key?: string,
         signal?: AbortSignal,
-    ): Promise<T> {
+    ): Promise<T> => {
         const response = await request(path, data, key, signal);
         try {
             return (await response.json()) as T;
@@ -101,7 +101,7 @@ export function createSiteApi(
             connectionLost();
             throw new Error(connectionMessage);
         }
-    }
+    };
     return {
         api,
         request,
@@ -109,4 +109,4 @@ export function createSiteApi(
         requestId,
         dispose: () => lifetime.abort(),
     };
-}
+};

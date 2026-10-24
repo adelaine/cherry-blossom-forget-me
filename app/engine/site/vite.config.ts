@@ -22,10 +22,16 @@ export default defineConfig({
             },
         },
     },
-    plugins: [{
-        name: "suitecontainer-module-styles",
-        generateBundle() {
-            this.emitFile({ type: "asset", fileName: "page.css", source: moduleStyles });
+    plugins: [
+        {
+            name: "suitecontainer-module-styles",
+            generateBundle() {
+                this.emitFile({
+                    type: "asset",
+                    fileName: "page.css",
+                    source: moduleStyles,
+                });
+            },
         },
-    }],
+    ],
 });

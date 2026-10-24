@@ -8,7 +8,7 @@ type SuiteApp = Record<string, unknown>;
 type SuiteAppConfig = Record<string, unknown> & { suiteapps: SuiteApp[] };
 type Row = { key: number; source: string; url: string; branch: string };
 
-function suiteappConfig(text: string): SuiteAppConfig {
+const suiteappConfig = (text: string): SuiteAppConfig => {
     const config = parseConfiguration(text);
     if (
         !Array.isArray(config.suiteapps) ||
@@ -20,9 +20,9 @@ function suiteappConfig(text: string): SuiteAppConfig {
             "Fix the SuiteApps list in Advanced configuration before editing SuiteApps.",
         );
     return config as SuiteAppConfig;
-}
+};
 
-export function directoryFromUrl(value: string): string {
+export const directoryFromUrl = (value: string): string => {
     return value
         .trim()
         .split(/[?#]/)[0]!
@@ -30,9 +30,9 @@ export function directoryFromUrl(value: string): string {
         .split(/[/:]/)
         .pop()!
         .replace(/\.git$/i, "");
-}
+};
 
-export function SuiteApps() {
+export const SuiteApps = () => {
     const runtime = useSite();
     const [message, setMessage] = useState("");
     const [saving, setSaving] = useState(false);
@@ -79,7 +79,7 @@ export function SuiteApps() {
         if (focusKey !== undefined) inputs.current.get(focusKey)?.focus();
     }, [focusKey]);
 
-    function write(next: SuiteAppConfig, nextRows: Row[]) {
+    const write = (next: SuiteAppConfig, nextRows: Row[]) => {
         const text = JSON.stringify(next, null, 4);
         cache.current = {
             text,
@@ -92,9 +92,9 @@ export function SuiteApps() {
         setMessage(
             "SuiteApps changed. Save SuiteApps, or click Deploy to save and deploy.",
         );
-    }
+    };
 
-    function edit(index: number, field: "url" | "branch", value: string) {
+    const edit = (index: number, field: "url" | "branch", value: string) => {
         if (disabled) return;
         const next = suiteappConfig(runtime.configText);
         const app = next.suiteapps[index]!;
@@ -115,18 +115,18 @@ export function SuiteApps() {
                 position === index ? { ...row, [field]: value } : row,
             ),
         );
-    }
+    };
 
-    function add() {
+    const add = () => {
         if (disabled) return;
         const next = suiteappConfig(runtime.configText);
         next.suiteapps.push({ url: "", directory: "" });
         const key = ++nextKey.current;
         write(next, [...rows, { key, source: "", url: "", branch: "" }]);
         setFocusKey(key);
-    }
+    };
 
-    function remove(index: number) {
+    const remove = (index: number) => {
         if (disabled) return;
         const next = suiteappConfig(runtime.configText);
         next.suiteapps.splice(index, 1);
@@ -134,9 +134,9 @@ export function SuiteApps() {
             next,
             rows.filter((_row, position) => position !== index),
         );
-    }
+    };
 
-    async function save() {
+    const save = async () => {
         if (disabled || submitting.current) return;
         submitting.current = true;
         setSaving(true);
@@ -163,7 +163,7 @@ export function SuiteApps() {
             if (!controller.signal.aborted) setSaving(false);
             runtime.setPending("suiteapps", false);
         }
-    }
+    };
 
     return (
         <>
@@ -299,7 +299,7 @@ export function SuiteApps() {
             </article>
         </>
     );
-}
+};
 
 export const suiteapps: SiteModule = {
     id: "suiteapps",

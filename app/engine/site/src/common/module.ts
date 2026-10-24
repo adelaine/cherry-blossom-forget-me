@@ -10,9 +10,9 @@ export interface SiteModule {
     navigation?: { target: string; label: string };
 }
 
-export function siteModules(
+export const siteModules = (
     modules: readonly SiteModule[],
-): readonly SiteModule[] {
+): readonly SiteModule[] => {
     const ids = new Set<string>();
     for (const module of modules) {
         if (ids.has(module.id))
@@ -20,4 +20,4 @@ export function siteModules(
         ids.add(module.id);
     }
     return modules;
-}
+};

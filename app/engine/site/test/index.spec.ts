@@ -8,14 +8,22 @@ import { deploymentPage } from "../src/web-page.ts";
 import { initializeBrowser } from "./browser-harness.ts";
 
 test("ANSI converter and styles are included in the compiled browser assets", () => {
-    const script = readFileSync(new URL("../../dist/site/assets/page.js", import.meta.url), "utf8");
+    const script = readFileSync(
+        new URL("../../dist/site/assets/page.js", import.meta.url),
+        "utf8",
+    );
     assert.equal(
         ansiToHtml("\x1b[31m<red>"),
         '<span class="ansi-fg-1">&lt;red&gt;</span>',
     );
     assert.ok(script.includes("data-ansi-fg"));
-    const styles = readFileSync(new URL("../public/styles.css", import.meta.url), "utf8");
-    assert.ok(styles.replace(/\s+/g, "").replace(/;}/g, "}").includes(ansiStyles));
+    const styles = readFileSync(
+        new URL("../public/styles.css", import.meta.url),
+        "utf8",
+    );
+    assert.ok(
+        styles.replace(/\s+/g, "").replace(/;}/g, "}").includes(ansiStyles),
+    );
     assert.ok(deploymentPage.html.includes('type="module" src="/page.js"'));
 });
 

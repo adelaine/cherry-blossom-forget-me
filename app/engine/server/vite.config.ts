@@ -165,19 +165,38 @@ export default defineConfig(() => {
                     });
                     server.middlewares.use(async (request, response, next) => {
                         const path = request.url?.split("?")[0];
-                        if (path !== "/page.js" && path !== "/page.css") return next();
+                        if (path !== "/page.js" && path !== "/page.css")
+                            return next();
                         try {
                             response.setHeader("Cache-Control", "no-store");
                             if (path === "/page.js") {
-                                response.setHeader("Content-Type", "text/javascript; charset=utf-8");
-                                const source = resolve(appDirectory, "site/src/main.tsx").replaceAll("\\", "/");
-                                response.end(`import ${JSON.stringify("/@fs/" + source)};`);
+                                response.setHeader(
+                                    "Content-Type",
+                                    "text/javascript; charset=utf-8",
+                                );
+                                const source = resolve(
+                                    appDirectory,
+                                    "site/src/main.tsx",
+                                ).replaceAll("\\", "/");
+                                response.end(
+                                    `import ${JSON.stringify("/@fs/" + source)};`,
+                                );
                             } else {
-                                const styles = await server.ssrLoadModule(resolve(appDirectory, "site/src/modules.ts"));
-                                response.setHeader("Content-Type", "text/css; charset=utf-8");
+                                const styles = await server.ssrLoadModule(
+                                    resolve(
+                                        appDirectory,
+                                        "site/src/modules.ts",
+                                    ),
+                                );
+                                response.setHeader(
+                                    "Content-Type",
+                                    "text/css; charset=utf-8",
+                                );
                                 response.end(styles.moduleStyles);
                             }
-                        } catch (error) { next(error); }
+                        } catch (error) {
+                            next(error);
+                        }
                     });
                     server.httpServer?.prependListener("upgrade", (request) => {
                         const origin = request.headers.origin;

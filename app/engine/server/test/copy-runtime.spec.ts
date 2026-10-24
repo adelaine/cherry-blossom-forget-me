@@ -12,7 +12,12 @@ test(
         const appDirectory = fileURLToPath(new URL("../../", import.meta.url));
         execFileSync(
             process.execPath,
-            [join(appDirectory, "node_modules/vite/bin/vite.js"), "build", "--config", "site/vite.config.ts"],
+            [
+                join(appDirectory, "node_modules/vite/bin/vite.js"),
+                "build",
+                "--config",
+                "site/vite.config.ts",
+            ],
             { cwd: appDirectory, encoding: "utf8", timeout: 90_000 },
         );
         execFileSync(

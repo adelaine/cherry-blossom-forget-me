@@ -4,7 +4,7 @@ import type { SiteModule } from "../common/module.ts";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage, targetHost } from "../common/state.ts";
 
-export function Sql() {
+export const Sql = () => {
     const runtime = useSite();
     const status = runtime.snapshot?.sql;
     const host = targetHost(runtime.configText);
@@ -65,7 +65,7 @@ export function Sql() {
             details.current.open = false;
     }, [runtime.collapseVersion]);
 
-    async function run() {
+    const run = async () => {
         if (submitting.current || !canRun || runtime.disabled) return;
         submitting.current = true;
         runtime.setActionError("");
@@ -94,7 +94,7 @@ export function Sql() {
             submitting.current = false;
             runtime.setPending("sql", false);
         }
-    }
+    };
 
     return (
         <article>
@@ -212,7 +212,7 @@ export function Sql() {
             </details>
         </article>
     );
-}
+};
 
 export const sql: SiteModule = {
     id: "sql",

@@ -12,7 +12,7 @@ type TestSettings = {
     testFile: string;
     workers: string;
 };
-function testSettings(text: string, fallback: unknown): TestSettings {
+const testSettings = (text: string, fallback: unknown): TestSettings => {
     let value = fallback;
     try {
         value = parseConfiguration(text).playwright ?? value;
@@ -34,9 +34,9 @@ function testSettings(text: string, fallback: unknown): TestSettings {
             typeof settings.testFile === "string" ? settings.testFile : "",
         workers: String(settings.workers || 1),
     };
-}
+};
 
-export function Playwright() {
+export const Playwright = () => {
     const runtime = useSite();
     const next = runtime.snapshot;
     const runner = next?.playwright;
@@ -95,7 +95,7 @@ export function Playwright() {
             details.current.open = false;
     }, [runtime.collapseVersion]);
 
-    function edit(changes: Partial<TestSettings>) {
+    const edit = (changes: Partial<TestSettings>) => {
         if (disabled) return;
         const edited = { ...settings, ...changes };
         setRequestError("");
@@ -124,9 +124,9 @@ export function Playwright() {
             );
         }
         setDraft({ settings: edited, sourceText: runtime.configText });
-    }
+    };
 
-    async function act(operation: "run" | "cancel" | "save") {
+    const act = async (operation: "run" | "cancel" | "save") => {
         if (
             submitting.current ||
             runtime.stopped ||
@@ -162,7 +162,7 @@ export function Playwright() {
             submitting.current = false;
             runtime.setPending("playwright", false);
         }
-    }
+    };
 
     return (
         <article>
@@ -297,7 +297,7 @@ export function Playwright() {
             </details>
         </article>
     );
-}
+};
 
 export const playwright: SiteModule = {
     id: "playwright",

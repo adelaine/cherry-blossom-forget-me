@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
 import { ansiToHtml, applyAnsiColors } from "./ansi.ts";
 
-export function AnsiLog({
+export const AnsiLog = ({
     id,
     text,
     label,
@@ -10,7 +10,7 @@ export function AnsiLog({
     id: string;
     text: string;
     label: string;
-}) {
+}) => {
     const element = useRef<HTMLPreElement>(null);
     const bottom =
         !element.current ||
@@ -30,4 +30,4 @@ export function AnsiLog({
             dangerouslySetInnerHTML={{ __html: ansiToHtml(text) }}
         />
     );
-}
+};

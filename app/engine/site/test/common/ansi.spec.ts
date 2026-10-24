@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ansiToHtml, ansiStyles, applyAnsiColors } from "../../src/common/ansi.ts";
+import {
+    ansiToHtml,
+    ansiStyles,
+    applyAnsiColors,
+} from "../../src/common/ansi.ts";
 import { readFileSync } from "node:fs";
 
 test("ANSI log rendering escapes HTML and uses fixed CSS classes", () => {
@@ -129,6 +133,11 @@ test("ANSI RGB rendering assigns only validated CSS properties", () => {
         backgroundColor: "#ff0080",
     });
     assert.deepEqual(spans[1]!.style, {});
-    const styles = readFileSync(new URL("../../public/styles.css", import.meta.url), "utf8");
-    assert.ok(styles.replace(/\s+/g, "").replace(/;}/g, "}").includes(ansiStyles));
+    const styles = readFileSync(
+        new URL("../../public/styles.css", import.meta.url),
+        "utf8",
+    );
+    assert.ok(
+        styles.replace(/\s+/g, "").replace(/;}/g, "}").includes(ansiStyles),
+    );
 });

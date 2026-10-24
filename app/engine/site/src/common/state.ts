@@ -3,14 +3,14 @@ import type { Services } from "../../../server/src/services/system.ts";
 export type ServerState = ReturnType<Services["status"]>;
 export type Configuration = Record<string, unknown>;
 
-export function parseConfiguration(text: string): Configuration {
+export const parseConfiguration = (text: string): Configuration => {
     const value: unknown = JSON.parse(text);
     if (!value || typeof value !== "object" || Array.isArray(value))
         throw new Error("Invalid configuration.");
     return value as Configuration;
-}
+};
 
-export function targetHost(text: string): string {
+export const targetHost = (text: string): string => {
     try {
         const vm = (
             parseConfiguration(text).vms as { url?: unknown }[] | undefined
@@ -24,8 +24,8 @@ export function targetHost(text: string): string {
     } catch {
         return "";
     }
-}
+};
 
-export function errorMessage(error: unknown): string {
+export const errorMessage = (error: unknown): string => {
     return error instanceof Error ? error.message : String(error);
-}
+};

@@ -20,7 +20,7 @@ export interface RuntimeEnvironment extends ApiEnvironment {
     clearInterval: typeof clearInterval;
 }
 
-function browserEnvironment(): RuntimeEnvironment {
+const browserEnvironment = (): RuntimeEnvironment => {
     return {
         location,
         history,
@@ -34,7 +34,7 @@ function browserEnvironment(): RuntimeEnvironment {
         setInterval: setInterval.bind(globalThis),
         clearInterval: clearInterval.bind(globalThis),
     };
-}
+};
 
 export class SiteRuntime {
     snapshot: ServerState | undefined;
@@ -399,13 +399,13 @@ export class SiteRuntime {
 const SiteContext = createContext<
     { runtime: SiteRuntime; revision: number } | undefined
 >(undefined);
-export function SiteProvider({
+export const SiteProvider = ({
     runtime,
     children,
 }: {
     runtime: SiteRuntime;
     children: ComponentChildren;
-}) {
+}) => {
     const [revision, setRevision] = useState(0);
     useLayoutEffect(() => {
         const unsubscribe = runtime.subscribe(() =>
@@ -422,9 +422,9 @@ export function SiteProvider({
         { value: { runtime, revision } },
         children,
     );
-}
-export function useSite(): SiteRuntime {
+};
+export const useSite = (): SiteRuntime => {
     const context = useContext(SiteContext);
     if (!context) throw new Error("SiteProvider is required.");
     return context.runtime;
-}
+};
