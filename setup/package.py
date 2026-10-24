@@ -19,6 +19,10 @@ def package(target, sources):
     with zipfile.ZipFile(partial, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for relative in sources:
             parts = Path(relative).parts
+            if any(part in (".cache", ".ai-docs", "node_modules", "dist", "build", ".agents", ".codex") for part in parts):
+                continue
+            if Path(relative).name in ("access-token", "connection.json", ".npmrc"):
+                continue
             if parts[0].startswith("start-") and relative not in LAUNCHERS[target]:
                 continue
             if relative.startswith("setup/python/") and relative not in ("setup/python/runtimes.tsv", "setup/python/NOTICE.txt"):

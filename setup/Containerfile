@@ -1,23 +1,6 @@
 # Oracle Linux 9 provides Instant Client packages for both x86_64 and aarch64.
 ARG SUITECONTAINER_BASE_IMAGE=container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24
-FROM ${SUITECONTAINER_BASE_IMAGE} AS build
-
-# Include the container's system trust store when npm connects to internal registries.
-ENV NODE_OPTIONS="--use-system-ca"
-
-WORKDIR /app
-COPY app/package.json ./
-COPY app/run-npm.mjs /opt/suitecontainer/run-npm.mjs
-RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=type=secret,id=npm-rootrc --mount=type=secret,id=npm-projectrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
-    if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
-    && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
-    && node /opt/suitecontainer/run-npm.mjs install --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund
-COPY app/tsconfig.build.json ./tsconfig.build.json
-COPY app/src ./src
-COPY app/copy-runtime.mjs ./copy-runtime.mjs
-RUN npm run build
-
-FROM ${SUITECONTAINER_BASE_IMAGE}
+FROM ${SUITECONTAINER_BASE_IMAGE} AS tools
 
 ENV NODE_OPTIONS="--use-system-ca"
 
@@ -56,7 +39,6 @@ RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=typ
     && javac -version \
     && suitecloud --version
 
-COPY --from=build /app/dist/ /opt/suitecontainer/
 COPY setup/gitlab-askpass.sh /usr/local/bin/
 COPY setup/sftp/start.sh /usr/local/bin/start-sftp
 RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
@@ -67,3 +49,27 @@ RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
 
 WORKDIR /workspace
 ENTRYPOINT ["node", "/opt/suitecontainer/install.js"]
+
+# Development runs the mounted checkout. Dependencies and the Vite cache live
+# in the project-specific Linux volume mounted by the host launcher.
+FROM tools AS development
+WORKDIR /app
+ENTRYPOINT ["npm"]
+CMD ["run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]
+
+FROM tools AS build
+WORKDIR /app
+COPY app/package.json app/package-lock.json ./
+COPY app/server/package.json ./server/package.json
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=type=secret,id=npm-rootrc --mount=type=secret,id=npm-projectrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
+    if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
+    && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
+    && node /opt/suitecontainer/run-npm.mjs ci --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund
+COPY app/tsconfig.build.json ./tsconfig.build.json
+COPY app/src ./src
+COPY app/server/src ./server/src
+COPY app/copy-runtime.mjs ./copy-runtime.mjs
+RUN npm run build
+
+FROM tools AS production
+COPY --from=build /app/dist/ /opt/suitecontainer/

@@ -29,6 +29,18 @@ class LauncherTests(unittest.TestCase):
             shutil.copyfile(REPOSITORY / relative, self.root / relative)
         (self.root / "credentials/auth.json").write_text('{"gitlab-token": "fixture-token"}')
         self.stack.enter_context(patch.object(bootstrap, "PROJECT", self.root))
+        self.stack.enter_context(patch.object(bootstrap, "secure_path"))
+        self.stack.enter_context(patch.object(bootstrap, "handshake"))
+        runtime = self.root / ".cache/runtime"
+        runtime.mkdir(parents=True)
+        (runtime / "access-token").write_text("a" * 64)
+        (runtime / "connection.json").write_text(json.dumps({
+            "schemaVersion": 1, "apiVersion": 1,
+            "instanceId": "00000000-0000-4000-8000-000000000001",
+            "projectRoot": str(self.root), "containerName": "fixture-app",
+            "baseUrl": "http://127.0.0.1:49123", "mode": "production",
+            "tokenFile": str(runtime / "access-token"),
+        }))
         self.stack.enter_context(patch.dict(os.environ, {"HOME": str(self.root), "USERPROFILE": str(self.root), "SUITECONTAINER_NEMS_DIR": str(self.root / "nems"), "SUITECONTAINER_NPMRC": str(self.root / "npm config/.npmrc")}, clear=True))
         self.stack.enter_context(patch.object(bootstrap, "container_name", return_value="fixture-app"))
         self.installer = self.stack.enter_context(patch.object(bootstrap, "install_podman"))
@@ -72,7 +84,7 @@ class LauncherTests(unittest.TestCase):
             elif args[1] == "port":
                 output = "127.0.0.1:49123\n"
             elif args[1] == "exec":
-                output = "/#session=fixture-session\n"
+                output = "idle\n" if "-e" in args else "/#session=" + "a" * 64 + "\n"
             elif args[1] == "run":
                 if "--web-paths" in args:
                     output = f"local\tfixture\t{self.root / 'repos'}\n"
@@ -178,10 +190,10 @@ class LauncherTests(unittest.TestCase):
 
     def test_reuses_running_app_without_rebuilding(self):
         self.existing = self.running = True
-        bootstrap.main()
+        result = bootstrap.main()
         self.assertFalse(self.calls_with("build"))
         self.assertFalse(self.calls_with("--serve"))
-        self.assertTrue(self.calls_with("port"))
+        self.assertTrue(result["reused"])
 
     def test_passes_npm_configuration_as_build_secret(self):
         npmrc = Path(os.environ["SUITECONTAINER_NPMRC"])

@@ -10,8 +10,8 @@
         "jsx": "react-jsx",
         "jsxImportSource": "hono/jsx",
         "noEmit": false,
-        "rootDir": "./src",
+        "rootDir": ".",
         "outDir": "./dist"
     },
-    "include": ["src/**/*.ts"]
+    "include": ["src/**/*.ts", "server/src/**/*.ts"]
 }

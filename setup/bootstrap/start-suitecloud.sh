@@ -39,4 +39,4 @@ if [[ ! -f "$runtime_dir/.ready" || ! -x "$python" ]]; then
   trap - EXIT
 fi
 if [[ "${1:-}" == --runtime-only ]]; then printf '%s\n' "$python"; exit 0; fi
-exec "$python" -I -B "$bootstrap_dir/bootstrap.py"
+exec "$python" -I -B "$bootstrap_dir/bootstrap.py" "$@"

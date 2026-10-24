@@ -2,11 +2,16 @@
 !app/
 app/*
 !app/package.json
+!app/package-lock.json
 !app/tsconfig.build.json
 !app/copy-runtime.mjs
 !app/run-npm.mjs
 !app/src/
 !app/src/**
+!app/server/
+!app/server/package.json
+!app/server/src/
+!app/server/src/**
 !setup/
 setup/*
 !setup/Containerfile

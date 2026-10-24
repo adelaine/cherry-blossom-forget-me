@@ -1,4 +1,6 @@
 """Shared host bootstrap, run by the project's private Python interpreter."""
+import argparse
+from contextlib import contextmanager, redirect_stdout
 import getpass
 import hashlib
 import importlib.util
@@ -7,6 +9,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import secrets
 import shlex
 import shutil
 import ssl
@@ -16,6 +19,8 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
+import uuid
 import webbrowser
 
 PROJECT = Path(__file__).resolve().parents[2]
@@ -26,6 +31,102 @@ IMAGE = "suitecontainer-workspace"
 DEVELOPER_IMAGE = "container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24"
 BASE_IMAGE = "ghcr.io/oracle/oraclelinux9-nodejs:24"
 OWNER = "suitecontainer.project"
+OPTIONS = argparse.Namespace(dev=False, no_browser=False, non_interactive=False, json=False, project=None)
+TOOLS_LABEL = "suitecontainer.tools"
+DEPENDENCIES_LABEL = "suitecontainer.dependencies"
+
+
+def secure_path(path):
+    """Make runtime credentials accessible only to the launching OS user."""
+    if path.is_symlink():
+        raise RuntimeError(f"Secure credential storage cannot use a symbolic link: {path}")
+    if WINDOWS:
+        script = """$ErrorActionPreference='Stop'; $p=$env:SUITECONTAINER_SECURE_PATH;
+$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User;
+$directory=Test-Path -LiteralPath $p -PathType Container;
+if($directory){$acl=[Security.AccessControl.DirectorySecurity]::new(); $flags=[Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'}
+else{$acl=[Security.AccessControl.FileSecurity]::new(); $flags=[Security.AccessControl.InheritanceFlags]::None};
+$acl.SetAccessRuleProtection($true,$false);
+$rule=[Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl',$flags,[Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow);
+$acl.AddAccessRule($rule);
+if($directory){[IO.Directory]::SetAccessControl($p,$acl)}
+else{[IO.File]::SetAccessControl($p,$acl)}"""
+        result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                                env={**os.environ, "SUITECONTAINER_SECURE_PATH": str(path)}, capture_output=True, text=True)
+        if result.returncode:
+            detail = result.stderr.strip() or "Windows PowerShell could not apply the filesystem ACL."
+            raise RuntimeError(f"Cannot establish owner-only Windows permissions for {path}. Check filesystem ACL support and your ownership, then relaunch.\n{detail}")
+    else:
+        path.chmod(0o700 if path.is_dir() else 0o600)
+        if path.stat().st_mode & 0o077:
+            raise RuntimeError(f"Cannot establish owner-only permissions for {path}. Use a filesystem that supports POSIX permissions.")
+
+
+def runtime_directory():
+    directory = PROJECT / ".cache/runtime"
+    directory.mkdir(parents=True, exist_ok=True)
+    secure_path(directory)
+    return directory
+
+
+@contextmanager
+def startup_lock():
+    path = runtime_directory() / "startup.lock"
+    with path.open("a+b") as lock:
+        secure_path(path)
+        if lock.tell() == 0:
+            lock.write(b"\0")
+            lock.flush()
+        lock.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise RuntimeError("Another launcher is starting this project. Wait for it to finish and run the launcher again.") from None
+        try:
+            yield
+        finally:
+            lock.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def write_private_json(path, value):
+    temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        with temporary.open("x", encoding="utf-8") as output:
+            secure_path(temporary)
+            json.dump(value, output, indent=2)
+            output.write("\n")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def dependency_fingerprint():
+    paths = ["app/package.json", "app/server/package.json", "app/package-lock.json"]
+    digest = hashlib.sha256()
+    for relative in paths:
+        path = PROJECT / relative
+        if not path.is_file():
+            raise RuntimeError(f"Development mode needs {relative}. Restore the committed application dependency files and relaunch.")
+        digest.update(relative.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def tooling_fingerprint():
+    digest = hashlib.sha256()
+    for relative in ("setup/Containerfile", "setup/gitlab-askpass.sh", "setup/sftp/start.sh", "app/run-npm.mjs"):
+        digest.update(relative.encode())
+        digest.update((PROJECT / relative).read_bytes())
+    return digest.hexdigest()
 
 
 def command(*args, capture=False, optional=False):
@@ -34,7 +135,7 @@ def command(*args, capture=False, optional=False):
     if WINDOWS and args[0] == "npm":
         args = [os.environ["COMSPEC"], "/d", "/s", "/c", subprocess.list2cmdline(args)]
     result = subprocess.run(args, text=True, encoding="utf-8", errors="replace",
-                            stdout=subprocess.PIPE if capture else None,
+                            stdout=subprocess.PIPE if capture else (sys.stderr if OPTIONS.json else None),
                             stderr=subprocess.DEVNULL if optional else None)
     if result.returncode and not optional:
         raise subprocess.CalledProcessError(result.returncode, args)
@@ -92,8 +193,13 @@ def import_token(auth_file, sources):
 def prepare_host():
     if not WINDOWS:
         os.umask(0o077)
+    credentials_created = not (PROJECT / "credentials").exists()
     for name in ("credentials", "repos", "sftp-files"):
         (PROJECT / name).mkdir(exist_ok=True)
+    # Existing checkouts can have a credentials directory owned by a different
+    # setup account. Protect every credential file without changing that owner.
+    if credentials_created:
+        secure_path(PROJECT / "credentials")
     for name in ("suitecontainer.config", "credentials/auth"):
         destination = PROJECT / f"{name}.json"
         if not destination.exists():
@@ -103,9 +209,11 @@ def prepare_host():
     if not os.environ.get("SUITECONTAINER_NEMS_DIR"):
         sources.append(Path.home() / ".nems.env")
     auth_file = PROJECT / "credentials/auth.json"
+    secure_path(auth_file)
     import_token(auth_file, sources)
-    if not WINDOWS:
-        auth_file.chmod(0o600)
+    for path in (PROJECT / "credentials").iterdir():
+        if path.is_file():
+            secure_path(path)
 
 
 def host_path():
@@ -130,6 +238,8 @@ def install_podman():
     host_path()
     if shutil.which("podman"):
         return
+    if OPTIONS.non_interactive:
+        raise RuntimeError("Podman is not installed. Install Podman and initialize its machine, then run the launcher again. Noninteractive startup cannot request installation privileges.")
     if WINDOWS:
         if not shutil.which("winget"):
             raise RuntimeError("Windows Package Manager is missing. Install App Installer from Microsoft Store, then run start-windows.cmd again.")
@@ -173,6 +283,8 @@ def start_machine():
     machines = json.loads(podman("machine", "list", "--format", "json", capture=True).stdout)
     machine = next((item for item in machines if item.get("Running")), None)
     if not machine:
+        if OPTIONS.non_interactive and not machines:
+            raise RuntimeError("No Podman machine is configured. Run podman machine init --now interactively, then relaunch.")
         if not machines:
             podman("machine", "init", "--now")
         else:
@@ -298,6 +410,8 @@ def build_image(machine):
         for identifier, path in files.items():
             secrets += ["--secret", f"id={identifier},src={convert(path)}"]
         arguments = ["build", "--build-arg", f"SUITECONTAINER_BASE_IMAGE={base_image}", *secrets, "-f", convert(PROJECT / "setup/Containerfile"), "--ignorefile", convert(PROJECT / "setup/.containerignore"), "--build-arg", "SUITECLOUD_CLI_ACCEPT_LICENSE=true"]
+        if OPTIONS.dev:
+            arguments += ["--target", "development", "--label", f"{TOOLS_LABEL}={tooling_fingerprint()}"]
         if not (WINDOWS or MACOS):
             environment.setdefault("SUITECLOUD_PROXY", "http://proxy.eng.netsuite.com:80")
             arguments += ["--build-arg", "SUITECLOUD_PROXY"]
@@ -306,10 +420,15 @@ def build_image(machine):
         build_podman(machine, *arguments)
 
 
-def start_web(name, extra_arguments=()):
+def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
     host = ["--env", f"SUITECONTAINER_HOST_ROOT={PROJECT}", "--env", f"SUITECONTAINER_HOST_PLATFORM={HOST_PLATFORM}"]
-    base = ["--mount", f"type=bind,src={PROJECT},dst=/project,ro=true", *host]
-    target = podman("run", "--rm", "--cgroups=disabled", *base, IMAGE, "--web-ssh-target", capture=True).stdout.strip()
+    helper_options = (["--mount", f"type=bind,src={PROJECT / 'app'},dst=/app,ro=true",
+                       "--mount", f"type=volume,src={development_volume(name)},dst=/app/node_modules",
+                       "--mount", f"type=volume,src={development_volume(name)}-server,dst=/app/server/node_modules",
+                       "--entrypoint", "node"] if OPTIONS.dev else [])
+    helper = [IMAGE, "--experimental-strip-types", "/app/src/install.ts"] if OPTIONS.dev else [IMAGE]
+    base = ["--mount", f"type=bind,src={PROJECT},dst=/project,ro=true", *host, *helper_options]
+    target = podman("run", "--rm", "--cgroups=disabled", *base, *helper, "--web-ssh-target", capture=True).stdout.strip()
     resolved = ""
     if target and shutil.which("ssh"):
         result = command("ssh", "-G", "-T", f"nsbuild@{target}", capture=True, optional=True)
@@ -321,8 +440,8 @@ def start_web(name, extra_arguments=()):
             ssh += ["--env", f"{key}={os.environ[key]}"]
     if WINDOWS:
         ssh += ["--env", f"SUITECONTAINER_SSH_PROGRAMDATA={os.environ.get('ProgramData', '')}"]
-    requests = podman("run", "--rm", "--cgroups=disabled", *base, *ssh, IMAGE, "--web-paths", capture=True).stdout
-    staged = ["--mount", f"type=bind,src={PROJECT},dst=/project"]
+    requests = podman("run", "--rm", "--cgroups=disabled", *base, *ssh, *helper, "--web-paths", capture=True).stdout
+    staged = ["--mount", f"type=bind,src={PROJECT},dst=/project", *helper_options]
     for request in requests.splitlines():
         if not request:
             continue
@@ -332,7 +451,7 @@ def start_web(name, extra_arguments=()):
             if kind == "external":
                 identifier += ".pem"
             staged += ["--mount", f"type=bind,src={path},dst=/{kind}/{identifier},ro=true"]
-    result = podman("run", "--rm", "--cgroups=disabled", *staged, *ssh, *host, IMAGE, "--web-mounts", capture=True)
+    result = podman("run", "--rm", "--cgroups=disabled", *staged, *ssh, *host, *helper, "--web-mounts", capture=True)
     mounts = [argument for mount in result.stdout.splitlines() if mount for argument in ("--mount", mount)]
     if not podman("container", "exists", name, optional=True).returncode:
         info = inspect(name)
@@ -341,9 +460,101 @@ def start_web(name, extra_arguments=()):
         confirm_owner(info)
         podman("rm", name, capture=True)
     arguments = ["run", "-d", "--name", name, "--label", f"{OWNER}={PROJECT}", "--cgroups=disabled", "--publish", "127.0.0.1::8080", "--publish", "127.0.0.1::8000", "--env", "SUITECONTAINER_SFTP=1"]
+    if instance_id:
+        directory = runtime_directory()
+        arguments += ["--label", f"suitecontainer.instance={instance_id}",
+                      "--env", f"SUITECONTAINER_INSTANCE_ID={instance_id}",
+                      "--env", "SUITECONTAINER_ACCESS_TOKEN_FILE=/run/suitecontainer/access-token",
+                      "--env", "SUITECONTAINER_CONNECTION_FILE=/run/suitecontainer/connection.json",
+                      "--env", f"SUITECONTAINER_MODE={'development' if OPTIONS.dev else 'production'}",
+                      "--mount", f"type=bind,src={directory},dst=/run/suitecontainer",
+                      "--mount", f"type=bind,src={directory / 'access-token'},dst=/run/suitecontainer/access-token,ro=true"]
+    if OPTIONS.dev:
+        volume = development_volume(name)
+        arguments += ["--label", f"{DEPENDENCIES_LABEL}={dependencies}",
+                      "--mount", f"type=bind,src={PROJECT / 'app'},dst=/app",
+                      "--mount", f"type=volume,src={volume},dst=/app/node_modules",
+                      "--mount", f"type=volume,src={volume}-server,dst=/app/server/node_modules",
+                      "--workdir", "/app", "--entrypoint", "npm"]
+        if WINDOWS and "SUITECONTAINER_WATCH_POLLING" not in os.environ:
+            arguments += ["--env", "SUITECONTAINER_WATCH_POLLING=1"]
+        for variable in ("SUITECONTAINER_WATCH_POLLING", "SUITECONTAINER_WATCH_INTERVAL_MS"):
+            if os.environ.get(variable):
+                arguments += ["--env", f"{variable}={os.environ[variable]}"]
     if not (WINDOWS or MACOS):
         arguments += ["--env", f"SUITECONTAINER_HOST_FQDN={command('hostname', '-f', capture=True, optional=True).stdout.strip()}"]
-    podman(*arguments, *extra_arguments, *mounts, IMAGE, "--serve", capture=True)
+    execution = ["--prefix", "/app", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"] if OPTIONS.dev else ["--serve"]
+    podman(*arguments, *extra_arguments, *mounts, IMAGE, *execution, capture=True)
+
+
+def development_volume(name):
+    return f"{name}-node-modules"
+
+
+@contextmanager
+def development_npm_inputs():
+    """Reuse host npm configuration and trust without putting credentials in argv."""
+    with tempfile.TemporaryDirectory(prefix="suitecontainer-dependencies-") as temporary:
+        directory = Path(temporary)
+        environment = os.environ
+        candidates = {
+            "npmrc": environment.get("SUITECONTAINER_NPMRC") or environment.get("NPM_CONFIG_USERCONFIG") or environment.get("npm_config_userconfig") or Path.home() / ".npmrc",
+            "npm-globalrc": environment.get("NPM_CONFIG_GLOBALCONFIG") or environment.get("npm_config_globalconfig"),
+            "npm-rootrc": PROJECT / ".npmrc", "npm-projectrc": PROJECT / "app/.npmrc",
+        }
+        variables = {key: value for key, value in environment.items() if key.lower().startswith("npm_config_")}
+        files = {}
+        for identifier, candidate in candidates.items():
+            if not candidate or not Path(candidate).is_file():
+                continue
+            path = Path(candidate).resolve()
+            files[identifier] = path
+            for variable in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", path.read_text(encoding="utf-8-sig")):
+                if variable in environment:
+                    variables[variable] = environment[variable]
+        if variables:
+            path = directory / "npm-env"
+            path.write_bytes(b"".join(key.encode() + b"\0" + value.encode() + b"\0" for key, value in variables.items()))
+            secure_path(path)
+            files["npm-env"] = path
+        arguments = []
+        if WINDOWS:
+            certificates = {data for store in ("ROOT",) for data, encoding, _ in ssl.enum_certificates(store) if encoding == "x509_asn"}
+            path = directory / "npm-ca.pem"
+            path.write_text("".join(ssl.DER_cert_to_PEM_cert(data) for data in sorted(certificates)), encoding="ascii")
+            files["npm-ca"] = path
+            arguments += ["--env", "NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca"]
+        for identifier, path in files.items():
+            arguments += ["--mount", f"type=bind,src={path},dst=/run/secrets/{identifier},ro=true"]
+        yield arguments
+
+
+def prepare_dependencies(name, fingerprint):
+    record = runtime_directory() / "dependencies.json"
+    previous = {}
+    try:
+        previous = json.loads(record.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    volume = development_volume(name)
+    exists = podman("volume", "exists", volume, optional=True)
+    server_exists = podman("volume", "exists", volume + "-server", optional=True)
+    if previous.get("fingerprint") == fingerprint and exists.returncode == 0 and server_exists.returncode == 0:
+        return
+    if exists.returncode not in (0, 1) or server_exists.returncode not in (0, 1):
+        raise RuntimeError("Cannot inspect development dependency storage. Check Podman permissions and relaunch.")
+    for relative in ("app/node_modules", "app/server/node_modules"):
+        (PROJECT / relative).mkdir(exist_ok=True)
+    print("Refreshing development dependencies from the committed lockfile...", flush=True)
+    # This runs only during an explicit launch, after the old app has been stopped while idle.
+    with development_npm_inputs() as npm_inputs:
+        podman("run", "--rm", "--cgroups=disabled", *npm_inputs,
+               "--mount", f"type=bind,src={PROJECT / 'app'},dst=/app,ro=true",
+               "--mount", f"type=volume,src={volume},dst=/app/node_modules",
+               "--mount", f"type=volume,src={volume}-server,dst=/app/server/node_modules",
+               "--workdir", "/app", "--entrypoint", "node", IMAGE,
+               "/opt/suitecontainer/run-npm.mjs", "ci", "--ignore-scripts", "--no-audit", "--no-fund")
+    write_private_json(record, {"fingerprint": fingerprint, "volume": volume})
 
 
 def assert_app_idle(name, runner_stopped=False):
@@ -385,43 +596,136 @@ def playwright_runner(name, machine, info):
                                    machine_path=machine_path, inspect_container=inspect, confirm_owner=confirm_owner, owner=OWNER)
 
 
-def open_page(name):
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, new_url):
+        return None
+
+
+def connection_http():
+    # Credentials must never be sent through a corporate proxy or a redirect.
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+
+
+def validate_connection(value, name):
+    expected_token = PROJECT / ".cache/runtime/access-token"
+    if not isinstance(value, dict) or value.get("schemaVersion") != 1 or value.get("apiVersion") != 1:
+        raise RuntimeError("instance_unavailable: The connection descriptor has an unsupported schema. Run the launcher explicitly to refresh it.")
+    if not isinstance(value.get("projectRoot"), str) or Path(value["projectRoot"]).resolve() != PROJECT.resolve() or value.get("containerName") != name:
+        raise RuntimeError("instance_unavailable: The connection descriptor belongs to another project.")
+    if value.get("tokenFile") != str(expected_token) or value.get("mode") not in ("production", "development"):
+        raise RuntimeError("instance_unavailable: The connection descriptor has invalid credential or mode metadata.")
+    if not isinstance(value.get("instanceId"), str) or not re.fullmatch(r"[a-f0-9-]{36}", value["instanceId"]):
+        raise RuntimeError("instance_unavailable: The connection descriptor has an invalid instance identity.")
+    destination = urllib.parse.urlsplit(value.get("baseUrl", ""))
+    if destination.scheme != "http" or destination.hostname not in ("127.0.0.1", "::1", "localhost") or not destination.port or destination.username or destination.password or destination.path not in ("", "/") or destination.query or destination.fragment:
+        raise RuntimeError("instance_unavailable: The connection descriptor must identify a host-loopback HTTP endpoint.")
+    return value
+
+
+def read_connection(name):
+    path = PROJECT / ".cache/runtime/connection.json"
+    try:
+        return validate_connection(json.loads(path.read_text(encoding="utf-8")), name)
+    except (OSError, ValueError, TypeError) as error:
+        raise RuntimeError("instance_unavailable: No valid connection descriptor is available. Run the launcher explicitly.") from error
+
+
+def handshake(connection):
+    http = connection_http()
+    # Check identity without credentials before reading and sending the token.
+    with http.open(connection["baseUrl"] + "/health?activity=1", timeout=3) as response:
+        identity = json.load(response)
+    if identity.get("instanceId") != connection["instanceId"]:
+        raise RuntimeError("instance_unavailable: The endpoint is a different backend instance. Rediscover it before sending credentials.")
+    token_file = Path(connection["tokenFile"])
+    secure_path(token_file)
+    token = token_file.read_text(encoding="ascii").strip()
+    if not re.fullmatch(r"[a-f0-9]{64}", token):
+        raise RuntimeError("instance_unavailable: The access token file is invalid. Run the launcher explicitly.")
+    request = urllib.request.Request(connection["baseUrl"] + "/api/capabilities", headers={"Authorization": "Bearer " + token})
+    with http.open(request, timeout=5) as response:
+        capabilities = json.load(response)
+    if capabilities.get("instanceId") != connection["instanceId"] or capabilities.get("apiVersion") != 1:
+        raise RuntimeError("instance_unavailable: The authenticated backend identity or API contract changed.")
+    return capabilities
+
+
+def remove_owned_connection(instance_id):
+    path = PROJECT / ".cache/runtime/connection.json"
+    try:
+        if json.loads(path.read_text(encoding="utf-8")).get("instanceId") == instance_id:
+            path.unlink()
+    except (OSError, ValueError, AttributeError):
+        pass
+
+
+def new_credentials():
+    instance_id = str(uuid.uuid4())
+    path = runtime_directory() / "access-token"
+    if path.is_symlink():
+        raise RuntimeError("The access token path must not be a symbolic link.")
+    (path.parent / "browser-url").unlink(missing_ok=True)
+    with path.open("w", encoding="ascii") as output:
+        secure_path(path)
+        output.write(secrets.token_hex(32))
+    return instance_id
+
+
+def discover(name, instance_id, dependencies=None):
     addresses = podman("port", name, "8080/tcp", capture=True).stdout.splitlines()
-    if not addresses:
-        raise RuntimeError("Could not find the deployment page port.")
-    port = addresses[0].rsplit(":", 1)[-1]
-    # Loopback readiness should not depend on the host's corporate HTTP proxy.
-    http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    for _ in range(60):
-        suffix = podman("exec", name, "cat", "/tmp/suitecontainer-web-url", capture=True, optional=True)
-        if not suffix.returncode and suffix.stdout.strip():
-            try:
-                with http.open(f"http://127.0.0.1:{port}/health", timeout=2):
-                    url = f"http://127.0.0.1:{port}{suffix.stdout.strip()}"
-                print(f"Deployment page: {url}", flush=True)
-                if WINDOWS or MACOS:
-                    try:
-                        if not webbrowser.open(url):
-                            print("Open the address above in your browser.")
-                    except OSError:
-                        print("Open the address above in your browser.")
-                else:
-                    hostname = command("hostname", "-f", capture=True).stdout.strip()
-                    print(f"From your computer, forward the port: ssh -N -L {port}:127.0.0.1:{port} {getpass.getuser()}@{hostname}")
-                    print("Then open the deployment page address above in your browser.")
-                print("The app stops automatically when unused. Running deployments and SQL jobs are allowed to finish. Use Stop app to stop it sooner, or run the launcher again to reopen it.")
-                return
-            except (OSError, urllib.error.URLError):
-                pass
-        info = inspect(name)
-        if not info or not info.get("State", {}).get("Running"):
-            podman("logs", name, optional=True)
-            raise RuntimeError("The deployment page could not start.")
-        time.sleep(1)
-    raise RuntimeError("The deployment page did not become ready. Check the container logs and relaunch.")
+    if not addresses or not re.fullmatch(r"127\.0\.0\.1:[0-9]+", addresses[0].strip()):
+        raise RuntimeError("Could not discover a host-loopback application port from Podman.")
+    connection = {"schemaVersion": 1, "apiVersion": 1, "instanceId": instance_id,
+                  "projectRoot": str(PROJECT), "containerName": name,
+                  "baseUrl": "http://" + addresses[0].strip(),
+                  "mode": "development" if OPTIONS.dev else "production",
+                  "tokenFile": str(PROJECT / ".cache/runtime/access-token")}
+    if dependencies:
+        connection["dependencyFingerprint"] = dependencies
+    validate_connection(connection, name)
+    for _ in range(30):
+        try:
+            handshake(connection)
+            write_private_json(runtime_directory() / "connection.json", connection)
+            return connection
+        except (OSError, ValueError, urllib.error.URLError):
+            info = inspect(name)
+            if not info or not info.get("State", {}).get("Running"):
+                raise RuntimeError("instance_unavailable: The backend exited before its authenticated startup handshake. Check container logs and relaunch.") from None
+            time.sleep(1)
+    raise RuntimeError("instance_unavailable: The backend did not complete its authenticated handshake. Check loopback access, Podman permissions, and container logs, then relaunch.")
 
 
-def main():
+def open_page(name, connection=None):
+    if OPTIONS.no_browser:
+        return
+    if connection is None:
+        connection = read_connection(name)
+    suffix = podman("exec", name, "cat", "/tmp/suitecontainer-web-url", capture=True).stdout.strip()
+    if not re.fullmatch(r"/#session=[a-f0-9]+", suffix):
+        raise RuntimeError("The browser session is unavailable. Relaunch the application.")
+    url = connection["baseUrl"] + suffix
+    if WINDOWS or MACOS:
+        try:
+            if not webbrowser.open(url):
+                raise OSError()
+        except OSError:
+            browser_file = runtime_directory() / "browser-url"
+            browser_file.write_text(url, encoding="utf-8")
+            secure_path(browser_file)
+            print(f"Open the private browser address stored in {browser_file}.")
+    else:
+        browser_file = runtime_directory() / "browser-url"
+        browser_file.write_text(url, encoding="utf-8")
+        secure_path(browser_file)
+        port = urllib.parse.urlsplit(connection["baseUrl"]).port
+        hostname = command("hostname", "-f", capture=True).stdout.strip()
+        print(f"From your computer, forward the port: ssh -N -L {port}:127.0.0.1:{port} {getpass.getuser()}@{hostname}")
+        print(f"Open the private browser address stored in {browser_file} after forwarding the port.")
+    print("The application is ready. Use Stop app to stop it, or run the launcher to reopen it.")
+
+
+def launch():
     prepare_host()
     install_podman()
     machine = start_machine()
@@ -430,11 +734,22 @@ def main():
     if info:
         confirm_owner(info)
     source_available = (PROJECT / "app/package.json").is_file() and (PROJECT / "setup/Containerfile").is_file()
-    shared_image_mode = pm_mode()
+    if OPTIONS.dev and not source_available:
+        raise RuntimeError("Development mode requires the application source checkout.")
+    shared_image_mode = pm_mode() and not OPTIONS.dev
     build_from_source = source_available and not shared_image_mode
     running = bool(info and info.get("State", {}).get("Running"))
+    dependencies = dependency_fingerprint() if OPTIONS.dev else None
     runner = playwright_runner(name, machine, info)
-    if build_from_source:
+    if OPTIONS.dev:
+        image = podman("image", "inspect", IMAGE, "--format", "json", capture=True, optional=True)
+        try:
+            compatible = not image.returncode and json.loads(image.stdout)[0].get("Labels", {}).get(TOOLS_LABEL) == tooling_fingerprint()
+        except (ValueError, KeyError, IndexError, AttributeError):
+            compatible = False
+        if not compatible:
+            build_image(machine)
+    elif build_from_source:
         build_image(machine)
     elif not running:
         image = podman("image", "exists", IMAGE, optional=True)
@@ -452,12 +767,23 @@ def main():
         elif image.returncode:
             raise RuntimeError("Could not check the local SuiteCloud image. Check the Podman connection and retry.")
     replace_app = False
+    connection = None
+    if running:
+        try:
+            connection = read_connection(name)
+            labels = info["Config"].get("Labels") or {}
+            expected_mode = "development" if OPTIONS.dev else "production"
+            replace_app = connection["mode"] != expected_mode or (OPTIONS.dev and labels.get(DEPENDENCIES_LABEL) != dependencies)
+            if not replace_app:
+                handshake(connection)
+        except (OSError, ValueError, RuntimeError, urllib.error.URLError):
+            replace_app = True
     if running and build_from_source:
         current_image = podman("image", "inspect", IMAGE, "--format", "{{.Id}}", capture=True).stdout.strip().removeprefix("sha256:")
         running_image = str(info.get("Image") or "").removeprefix("sha256:")
         if not current_image or not running_image:
             raise RuntimeError("Could not compare the running app with the updated image. The running app was left untouched.")
-        replace_app = current_image != running_image
+        replace_app = replace_app or current_image != running_image
     if runner:
         runner.plan(shared_image_mode)
         replace_app = replace_app or runner.app_changed
@@ -471,6 +797,8 @@ def main():
     if running and replace_app:
         print("Restarting the app with its updated container settings...", flush=True)
         podman("stop", name)
+        if connection:
+            remove_owned_connection(connection["instanceId"])
         # App shutdown also stops its runner. Recreate that runner only after the
         # old app has exited, so shutdown cannot stop the replacement container.
         if runner and runner.enabled:
@@ -478,13 +806,51 @@ def main():
     if runner:
         runner.apply()
     if not running or replace_app:
-        start_web(name, runner.app_arguments if runner else ())
-    open_page(name)
+        instance_id = new_credentials()
+        try:
+            if OPTIONS.dev:
+                prepare_dependencies(name, dependencies)
+            start_web(name, runner.app_arguments if runner else (), instance_id=instance_id, dependencies=dependencies)
+            connection = discover(name, instance_id, dependencies)
+        except BaseException:
+            remove_owned_connection(instance_id)
+            failed = inspect(name)
+            if failed and (failed["Config"].get("Labels") or {}).get("suitecontainer.instance") == instance_id:
+                podman("stop", name, optional=True, capture=True)
+            raise
+    open_page(name, connection)
+    return {**{key: connection[key] for key in ("apiVersion", "instanceId", "projectRoot", "containerName", "baseUrl", "mode")},
+            "connectionFile": str(PROJECT / ".cache/runtime/connection.json"), "reused": running and not replace_app}
+
+
+def main(args=()):
+    global PROJECT, OPTIONS, IMAGE
+    parser = argparse.ArgumentParser(description="Start the SuiteContainer environment and discover its shared API.")
+    parser.add_argument("--dev", action="store_true")
+    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--non-interactive", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--project", type=Path)
+    OPTIONS = parser.parse_args(args)
+    if OPTIONS.json:
+        OPTIONS.non_interactive = True
+        OPTIONS.no_browser = True
+    if OPTIONS.project:
+        PROJECT = OPTIONS.project.expanduser().resolve()
+    if not PROJECT.is_dir() or not (PROJECT / "suitecontainer.config.example.json").is_file():
+        raise RuntimeError("The selected project must contain the SuiteContainer checkout or distribution.")
+    IMAGE = "suitecontainer-workspace:dev" if OPTIONS.dev else "suitecontainer-workspace"
+    with redirect_stdout(sys.stderr) if OPTIONS.json else redirect_stdout(sys.stdout):
+        with startup_lock():
+            result = launch()
+    if OPTIONS.json:
+        print(json.dumps(result))
+    return result
 
 
 if __name__ == "__main__":
     try:
-        main()
+        main(sys.argv[1:])
     except subprocess.CalledProcessError as error:
         print(f"Setup stopped: {Path(error.cmd[0]).name} failed (exit {error.returncode}). Review the error above and retry.", file=sys.stderr)
         sys.exit(error.returncode if 0 < error.returncode < 256 else 1)

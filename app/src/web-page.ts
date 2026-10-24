@@ -269,10 +269,18 @@ document.addEventListener('alpine:init', () => {
             }, 5000);
           }
         }
-        async function api(path, data) {
+        let requestSequence = 0;
+        function requestId() {
+          return globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + '-' + (++requestSequence).toString(36) + '-' + Math.random().toString(36).slice(2);
+        }
+        async function api(path, data, idempotencyKey) {
+          // A retry of this action must retain its key. Connection loss requires
+          // rediscovery before another mutation; this client never replays it.
+          const mutation = data !== undefined && path !== 'check' && path !== 'validate' && path !== 'heartbeat';
+          const headers = {'X-Session-Token':session, ...(data === undefined ? {} : {'Content-Type':'application/json'}), ...(mutation ? {'Idempotency-Key':idempotencyKey || requestId()} : {})};
           let response, result;
           try {
-            response = await fetch('/api/' + path, { signal:AbortSignal.timeout(path === 'sftp' || path === 'playwright/cancel' ? 30000 : path === 'playwright/run' ? 20000 : 10000), method: data === undefined ? 'GET' : 'POST', headers: {'X-Session-Token': session, ...(data === undefined ? {} : {'Content-Type':'application/json'})}, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
+            response = await fetch('/api/' + path, { signal:AbortSignal.timeout(path === 'sftp' || path === 'playwright/cancel' ? 30000 : path === 'playwright/run' ? 20000 : 10000), method: data === undefined ? 'GET' : 'POST', headers, ...(data === undefined ? {} : {body:JSON.stringify(data)}) });
             result = await response.json();
           } catch { connectionLost(); throw new Error(connectionMessage); }
           if (response.status >= 500 || (!response.ok && result.error?.startsWith('The app is stopping'))) { connectionLost(); throw new Error(connectionMessage); }
@@ -556,7 +564,7 @@ document.addEventListener('alpine:init', () => {
           const timeout = setTimeout(() => controller.abort(), 10000);
           try {
             const response = await fetch('/api/theme', {signal:controller.signal, method:'POST',
-              headers:{'X-Session-Token':session,'Content-Type':'application/json'}, body:JSON.stringify({theme})});
+              headers:{'X-Session-Token':session,'Content-Type':'application/json','Idempotency-Key':requestId()}, body:JSON.stringify({theme})});
             if (!response.ok) {
               const result = await response.json();
               throw new Error(result.error || 'The theme could not be saved.');

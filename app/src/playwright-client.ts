@@ -104,12 +104,12 @@ export class PlaywrightClient {
         this.run = await this.request("/cancel", {});
     }
 
-    dispose(): Promise<void> {
+    dispose(shutdownRunner = true): Promise<void> {
         if (this.closing) return this.closing;
         this.disposed = true;
         clearInterval(this.timer);
         this.closing = (async () => {
-            if (this.url && this.token) {
+            if (shutdownRunner && this.url && this.token) {
                 try { await this.request("/shutdown", {}); } catch { /* The runner watchdog handles an unreachable app. */ }
             }
         })();

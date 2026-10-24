@@ -1,0 +1,13 @@
+{
+    "name": "@suitecontainer/server",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --config vite.config.ts",
+        "test": "node --experimental-strip-types --test test/api/credentials.spec.ts test/api/deployment.spec.ts test/api/sql.spec.ts test/copy-runtime.spec.ts test/main.spec.ts test/sql-password-crypto.spec.ts test/step-config.spec.ts test/step-deploy.spec.ts test/step-launch.spec.ts"
+    },
+    "devDependencies": {
+        "@hono/vite-dev-server": "0.26.1",
+        "vite": "^6.4.1"
+    }
+}

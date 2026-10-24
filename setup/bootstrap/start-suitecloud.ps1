@@ -14,7 +14,7 @@ if (-not (Test-Path -LiteralPath $ready) -or -not (Test-Path -LiteralPath $pytho
     [IO.Directory]::CreateDirectory($runtimeDir) | Out-Null
     $archive = Join-Path $runtimeDir ("download-$([guid]::NewGuid().ToString('N')).tar.gz")
     try {
-        Write-Host "Downloading Python $($metadata.version) for Windows..."
+        [Console]::Error.WriteLine("Downloading Python $($metadata.version) for Windows...")
         & curl.exe --fail --location --show-error --silent --output $archive $metadata.url
         if ($LASTEXITCODE -ne 0) { throw 'Could not download Python. Check network access, proxy settings, and VPN/Banyan sign-in, then retry.' }
         $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -28,5 +28,5 @@ if (-not (Test-Path -LiteralPath $ready) -or -not (Test-Path -LiteralPath $pytho
     }
 }
 if ($RuntimeOnly) { return $python }
-& $python -I -B (Join-Path $PSScriptRoot 'bootstrap.py')
+& $python -I -B (Join-Path $PSScriptRoot 'bootstrap.py') @args
 exit $LASTEXITCODE

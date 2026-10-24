@@ -2,14 +2,18 @@
     "name": "ns-suitecontainer",
     "private": true,
     "type": "module",
+    "workspaces": [
+        "server"
+    ],
     "scripts": {
         "build": "node copy-runtime.mjs && tsc -p tsconfig.build.json",
         "typecheck": "tsc -p tsconfig.json",
-        "dev": "tsx watch src/install.ts --serve",
+        "dev": "npm --workspace server run dev --",
         "start": "node dist/install.js --serve",
         "sftp": "node --experimental-strip-types src/sftp.ts",
         "format": "prettier --config ../setup/.prettierrc --write .",
-        "test": "node --experimental-strip-types --test test/install.spec.ts test/web.spec.ts test/web-routing.spec.ts test/build.spec.ts test/sql-password-crypto.spec.ts test/sql-unlock.spec.ts"
+        "test": "npm run test:frontend && npm --workspace server run test",
+        "test:frontend": "node --experimental-strip-types --test test/ansi.spec.ts test/web-page.spec.ts"
     },
     "dependencies": {
         "@alpinejs/csp": "^3.17.4",
