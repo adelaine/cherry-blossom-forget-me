@@ -131,7 +131,7 @@ export function createServices(
             playwright: playwright.status(testConfig, testConfigError),
             operations: operations
                 .list()
-                .map(({ result, ...operation }) => operation),
+                .map(({ result: _result, ...operation }) => operation),
             serviceRestartPending: operations.restartPending || null,
         };
     }

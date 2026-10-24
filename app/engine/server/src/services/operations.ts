@@ -174,8 +174,14 @@ export class OperationsService {
         op.offset += removed;
     }
     get(id: string): Operation {
-        const { log, offset, sourceLength, logState, cancel, ...op } =
-            this.lookup(id);
+        const {
+            log: _log,
+            offset: _offset,
+            sourceLength: _sourceLength,
+            logState: _logState,
+            cancel: _cancel,
+            ...op
+        } = this.lookup(id);
         return structuredClone(op);
     }
     list(): Operation[] {

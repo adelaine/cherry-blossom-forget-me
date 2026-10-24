@@ -20,7 +20,8 @@ async function hiddenPrompt(label: string): Promise<string> {
             process.stdin.setRawMode(false);
             process.stdin.pause();
             process.stdout.write("\n");
-            error ? reject(error) : resolve(value);
+            if (error) reject(error);
+            else resolve(value);
         };
         const onKey = (
             text: string,
@@ -33,7 +34,15 @@ async function hiddenPrompt(label: string): Promise<string> {
                 value = Array.from(value).slice(0, -1).join("");
                 return;
             }
-            if (!key.ctrl && !key.meta && text && !/[\x00-\x1f\x7f]/.test(text))
+            if (
+                !key.ctrl &&
+                !key.meta &&
+                text &&
+                Array.from(text).every((character) => {
+                    const code = character.charCodeAt(0);
+                    return code >= 0x20 && code !== 0x7f;
+                })
+            )
                 value += text;
         };
         process.stdin.on("keypress", onKey);
