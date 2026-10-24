@@ -3,15 +3,15 @@ import type { ServerLifecycle } from "../main.ts";
 import { configObject } from "../services/configuration.ts";
 import { ServiceError } from "../services/errors.ts";
 
-export type RequestSchema = {
+export interface RequestSchema {
     required?: string[];
     fields?: Record<
         string,
         { type?: "string" | "number" | "boolean" | "config"; enum?: unknown[] }
     >;
     description?: string;
-};
-export type ApiContract = {
+}
+export interface ApiContract {
     method: "GET" | "POST";
     path: string;
     schema?: RequestSchema;
@@ -19,12 +19,12 @@ export type ApiContract = {
     contentType?: string;
     cancelSupported?: boolean;
     confirmation?: string;
-};
+}
 export type ApiApp = Hono<{ Variables: { input: Record<string, unknown> } }>;
-export function parseSchema(
+export const parseSchema = (
     schema: RequestSchema | undefined,
     input: Record<string, unknown>,
-): Record<string, unknown> {
+): Record<string, unknown> => {
     if (!schema) return input;
     const normalized = { ...input };
     // Both existing stringified configuration and object configuration enter the same validator.
@@ -61,8 +61,8 @@ export function parseSchema(
             );
     }
     return normalized;
-}
-export function register(
+};
+export const register = (
     app: ApiApp,
     lifecycle: ServerLifecycle,
     contract: ApiContract,
@@ -71,7 +71,7 @@ export function register(
         c: Context,
     ) => unknown | Promise<unknown>,
     status = 200,
-): void {
+): void => {
     const handler = async (c: Context) => {
         const input = parseSchema(contract.schema, c.get("input") ?? {});
         const execute = async () => ({ status, value: await action(input, c) });
@@ -88,7 +88,7 @@ export function register(
     };
     if (contract.method === "POST") app.post(contract.path, handler);
     else app.get(contract.path, handler);
-}
+};
 
 export const operationContracts: ApiContract[] = [
     {
@@ -124,7 +124,10 @@ export const operationContracts: ApiContract[] = [
         cancelSupported: true,
     },
 ];
-export function operationsApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const operationsApi = (
+    app: ApiApp,
+    lifecycle: ServerLifecycle,
+): void => {
     register(app, lifecycle, operationContracts[0], (_, c) =>
         lifecycle.operations.get(c.req.param("id")!),
     );
@@ -134,4 +137,4 @@ export function operationsApi(app: ApiApp, lifecycle: ServerLifecycle): void {
     register(app, lifecycle, operationContracts[2], (_, c) =>
         lifecycle.operations.cancel(c.req.param("id")!),
     );
-}
+};

@@ -4,7 +4,7 @@ import type { LogRedactionState } from "./credentials.ts";
 
 export type OperationState =
     "preparing" | "running" | "succeeded" | "failed" | "cancelled";
-export type Operation = {
+export interface Operation {
     id: string;
     instanceId: string;
     kind: string;
@@ -16,7 +16,7 @@ export type Operation = {
     cancelSupported: boolean;
     result?: unknown;
     error?: ReturnType<typeof structuredError>;
-};
+}
 type StoredOperation = Operation & {
     log: string;
     offset: number;
@@ -26,7 +26,7 @@ type StoredOperation = Operation & {
 };
 type Reply = { status: number; value: unknown };
 
-function canonical(value: unknown): string {
+const canonical = (value: unknown): string => {
     if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
     if (value && typeof value === "object")
         return `{${Object.entries(value)
@@ -35,7 +35,7 @@ function canonical(value: unknown): string {
             .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`)
             .join(",")}}`;
     return JSON.stringify(value) ?? "null";
-}
+};
 
 export class OperationsService {
     readonly instanceId: string;

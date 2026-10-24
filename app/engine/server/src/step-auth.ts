@@ -1,13 +1,13 @@
 import { readFileSync } from "node:fs";
 import { posix, win32 } from "node:path";
 
-export type Auth = {
+export interface Auth {
     "gitlab-token"?: string;
     sftp?: { port: number; username: string; password: string; path?: string };
     "suitecloud-certificates"?: { public: string; private: string; id: string };
-};
+}
 
-export function readAuth(path = "/config/credentials/auth.json"): Auth {
+export const readAuth = (path = "/config/credentials/auth.json"): Auth => {
     let value: unknown;
     try {
         value = JSON.parse(readFileSync(path, "utf8"));
@@ -78,4 +78,4 @@ export function readAuth(path = "/config/credentials/auth.json"): Auth {
         );
     }
     return auth;
-}
+};

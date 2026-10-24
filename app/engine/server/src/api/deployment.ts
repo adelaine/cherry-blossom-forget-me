@@ -17,7 +17,10 @@ export const deploymentContracts: ApiContract[] = [
         cancelSupported: false,
     },
 ];
-export function deploymentApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const deploymentApi = (
+    app: ApiApp,
+    lifecycle: ServerLifecycle,
+): void => {
     register(
         app,
         lifecycle,
@@ -28,4 +31,4 @@ export function deploymentApi(app: ApiApp, lifecycle: ServerLifecycle): void {
         },
         202,
     );
-}
+};

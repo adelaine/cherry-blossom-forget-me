@@ -9,11 +9,14 @@ import { credentialPath } from "../web-mounts.ts";
 import type { ConfigurationService } from "./configuration.ts";
 import { message } from "./errors.ts";
 
-export type CredentialState = {
+export interface CredentialState {
     generatedCertificates: boolean;
     secrets: Set<string>;
-};
-export type LogRedactionState = { pending: string; privateKey: boolean };
+}
+export interface LogRedactionState {
+    pending: string;
+    privateKey: boolean;
+}
 export class CredentialsService {
     private config: ConfigurationService;
     readonly shared: CredentialState;

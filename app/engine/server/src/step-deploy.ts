@@ -5,7 +5,10 @@ import { basename, join } from "node:path";
 import type { Config } from "./step-config.ts";
 import { authenticationError } from "./step-suitecloud-errors.ts";
 
-function suitecloudEnv(passkey: string, deploying = false): NodeJS.ProcessEnv {
+const suitecloudEnv = (
+    passkey: string,
+    deploying = false,
+): NodeJS.ProcessEnv => {
     const env: NodeJS.ProcessEnv = {
         ...process.env,
         SUITECLOUD_CI_PASSKEY: passkey,
@@ -14,16 +17,16 @@ function suitecloudEnv(passkey: string, deploying = false): NodeJS.ProcessEnv {
     if (deploying) env.SUITECLOUD_CI = "1";
     else delete env.SUITECLOUD_CI;
     return env;
-}
+};
 
-function runSuitecloud(
+const runSuitecloud = (
     args: string[],
     cwd: string,
     passkey: string,
     deploying = false,
     domain = "",
     spawn: typeof spawnSync = spawnSync,
-): void {
+): void => {
     const authenticating = args[0] === "account:setup:ci";
     const result = spawn("suitecloud", args, {
         cwd,
@@ -49,13 +52,13 @@ function runSuitecloud(
         if (result.stdout) process.stdout.write(result.stdout);
         if (result.stderr) process.stderr.write(result.stderr);
     }
-}
+};
 
-export function deployRepos(
+export const deployRepos = (
     config: Config,
     privateKeyPath: string,
     options: { workspaceRoot?: string; spawn?: typeof spawnSync } = {},
-): void {
+): void => {
     const certificates = config.certificates!;
     const passkey =
         process.env.SUITECONTAINER_DEPLOY_PASSKEY ||
@@ -147,4 +150,4 @@ export function deployRepos(
         }
     }
     console.log("All SuiteApps were deployed.");
-}
+};

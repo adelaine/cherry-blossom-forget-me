@@ -22,7 +22,7 @@ export const sqlContracts: ApiContract[] = [
         cancelSupported: false,
     },
 ];
-export function sqlApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const sqlApi = (app: ApiApp, lifecycle: ServerLifecycle): void => {
     register(
         app,
         lifecycle,
@@ -38,4 +38,4 @@ export function sqlApi(app: ApiApp, lifecycle: ServerLifecycle): void {
         },
         202,
     );
-}
+};

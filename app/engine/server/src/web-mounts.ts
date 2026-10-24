@@ -3,14 +3,14 @@ import { join, posix, win32 } from "node:path";
 import type { Auth } from "./step-auth.ts";
 import { hostSshSettings, type SshSettings } from "./web-ssh.ts";
 
-export type MountRecord = {
+export interface MountRecord {
     hostRoot: string;
     platform: string;
     local: Record<string, string>;
     certificates: Record<string, string>;
     sftp?: string;
     ssh?: SshSettings;
-};
+}
 
 export const webSshTarget = (projectRoot: string): string => {
     try {
@@ -29,16 +29,16 @@ export const webSshTarget = (projectRoot: string): string => {
     }
 };
 
-export function hostPath(record: MountRecord, path: string): string {
+export const hostPath = (record: MountRecord, path: string): string => {
     const paths = record.platform === "win32" ? win32 : posix;
     const resolved = paths.resolve(record.hostRoot, path);
     return record.platform === "win32" ? resolved.toLowerCase() : resolved;
-}
+};
 
-export function credentialPath(
+export const credentialPath = (
     record: MountRecord,
     path: string,
-): string | null {
+): string | null => {
     const paths = record.platform === "win32" ? win32 : posix;
     const relative = paths.relative(
         paths.resolve(record.hostRoot, "credentials"),
@@ -53,7 +53,7 @@ export function credentialPath(
         return posix.join("/config/credentials", ...relative.split(paths.sep));
     }
     return record.certificates[hostPath(record, path)] ?? null;
-}
+};
 
 export const webPathRequests = (
     projectRoot: string,

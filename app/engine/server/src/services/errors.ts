@@ -18,23 +18,23 @@ export class ServiceError extends Error {
     }
 }
 
-export function isServiceError(error: unknown): error is ServiceError {
+export const isServiceError = (error: unknown): error is ServiceError => {
     return (
         error instanceof Error &&
         typeof (error as ServiceError).code === "string" &&
         typeof (error as ServiceError).status === "number" &&
         typeof (error as ServiceError).retryable === "boolean"
     );
-}
-export function errorStatus(error: unknown): number {
+};
+export const errorStatus = (error: unknown): number => {
     return isServiceError(error)
         ? error.status
         : error && typeof error === "object" && "code" in error
           ? 500
           : 400;
-}
+};
 
-export function message(error: unknown): string {
+export const message = (error: unknown): string => {
     const text = (
         error instanceof Error ? error.message : String(error)
     ).replace(/ Update .* and run the start script again\.$/, "");
@@ -53,12 +53,12 @@ export function message(error: unknown): string {
     )
         return "The certificate files do not match or cannot be read. Check Certificate paths in Credentials, or generate and register a new pair.";
     return text;
-}
+};
 
-export function structuredError(
+export const structuredError = (
     error: unknown,
     redact: (text: string) => string,
-) {
+) => {
     return {
         error:
             error instanceof SyntaxError
@@ -74,4 +74,4 @@ export function structuredError(
         retryable: isServiceError(error) ? error.retryable : false,
         details: isServiceError(error) ? error.details : {},
     };
-}
+};

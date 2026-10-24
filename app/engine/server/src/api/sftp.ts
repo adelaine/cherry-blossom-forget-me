@@ -23,9 +23,9 @@ export const sftpContracts: ApiContract[] = [
             "recreate requires confirmReplace=true and a replaceable target-side container.",
     },
 ];
-export function sftpApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const sftpApi = (app: ApiApp, lifecycle: ServerLifecycle): void => {
     register(app, lifecycle, sftpContracts[0], async (input) => {
         await lifecycle.services.sftp.action(input);
         return lifecycle.services.status();
     });
-}
+};

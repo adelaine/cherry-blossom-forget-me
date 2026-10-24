@@ -59,7 +59,7 @@ export const suiteappContracts: ApiContract[] = [
         responseFields: ["config", "ready", "error"],
     },
 ];
-export function suiteappsApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const suiteappsApi = (app: ApiApp, lifecycle: ServerLifecycle): void => {
     register(app, lifecycle, suiteappContracts[0], (input) => {
         lifecycle.services.configuration.save(input.config);
         return lifecycle.services.status();
@@ -89,4 +89,4 @@ export function suiteappsApi(app: ApiApp, lifecycle: ServerLifecycle): void {
     register(app, lifecycle, suiteappContracts[4], (input) =>
         lifecycle.services.status(JSON.stringify(input.config)),
     );
-}
+};

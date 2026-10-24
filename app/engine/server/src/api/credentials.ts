@@ -31,7 +31,10 @@ export const credentialContracts: ApiContract[] = [
         contentType: "application/x-pem-file",
     },
 ];
-export function credentialsApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const credentialsApi = (
+    app: ApiApp,
+    lifecycle: ServerLifecycle,
+): void => {
     register(app, lifecycle, credentialContracts[0], (input) => {
         lifecycle.services.credentials.save(input);
         return lifecycle.services.status();
@@ -47,4 +50,4 @@ export function credentialsApi(app: ApiApp, lifecycle: ServerLifecycle): void {
             new Uint8Array(lifecycle.services.credentials.publicCertificate()),
         );
     });
-}
+};

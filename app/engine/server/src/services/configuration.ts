@@ -3,13 +3,13 @@ import { join } from "node:path";
 import type { MountRecord } from "../web-mounts.ts";
 import type { OperationsService } from "./operations.ts";
 
-export function configObject(value: unknown): Record<string, unknown> {
+export const configObject = (value: unknown): Record<string, unknown> => {
     const parsed =
         typeof value === "string" ? JSON.parse(value) : structuredClone(value);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
         throw new Error("Configuration must be a JSON object.");
     return parsed as Record<string, unknown>;
-}
+};
 
 export class ConfigurationService {
     readonly path: string;

@@ -12,7 +12,7 @@ import type { Auth } from "../step-auth.ts";
 import type { Config } from "../step-config.ts";
 import { mountChanges } from "./suiteapps.ts";
 
-export type ServiceOptions = {
+export interface ServiceOptions {
     configDirectory?: string;
     workerScript?: string;
     sqlCommand?: string;
@@ -20,16 +20,16 @@ export type ServiceOptions = {
     sqlTimeoutMs?: number;
     playwrightUrl?: string;
     playwrightToken?: string;
-};
+}
 export type SharedServiceState = CredentialState & {
     passkey: string;
     runnerToken: string;
 };
-export function createServices(
+export const createServices = (
     options: ServiceOptions,
     operations: OperationsService,
     shared: SharedServiceState,
-) {
+) => {
     const configuration = new ConfigurationService(
         options.configDirectory ?? "/config",
         operations,
@@ -60,7 +60,7 @@ export function createServices(
         options.playwrightUrl,
         shared.runnerToken,
     );
-    function status(text = configuration.text()) {
+    const status = (text = configuration.text()) => {
         let auth: Auth = {};
         let credentialError = "";
         try {
@@ -134,15 +134,15 @@ export function createServices(
                 .map(({ result: _result, ...operation }) => operation),
             serviceRestartPending: operations.restartPending || null,
         };
-    }
-    async function dispose(options: { preserveRunner?: boolean } = {}) {
+    };
+    const dispose = async (options: { preserveRunner?: boolean } = {}) => {
         sftp.dispose();
         await Promise.all([
             deployment.dispose(),
             sql.dispose(),
             playwright.dispose(!options.preserveRunner),
         ]);
-    }
+    };
     return {
         configuration,
         credentials,
@@ -154,5 +154,5 @@ export function createServices(
         status,
         dispose,
     };
-}
+};
 export type Services = ReturnType<typeof createServices>;

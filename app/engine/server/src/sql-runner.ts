@@ -9,12 +9,15 @@ export type SqlRequest = {
     password: string;
     sql: string;
 };
-export type SqlResult = { state: "succeeded" | "failed"; output: string };
+export interface SqlResult {
+    state: "succeeded" | "failed";
+    output: string;
+}
 
-export function validateSqlRequest(
+export const validateSqlRequest = (
     input: Record<string, unknown>,
     config: unknown,
-): SqlRequest {
+): SqlRequest => {
     const vms = (config as { vms?: { url?: unknown }[] } | null)?.vms;
     if (
         !Array.isArray(vms) ||
@@ -68,16 +71,16 @@ export function validateSqlRequest(
         password: input.password,
         sql: input.sql,
     };
-}
+};
 
-export function startSql(
+export const startSql = (
     request: SqlRequest,
     options: {
         command?: string;
         args?: string[];
         timeoutMs?: number;
     } = {},
-): { child: ChildProcessWithoutNullStreams; result: Promise<SqlResult> } {
+): { child: ChildProcessWithoutNullStreams; result: Promise<SqlResult> } => {
     // No shell, credentials in arguments, or on-disk script. Restricted mode
     // disables SQL*Plus HOST, file access, and external scripts.
     const child = spawn(
@@ -178,4 +181,4 @@ export function startSql(
         );
     });
     return { child, result };
-}
+};

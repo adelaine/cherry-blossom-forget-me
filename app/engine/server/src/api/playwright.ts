@@ -22,7 +22,10 @@ export const playwrightContracts: ApiContract[] = [
         cancelSupported: true,
     },
 ];
-export function playwrightApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const playwrightApi = (
+    app: ApiApp,
+    lifecycle: ServerLifecycle,
+): void => {
     register(
         app,
         lifecycle,
@@ -38,4 +41,4 @@ export function playwrightApi(app: ApiApp, lifecycle: ServerLifecycle): void {
         await lifecycle.services.playwright.cancel();
         return lifecycle.services.status();
     });
-}
+};

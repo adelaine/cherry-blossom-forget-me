@@ -5,7 +5,7 @@ import { readAuth } from "./step-auth.ts";
 const tokenPath = "/tmp/suitecloud-gitlab-token";
 const nemsFiles = ["/config/.nems.env", "/config/config.toml"];
 
-export function readToken(file: string): string {
+export const readToken = (file: string): string => {
     if (!existsSync(file)) return "";
     let contents: string;
     try {
@@ -59,9 +59,9 @@ export function readToken(file: string): string {
         if (value) return value;
     }
     return "";
-}
+};
 
-function promptForToken(): string {
+const promptForToken = (): string => {
     const result = spawnSync(
         "bash",
         [
@@ -73,20 +73,20 @@ function promptForToken(): string {
     if (result.status !== 0)
         throw new Error("Could not read the GitLab token.");
     return result.stdout;
-}
+};
 
-export function prepareToken(
+export const prepareToken = (
     authPath = "/config/credentials/auth.json",
     destination = tokenPath,
-): void {
+): void => {
     const token =
         readAuth(authPath)["gitlab-token"]?.trim() ||
         nemsFiles.map(readToken).find(Boolean) ||
         (process.env.SUITECONTAINER_NONINTERACTIVE ? "" : promptForToken());
     if (!token) throw new Error("A GitLab token is required.");
     writeFileSync(destination, token, { mode: 0o600 });
-}
+};
 
-export function removeToken(): void {
+export const removeToken = (): void => {
     rmSync(tokenPath, { force: true });
-}
+};

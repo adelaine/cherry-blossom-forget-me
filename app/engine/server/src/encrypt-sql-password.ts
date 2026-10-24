@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { encryptSqlPassword } from "./sql-password-crypto.ts";
 import { SQL_PASSWORD_SALT } from "./sql-settings.ts";
 
-async function hiddenPrompt(label: string): Promise<string> {
+const hiddenPrompt = async (label: string): Promise<string> => {
     if (!process.stdin.isTTY || !process.stdout.isTTY)
         throw new Error(
             "Run this utility in a terminal, or use --stdin to read JSON from standard input.",
@@ -47,11 +47,11 @@ async function hiddenPrompt(label: string): Promise<string> {
         };
         process.stdin.on("keypress", onKey);
     });
-}
+};
 
-export async function generateEncryptedPassword(
+export const generateEncryptedPassword = async (
     args = process.argv.slice(2),
-): Promise<void> {
+): Promise<void> => {
     if (args.some((arg) => arg !== "--stdin"))
         throw new Error(
             "Usage: node app/src/encrypt-sql-password.ts [--stdin]",
@@ -108,7 +108,7 @@ export async function generateEncryptedPassword(
         console.log(
             "Save this encrypted string with your SQL credentials. Keep SQL_PASSWORD_SALT unchanged and the password hint separate.",
         );
-}
+};
 
 if (
     process.argv[1] &&

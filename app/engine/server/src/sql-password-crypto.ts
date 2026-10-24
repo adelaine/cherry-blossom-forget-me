@@ -5,7 +5,7 @@ import {
     scrypt,
 } from "node:crypto";
 
-function validateInput(password: string, salt: string): void {
+const validateInput = (password: string, salt: string): void => {
     if (!password || Buffer.byteLength(password) > 1024)
         throw new Error(
             "Enter the answer to the password hint (maximum 1024 bytes).",
@@ -14,9 +14,9 @@ function validateInput(password: string, salt: string): void {
         throw new Error(
             "Set SQL_PASSWORD_SALT before generating or unlocking credentials.",
         );
-}
+};
 
-async function deriveKey(password: string, salt: string): Promise<Buffer> {
+const deriveKey = async (password: string, salt: string): Promise<Buffer> => {
     validateInput(password, salt);
     return new Promise((resolve, reject) =>
         scrypt(
@@ -27,13 +27,13 @@ async function deriveKey(password: string, salt: string): Promise<Buffer> {
             (error, key) => (error ? reject(error) : resolve(key)),
         ),
     );
-}
+};
 
-export async function encryptSqlPassword(
+export const encryptSqlPassword = async (
     sqlPassword: string,
     unlockPassword: string,
     salt: string,
-): Promise<string> {
+): Promise<string> => {
     if (
         !sqlPassword ||
         Buffer.byteLength(sqlPassword) > 4096 ||
@@ -60,13 +60,13 @@ export async function encryptSqlPassword(
     } finally {
         key.fill(0);
     }
-}
+};
 
-export async function decryptSqlPassword(
+export const decryptSqlPassword = async (
     encrypted: string,
     unlockPassword: string,
     salt: string,
-): Promise<Buffer> {
+): Promise<Buffer> => {
     validateInput(unlockPassword, salt);
     const parts = encrypted.split(":");
     if (
@@ -101,4 +101,4 @@ export async function decryptSqlPassword(
         key.fill(0);
         partial?.fill(0);
     }
-}
+};

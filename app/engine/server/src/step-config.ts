@@ -1,25 +1,25 @@
 import { readFileSync } from "node:fs";
 import { readAuth, type Auth } from "./step-auth.ts";
 
-export type SuiteApp = {
+export interface SuiteApp {
     url?: string;
     directory: string;
     branch?: string;
     localPath?: string;
-};
-export type Vm = {
+}
+export interface Vm {
     account: string;
     url: string;
     database?: { user?: string; service?: string };
-};
+}
 export type PlaywrightBrowser = "container" | "local-chrome";
-export type PlaywrightSettings = {
+export interface PlaywrightSettings {
     enabled: boolean;
     project: string;
     browser?: PlaywrightBrowser;
     testFile?: string;
     workers?: number;
-};
+}
 export type Config = {
     PM_MODE?: boolean;
     suiteapps: SuiteApp[];
@@ -35,7 +35,7 @@ const invalidConfig: (message: string) => never = (message) => {
     );
 };
 
-export function gitlabHttpsUrl(raw: unknown): string | null {
+export const gitlabHttpsUrl = (raw: unknown): string | null => {
     if (typeof raw !== "string") return null;
     let projectPath: string;
     const ssh = raw.match(
@@ -66,9 +66,9 @@ export function gitlabHttpsUrl(raw: unknown): string | null {
     if (!/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+$/.test(projectPath))
         return null;
     return `https://gitlab.eng.netsuite.com/${projectPath}.git`;
-}
+};
 
-export function validBranch(branch: unknown): boolean {
+export const validBranch = (branch: unknown): boolean => {
     return (
         typeof branch === "string" &&
         /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch) &&
@@ -83,13 +83,13 @@ export function validBranch(branch: unknown): boolean {
                     part.endsWith(".lock"),
             )
     );
-}
+};
 
-export function validateConfig(
+export const validateConfig = (
     value: unknown,
     requireDeploymentSettings = false,
     auth?: Auth,
-): Config {
+): Config => {
     if (
         !value ||
         typeof value !== "object" ||
@@ -277,13 +277,13 @@ export function validateConfig(
         seen.add(repo.directory.toLowerCase());
     }
     return config;
-}
+};
 
-export function readConfig(
+export const readConfig = (
     path: string,
     requireDeploymentSettings = false,
     authPath = "/config/credentials/auth.json",
-): Config {
+): Config => {
     let value: unknown;
     try {
         value = JSON.parse(readFileSync(path, "utf8"));
@@ -294,4 +294,4 @@ export function readConfig(
     const config = validateConfig(value, false, auth);
     config.certificates = auth["suitecloud-certificates"];
     return validateConfig(config, requireDeploymentSettings);
-}
+};

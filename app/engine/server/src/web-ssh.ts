@@ -1,7 +1,10 @@
 import { posix, win32 } from "node:path";
 
-export type SshFile = { source: string; path: string };
-export type SshSettings = {
+export interface SshFile {
+    source: string;
+    path: string;
+}
+export interface SshSettings {
     target: string;
     hostname: string;
     user: string;
@@ -12,13 +15,13 @@ export type SshSettings = {
     hostKeyAlias?: string;
     strictHostKeyChecking?: "yes" | "no";
     error?: string;
-};
+}
 
 // Parse OpenSSH's resolved output, not the user's configuration syntax.
-export function hostSshSettings(
+export const hostSshSettings = (
     hostRoot: string,
     platform: string,
-): SshSettings {
+): SshSettings => {
     const target = process.env.SUITECONTAINER_SSH_TARGET || "";
     const settings: SshSettings = {
         target,
@@ -149,4 +152,4 @@ export function hostSshSettings(
         "certificate",
     );
     return settings;
-}
+};

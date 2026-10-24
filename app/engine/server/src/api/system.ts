@@ -56,7 +56,7 @@ export const systemContracts: ApiContract[] = [
             "Refused during deployment or SQL preparation/execution. Active Playwright is shut down through the managed runner.",
     },
 ];
-export function systemApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+export const systemApi = (app: ApiApp, lifecycle: ServerLifecycle): void => {
     register(app, lifecycle, systemContracts[0], () =>
         lifecycle.services.status(),
     );
@@ -105,4 +105,4 @@ export function systemApi(app: ApiApp, lifecycle: ServerLifecycle): void {
         lifecycle.stop();
         return { stopped: true };
     });
-}
+};

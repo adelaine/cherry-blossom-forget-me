@@ -19,7 +19,10 @@ import type { Config } from "./step-config.ts";
 import { readAuth } from "./step-auth.ts";
 
 // Generate and verify before replacing the active pair. No old-pair backups remain.
-export function replaceCertificates(directory: string, authPath: string): void {
+export const replaceCertificates = (
+    directory: string,
+    authPath: string,
+): void => {
     const auth = readAuth(authPath);
     const staging = mkdtempSync(join(directory, ".certificates-"));
     try {
@@ -51,12 +54,12 @@ export function replaceCertificates(directory: string, authPath: string): void {
     } finally {
         rmSync(staging, { recursive: true, force: true });
     }
-}
+};
 
-export function verifyCertificates(
+export const verifyCertificates = (
     publicPath = "/config/certs/public.pem",
     privatePath = "/config/certs/private.pem",
-): string {
+): string => {
     if (!existsSync(publicPath) || !existsSync(privatePath)) {
         throw new Error(
             "Certificate files were not mounted. Check their paths in credentials/auth.json.",
@@ -76,13 +79,13 @@ export function verifyCertificates(
         );
     }
     return privatePath;
-}
+};
 
-export function prepareCertificates(
+export const prepareCertificates = (
     config: Config,
     directory = "/config/credentials",
     authPath = "/config/credentials/auth.json",
-): boolean {
+): boolean => {
     const certificates = config.certificates;
     const paths = [certificates?.public, certificates?.private];
     const missing = paths.map(
@@ -162,4 +165,4 @@ export function prepareCertificates(
         mode: 0o600,
     });
     return generated;
-}
+};

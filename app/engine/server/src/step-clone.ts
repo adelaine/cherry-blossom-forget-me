@@ -3,7 +3,7 @@ import { existsSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { gitlabHttpsUrl, type SuiteApp } from "./step-config.ts";
 
-export function run(command: string, args: string[]): void {
+export const run = (command: string, args: string[]): void => {
     const result = spawnSync(command, args, {
         stdio: "inherit",
         env: {
@@ -14,18 +14,18 @@ export function run(command: string, args: string[]): void {
     });
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(`${command} failed.`);
-}
+};
 
-export function hasLocalCheckout(directory: string): boolean {
+export const hasLocalCheckout = (directory: string): boolean => {
     const destination = join("/workspace", directory);
     return (
         existsSync(destination) &&
         statSync(destination).isDirectory() &&
         existsSync(join(destination, ".git"))
     );
-}
+};
 
-export function cloneRepos(repos: SuiteApp[], pmMode = false): void {
+export const cloneRepos = (repos: SuiteApp[], pmMode = false): void => {
     for (const repo of repos) {
         if (repo.localPath || pmMode) {
             if (!hasLocalCheckout(repo.directory)) {
@@ -97,4 +97,4 @@ export function cloneRepos(repos: SuiteApp[], pmMode = false): void {
             }
         }
     }
-}
+};

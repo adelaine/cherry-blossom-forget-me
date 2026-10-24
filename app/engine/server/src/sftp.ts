@@ -30,12 +30,12 @@ Keep this terminal open. Ctrl+C closes the tunnel; SuiteContainer stays running.
 SuiteScript connects to localhost:8000 after your canary restriction is disabled.
 `;
 
-export type SftpOptions = {
+export interface SftpOptions {
     scrumbox: string;
     remotePort: number;
     remoteBind: string;
     sshOptions: string[];
-};
+}
 
 export const parseSftpOptions = (args: string[]): SftpOptions | null => {
     if (args.includes("--help")) return null;
@@ -112,7 +112,7 @@ export const parseSftpOptions = (args: string[]): SftpOptions | null => {
     return options;
 };
 
-function command(executable: string, args: string[]): string {
+const command = (executable: string, args: string[]): string => {
     const result = spawnSync(executable, args, {
         encoding: "utf8",
         timeout: 15_000,
@@ -124,9 +124,9 @@ function command(executable: string, args: string[]): string {
             `${executable} failed (${result.status ?? result.signal}). ${result.stderr.trim()}`,
         );
     return result.stdout.trim();
-}
+};
 
-function podmanExecutable(): string {
+const podmanExecutable = (): string => {
     if (process.platform === "win32") {
         for (const candidate of [
             join(process.env.LOCALAPPDATA ?? "", "Programs/Podman/podman.exe"),
@@ -135,12 +135,12 @@ function podmanExecutable(): string {
             if (existsSync(candidate)) return candidate;
     }
     return "podman";
-}
+};
 
-export function sftpTunnelArgs(
+export const sftpTunnelArgs = (
     options: SftpOptions,
     localPort: number,
-): string[] {
+): string[] => {
     return [
         "-N",
         "-T",
@@ -156,9 +156,9 @@ export function sftpTunnelArgs(
         "--",
         options.scrumbox,
     ];
-}
+};
 
-export async function serveSftp(options: SftpOptions): Promise<number> {
+export const serveSftp = async (options: SftpOptions): Promise<number> => {
     const podman = podmanExecutable();
     const containers = JSON.parse(
         command(podman, ["ps", "--format", "json"]),
@@ -270,7 +270,7 @@ export async function serveSftp(options: SftpOptions): Promise<number> {
             /* app may already have stopped */
         }
     }
-}
+};
 
 if (
     process.argv[1] &&

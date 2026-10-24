@@ -7,24 +7,24 @@ import { configObject, type ConfigurationService } from "./configuration.ts";
 import type { CredentialsService } from "./credentials.ts";
 import { message, ServiceError } from "./errors.ts";
 
-export type Target = {
+export interface Target {
     id: string;
     account: string;
     url: string;
     displayName: string;
-};
-export type Blocker = {
+}
+export interface Blocker {
     code: string;
     message: string;
     capability: string;
     target?: string;
-};
-export function mountChanges(
+}
+export const mountChanges = (
     config: Config,
     auth: Auth,
     record: MountRecord,
     allowUnusedExternal = false,
-): boolean {
+): boolean => {
     const local = Object.fromEntries(
         config.suiteapps
             .filter((repo) => repo.localPath)
@@ -58,7 +58,7 @@ export function mountChanges(
                 (path) => !usedExternal.has(path),
             ))
     );
-}
+};
 
 export class SuiteAppsService {
     readonly configuration: ConfigurationService;
