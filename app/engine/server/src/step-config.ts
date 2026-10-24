@@ -1,10 +1,25 @@
 import { readFileSync } from "node:fs";
 import { readAuth, type Auth } from "./step-auth.ts";
 
-export type SuiteApp = { url?: string; directory: string; branch?: string; localPath?: string };
-export type Vm = { account: string; url: string; database?: { user?: string; service?: string } };
+export type SuiteApp = {
+    url?: string;
+    directory: string;
+    branch?: string;
+    localPath?: string;
+};
+export type Vm = {
+    account: string;
+    url: string;
+    database?: { user?: string; service?: string };
+};
 export type PlaywrightBrowser = "container" | "local-chrome";
-export type PlaywrightSettings = { enabled: boolean; project: string; browser?: PlaywrightBrowser; testFile?: string; workers?: number };
+export type PlaywrightSettings = {
+    enabled: boolean;
+    project: string;
+    browser?: PlaywrightBrowser;
+    testFile?: string;
+    workers?: number;
+};
 export type Config = {
     PM_MODE?: boolean;
     suiteapps: SuiteApp[];
@@ -85,47 +100,112 @@ export function validateConfig(
     const config = value as Config;
     if (config.playwright !== undefined) {
         const settings = config.playwright;
-        if (!settings || typeof settings !== "object" || Array.isArray(settings) || typeof settings.enabled !== "boolean" || typeof settings.project !== "string") {
-            invalidConfig("Playwright needs enabled (true or false) and a project directory relative to repos.");
+        if (
+            !settings ||
+            typeof settings !== "object" ||
+            Array.isArray(settings) ||
+            typeof settings.enabled !== "boolean" ||
+            typeof settings.project !== "string"
+        ) {
+            invalidConfig(
+                "Playwright needs enabled (true or false) and a project directory relative to repos.",
+            );
         }
-        const relativePath = (path: string) => path === "" ||
-            /^[A-Za-z0-9][A-Za-z0-9._ /-]*$/.test(path) && path === path.trim() &&
-            path.split("/").every(part => part !== "" && part !== "." && part !== ".." && !part.startsWith("."));
-        if (!relativePath(settings.project) || (settings.project && !config.suiteapps.some(repo => repo?.directory === settings.project.split("/")[0]))) {
-            invalidConfig("Playwright project must be inside a listed SuiteApp, for example absi-nsn/test-pw, without parent-directory segments.");
+        const relativePath = (path: string) =>
+            path === "" ||
+            (/^[A-Za-z0-9][A-Za-z0-9._ /-]*$/.test(path) &&
+                path === path.trim() &&
+                path
+                    .split("/")
+                    .every(
+                        (part) =>
+                            part !== "" &&
+                            part !== "." &&
+                            part !== ".." &&
+                            !part.startsWith("."),
+                    ));
+        if (
+            !relativePath(settings.project) ||
+            (settings.project &&
+                !config.suiteapps.some(
+                    (repo) =>
+                        repo?.directory === settings.project.split("/")[0],
+                ))
+        ) {
+            invalidConfig(
+                "Playwright project must be inside a listed SuiteApp, for example absi-nsn/test-pw, without parent-directory segments.",
+            );
         }
-        if (settings.testFile !== undefined && (typeof settings.testFile !== "string" || !relativePath(settings.testFile))) {
-            invalidConfig("Playwright testFile must be a relative test file path, or empty to run the project.");
+        if (
+            settings.testFile !== undefined &&
+            (typeof settings.testFile !== "string" ||
+                !relativePath(settings.testFile))
+        ) {
+            invalidConfig(
+                "Playwright testFile must be a relative test file path, or empty to run the project.",
+            );
         }
-        if (settings.workers !== undefined && (!Number.isInteger(settings.workers) || settings.workers < 1 || settings.workers > 16)) {
-            invalidConfig("Playwright workers must be a whole number from 1 to 16.");
+        if (
+            settings.workers !== undefined &&
+            (!Number.isInteger(settings.workers) ||
+                settings.workers < 1 ||
+                settings.workers > 16)
+        ) {
+            invalidConfig(
+                "Playwright workers must be a whole number from 1 to 16.",
+            );
         }
-        if (settings.browser !== undefined && settings.browser !== "container" && settings.browser !== "local-chrome") {
-            invalidConfig('Playwright browser must be "container" or "local-chrome".');
+        if (
+            settings.browser !== undefined &&
+            settings.browser !== "container" &&
+            settings.browser !== "local-chrome"
+        ) {
+            invalidConfig(
+                'Playwright browser must be "container" or "local-chrome".',
+            );
         }
     }
     if (config.PM_MODE !== undefined && typeof config.PM_MODE !== "boolean") {
-        invalidConfig("The setting that controls local deployment must be true or false.");
+        invalidConfig(
+            "The setting that controls local deployment must be true or false.",
+        );
     }
     if (auth && !auth["gitlab-token"]?.trim()) config.PM_MODE = true;
-    if (config.status !== undefined &&
-        (!config.status || typeof config.status !== "object" || Array.isArray(config.status) ||
-            (config.status["deploy-start-ok"] !== undefined && ![0, 1].includes(config.status["deploy-start-ok"])))) {
+    if (
+        config.status !== undefined &&
+        (!config.status ||
+            typeof config.status !== "object" ||
+            Array.isArray(config.status) ||
+            (config.status["deploy-start-ok"] !== undefined &&
+                ![0, 1].includes(config.status["deploy-start-ok"])))
+    ) {
         invalidConfig("Set status.deploy-start-ok to 0 or 1.");
     }
-    if (config.status?.theme !== undefined && !["light", "dark"].includes(config.status.theme)) {
-        invalidConfig('Set status.theme to "light" or "dark", or remove it to use the system theme.');
+    if (
+        config.status?.theme !== undefined &&
+        !["light", "dark"].includes(config.status.theme)
+    ) {
+        invalidConfig(
+            'Set status.theme to "light" or "dark", or remove it to use the system theme.',
+        );
     }
     if (config.suiteapps.length > 0) {
         if (!Array.isArray(config.vms) || config.vms.length === 0)
             invalidConfig('The file needs a nonempty "vms" list.');
         for (const [index, vm] of config.vms.entries()) {
-            if (!vm || typeof vm !== "object" || Array.isArray(vm) ||
-                typeof vm.account !== "string" || !/^[A-Za-z0-9_-]+$/.test(vm.account) ||
+            if (
+                !vm ||
+                typeof vm !== "object" ||
+                Array.isArray(vm) ||
+                typeof vm.account !== "string" ||
+                !/^[A-Za-z0-9_-]+$/.test(vm.account) ||
                 typeof vm.url !== "string" ||
                 !/^(?:[A-Za-z0-9-]+\.)+[A-Za-z0-9-]+$/.test(vm.url) ||
-                !vm.url.endsWith(".netsuite.com")) {
-                invalidConfig(`VM ${index + 1} needs an account ID and a NetSuite domain.`);
+                !vm.url.endsWith(".netsuite.com")
+            ) {
+                invalidConfig(
+                    `VM ${index + 1} needs an account ID and a NetSuite domain.`,
+                );
             }
         }
     }
@@ -178,12 +258,18 @@ export function validateConfig(
                 `SuiteApp ${index + 1} has an invalid "branch" name.`,
             );
         }
-        if (repo.localPath !== undefined && (typeof repo.localPath !== "string" ||
-            /[,\r\n\t]/.test(repo.localPath) || (repo.localPath.length > 0 && !repo.localPath.trim()))) {
+        if (
+            repo.localPath !== undefined &&
+            (typeof repo.localPath !== "string" ||
+                /[,\r\n\t]/.test(repo.localPath) ||
+                (repo.localPath.length > 0 && !repo.localPath.trim()))
+        ) {
             invalidConfig(`SuiteApp ${index + 1} has an invalid "localPath".`);
         }
         if (!config.PM_MODE && repo.localPath && repo.branch !== undefined) {
-            invalidConfig(`SuiteApp ${index + 1} cannot set both "localPath" and "branch".`);
+            invalidConfig(
+                `SuiteApp ${index + 1} cannot set both "localPath" and "branch".`,
+            );
         }
         if (repo.url !== undefined && !gitlabHttpsUrl(repo.url)) {
             invalidConfig(`SuiteApp ${index + 1} has an invalid GitLab URL.`);

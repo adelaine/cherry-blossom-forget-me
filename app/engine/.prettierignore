@@ -1,0 +1,57 @@
+# Private data and local agent state
+../../home/
+**/home/
+**/.ai-docs/
+**/.agents/
+**/.codex/
+**/.claude/
+**/.cursor/
+../**/.ai-docs/
+
+# Dependencies, caches, generated output, and coverage
+**/node_modules/
+**/.cache/
+**/.vite/
+**/dist/
+**/build/
+**/coverage/
+**/.nyc_output/
+**/tmp/
+**/temp/
+*.tsbuildinfo
+../**/node_modules/
+../**/.cache/
+../**/dist/
+../**/build/
+../**/coverage/
+
+# Dependency lockfiles and vendored assets
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+pnpm-lock.yaml
+bun.lock
+bun.lockb
+**/vendor/
+**/vendored/
+**/assets/
+*.min.js
+*.min.css
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.svg
+*.ttf
+*.otf
+*.woff
+*.woff2
+../**/vendor/
+../**/vendored/
+../**/assets/
+
+# README files are maintained separately
+README.md
+../**/README.md

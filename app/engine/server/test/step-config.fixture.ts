@@ -13,8 +13,13 @@ export function withConfigFixture(action: (directory: string) => void): void {
         );
         action(directory);
     } finally {
-        if (!resolve(directory).startsWith(resolve(tmpdir()) + sep) || !basename(directory).startsWith("suitecontainer-certificates-")) {
-            throw new Error("Fixture cleanup must stay inside its temporary directory.");
+        if (
+            !resolve(directory).startsWith(resolve(tmpdir()) + sep) ||
+            !basename(directory).startsWith("suitecontainer-certificates-")
+        ) {
+            throw new Error(
+                "Fixture cleanup must stay inside its temporary directory.",
+            );
         }
         rmSync(directory, { recursive: true, force: true });
     }

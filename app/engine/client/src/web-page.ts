@@ -1,5 +1,8 @@
 import { ansiToHtml, ansiStyles, applyAnsiColors } from "./ansi.ts";
-import { ACTIVITY_GRACE_MS, HEARTBEAT_INTERVAL_MS } from "../../server/src/web-inactivity.ts";
+import {
+    ACTIVITY_GRACE_MS,
+    HEARTBEAT_INTERVAL_MS,
+} from "../../server/src/web-inactivity.ts";
 
 const lightTheme = `
 --pico-background-color:#e9e7e2;

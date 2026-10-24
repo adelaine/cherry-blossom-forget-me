@@ -1,5 +1,11 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+    existsSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,10 +23,18 @@ export function downloadFailureMessage(output) {
     if (/TAR_BAD_ARCHIVE|TAR_ENTRY_INVALID/.test(output)) {
         return "Package download did not return a valid archive. A Banyan login page can cause this. Check that Banyan is connected and signed in, then run the launcher again.";
     }
-    if (/\b(?:ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ESOCKETTIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH)\b/.test(output)) {
+    if (
+        /\b(?:ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ESOCKETTIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH)\b/.test(
+            output,
+        )
+    ) {
         return "Could not connect to the package registry. Check your network and Banyan connection, then run the launcher again.";
     }
-    if (/\b(?:UNABLE_TO_VERIFY_LEAF_SIGNATURE|UNABLE_TO_GET_ISSUER_CERT_LOCALLY|SELF_SIGNED_CERT_IN_CHAIN|DEPTH_ZERO_SELF_SIGNED_CERT|CERT_HAS_EXPIRED)\b/.test(output)) {
+    if (
+        /\b(?:UNABLE_TO_VERIFY_LEAF_SIGNATURE|UNABLE_TO_GET_ISSUER_CERT_LOCALLY|SELF_SIGNED_CERT_IN_CHAIN|DEPTH_ZERO_SELF_SIGNED_CERT|CERT_HAS_EXPIRED)\b/.test(
+            output,
+        )
+    ) {
         return "Could not verify the package registry certificate. Check your Banyan connection and company CA certificates, then run the launcher again.";
     }
     return "";
@@ -38,41 +52,86 @@ export function runNpm(args) {
             if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
             variables.set(name, pairs[index + 1]);
             // These paths belong to the host. Keep the container's cache and installation location.
-            if (/^npm_config_/i.test(name) && !/^npm_config_(?:cache|prefix|local_prefix|userconfig|globalconfig)$/i.test(name)) {
+            if (
+                /^npm_config_/i.test(name) &&
+                !/^npm_config_(?:cache|prefix|local_prefix|userconfig|globalconfig)$/i.test(
+                    name,
+                )
+            ) {
                 environment[name] = pairs[index + 1];
             }
         }
     }
     let configurationDirectory;
     if (installing) {
-        const userConfig = args.find(argument => argument.startsWith("--userconfig="))?.slice("--userconfig=".length) ?? "/run/secrets/npmrc";
-        const sources = ["/run/secrets/npm-globalrc", userConfig, "/run/secrets/npm-rootrc", "/run/secrets/npm-projectrc"].filter(file => existsSync(file));
+        const userConfig =
+            args
+                .find((argument) => argument.startsWith("--userconfig="))
+                ?.slice("--userconfig=".length) ?? "/run/secrets/npmrc";
+        const sources = [
+            "/run/secrets/npm-globalrc",
+            userConfig,
+            "/run/secrets/npm-rootrc",
+            "/run/secrets/npm-projectrc",
+        ].filter((file) => existsSync(file));
         if (sources.length) {
             let variableIndex = 0;
-            const configuration = sources.map(file => readFileSync(file, "utf8")).join("\n").replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (reference, name) => {
-                if (!variables.has(name)) return reference;
-                const alias = `SUITECONTAINER_NPM_VALUE_${variableIndex++}`;
-                environment[alias] = variables.get(name);
-                return "${" + alias + "}";
-            });
-            configurationDirectory = mkdtempSync(join(tmpdir(), "suitecontainer-npm-"));
+            const configuration = sources
+                .map((file) => readFileSync(file, "utf8"))
+                .join("\n")
+                .replace(
+                    /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
+                    (reference, name) => {
+                        if (!variables.has(name)) return reference;
+                        const alias = `SUITECONTAINER_NPM_VALUE_${variableIndex++}`;
+                        environment[alias] = variables.get(name);
+                        return "${" + alias + "}";
+                    },
+                );
+            configurationDirectory = mkdtempSync(
+                join(tmpdir(), "suitecontainer-npm-"),
+            );
             const configurationFile = join(configurationDirectory, ".npmrc");
             writeFileSync(configurationFile, configuration, { mode: 0o600 });
-            args = args.filter(argument => !argument.startsWith("--userconfig="));
+            args = args.filter(
+                (argument) => !argument.startsWith("--userconfig="),
+            );
             args.push(`--userconfig=${configurationFile}`);
-            if (/^\s*\/\/registry\s*=/m.test(configuration)) console.error("Check the selected npm configuration: the registry setting should use registry=, not //registry=.");
+            if (/^\s*\/\/registry\s*=/m.test(configuration))
+                console.error(
+                    "Check the selected npm configuration: the registry setting should use registry=, not //registry=.",
+                );
         }
-        const configurationArgs = args.filter(argument => argument.startsWith("--userconfig="));
-        const registry = spawnSync("npm", ["config", "get", "registry", ...configurationArgs], { env: environment, encoding: "utf8", timeout: 5000 });
+        const configurationArgs = args.filter((argument) =>
+            argument.startsWith("--userconfig="),
+        );
+        const registry = spawnSync(
+            "npm",
+            ["config", "get", "registry", ...configurationArgs],
+            { env: environment, encoding: "utf8", timeout: 5000 },
+        );
         if (registry.status === 0) {
             try {
                 const url = new URL(registry.stdout.trim());
-                url.username = ""; url.password = ""; url.search = ""; url.hash = "";
+                url.username = "";
+                url.password = "";
+                url.search = "";
+                url.hash = "";
                 console.log(`npm registry: ${url.href}`);
-            } catch { console.log("npm registry: could not display the configured URL"); }
-        } else console.log("npm registry: npm could not report it; continuing with installation");
+            } catch {
+                console.log(
+                    "npm registry: could not display the configured URL",
+                );
+            }
+        } else
+            console.log(
+                "npm registry: npm could not report it; continuing with installation",
+            );
     }
-    const child = spawn("npm", args, { env: environment, stdio: ["inherit", installing ? "pipe" : "inherit", "pipe"] });
+    const child = spawn("npm", args, {
+        env: environment,
+        stdio: ["inherit", installing ? "pipe" : "inherit", "pipe"],
+    });
     let recentOutput = "";
     let failureMessage = "";
     let launchFailed = false;
@@ -82,7 +141,9 @@ export function runNpm(args) {
         const frames = ["|", "/", "-", "\\"];
         let frame = 0;
         const renderProgress = () => {
-            process.stdout.write(`\r⬇️  Downloading packages… ${frames[frame++ % frames.length]}`);
+            process.stdout.write(
+                `\r⬇️  Downloading packages… ${frames[frame++ % frames.length]}`,
+            );
         };
         renderProgress();
         progressTimer = setInterval(renderProgress, 250);
@@ -120,15 +181,24 @@ export function runNpm(args) {
     });
     child.on("close", (code) => {
         stopProgress();
-        if (configurationDirectory) rmSync(configurationDirectory, { recursive: true, force: true });
+        if (configurationDirectory)
+            rmSync(configurationDirectory, { recursive: true, force: true });
         if (installing && (failureMessage || launchFailed || code !== 0)) {
-            if (recentOutput) process.stderr.write(recentOutput.endsWith("\n") ? recentOutput : `${recentOutput}\n`);
+            if (recentOutput)
+                process.stderr.write(
+                    recentOutput.endsWith("\n")
+                        ? recentOutput
+                        : `${recentOutput}\n`,
+                );
             if (failureMessage) console.error(failureMessage);
         }
         process.exitCode = failureMessage || launchFailed ? 1 : (code ?? 1);
     });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (
+    process.argv[1] &&
+    import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
     runNpm(process.argv.slice(2));
 }

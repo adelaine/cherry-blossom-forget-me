@@ -20,17 +20,35 @@ export function readAuth(path = "/config/credentials/auth.json"): Auth {
         throw new Error("credentials/auth.json must contain an object.");
     }
     const auth = value as Auth;
-    if (auth.sftp !== undefined &&
-        (!auth.sftp || typeof auth.sftp !== "object" || Array.isArray(auth.sftp) ||
-            !Number.isInteger(auth.sftp.port) || auth.sftp.port < 1024 || auth.sftp.port > 65535 ||
-            typeof auth.sftp.username !== "string" || !/^[a-z_][a-z0-9_-]{0,31}$/.test(auth.sftp.username) ||
+    if (
+        auth.sftp !== undefined &&
+        (!auth.sftp ||
+            typeof auth.sftp !== "object" ||
+            Array.isArray(auth.sftp) ||
+            !Number.isInteger(auth.sftp.port) ||
+            auth.sftp.port < 1024 ||
+            auth.sftp.port > 65535 ||
+            typeof auth.sftp.username !== "string" ||
+            !/^[a-z_][a-z0-9_-]{0,31}$/.test(auth.sftp.username) ||
             ["root", "nobody"].includes(auth.sftp.username) ||
-            typeof auth.sftp.password !== "string" || /[\r\n\0]/.test(auth.sftp.password) ||
-            (auth.sftp.path !== undefined && (typeof auth.sftp.path !== "string" || /[,\r\n\0\t]/.test(auth.sftp.path))))) {
-        throw new Error("Set sftp.port (1024-65535), sftp.username, and a single-line sftp.password in credentials/auth.json.");
+            typeof auth.sftp.password !== "string" ||
+            /[\r\n\0]/.test(auth.sftp.password) ||
+            (auth.sftp.path !== undefined &&
+                (typeof auth.sftp.path !== "string" ||
+                    /[,\r\n\0\t]/.test(auth.sftp.path))))
+    ) {
+        throw new Error(
+            "Set sftp.port (1024-65535), sftp.username, and a single-line sftp.password in credentials/auth.json.",
+        );
     }
-    if (auth.sftp?.path?.trim() && !posix.isAbsolute(auth.sftp.path) && !win32.isAbsolute(auth.sftp.path)) {
-        throw new Error("Set sftp.path to an absolute path to the local folder.");
+    if (
+        auth.sftp?.path?.trim() &&
+        !posix.isAbsolute(auth.sftp.path) &&
+        !win32.isAbsolute(auth.sftp.path)
+    ) {
+        throw new Error(
+            "Set sftp.path to an absolute path to the local folder.",
+        );
     }
     if (
         auth["gitlab-token"] !== undefined &&

@@ -5,38 +5,102 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 
-test("copied runtime packages and compiled code run without the development dependencies", { timeout: 120_000 }, async () => {
-    const appDirectory = fileURLToPath(new URL("../../", import.meta.url));
-    execFileSync(process.execPath, [join(appDirectory, "../setup/node/copy-runtime.mjs"), appDirectory], {
-        cwd: appDirectory, encoding: "utf8", timeout: 90_000,
-    });
+test(
+    "copied runtime packages and compiled code run without the development dependencies",
+    { timeout: 120_000 },
+    async () => {
+        const appDirectory = fileURLToPath(new URL("../../", import.meta.url));
+        execFileSync(
+            process.execPath,
+            [
+                join(appDirectory, "../setup/node/copy-runtime.mjs"),
+                appDirectory,
+            ],
+            {
+                cwd: appDirectory,
+                encoding: "utf8",
+                timeout: 90_000,
+            },
+        );
 
-    execFileSync(process.execPath, [join(appDirectory, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.build.json"], {
-        cwd: appDirectory, encoding: "utf8", timeout: 90_000,
-    });
+        execFileSync(
+            process.execPath,
+            [
+                join(appDirectory, "node_modules/typescript/bin/tsc"),
+                "-p",
+                "tsconfig.build.json",
+            ],
+            {
+                cwd: appDirectory,
+                encoding: "utf8",
+                timeout: 90_000,
+            },
+        );
 
-    const root = mkdtempSync(join(tmpdir(), "suitecontainer-standalone-"));
-    try {
-        const runtime = join(root, "runtime");
-        cpSync(join(appDirectory, "dist"), runtime, { recursive: true });
-        const configDirectory = join(root, "config");
-        mkdirSync(join(configDirectory, "credentials"), { recursive: true });
-        const configPath = join(configDirectory, "suitecontainer.config.json");
-        writeFileSync(configPath, JSON.stringify({ suiteapps: [], vms: [{ account: "000071", url: "" }] }));
-        writeFileSync(join(configDirectory, "credentials/auth.json"), JSON.stringify({
-            "gitlab-token": "", "suitecloud-certificates": { public: "", private: "", id: "" },
-        }));
-        writeFileSync(join(configDirectory, "credentials/web-mounts.json"), JSON.stringify({
-            hostRoot: "/project", platform: "linux", local: {}, certificates: {},
-        }));
+        const root = mkdtempSync(join(tmpdir(), "suitecontainer-standalone-"));
+        try {
+            const runtime = join(root, "runtime");
+            cpSync(join(appDirectory, "dist"), runtime, { recursive: true });
+            const configDirectory = join(root, "config");
+            mkdirSync(join(configDirectory, "credentials"), {
+                recursive: true,
+            });
+            const configPath = join(
+                configDirectory,
+                "suitecontainer.config.json",
+            );
+            writeFileSync(
+                configPath,
+                JSON.stringify({
+                    suiteapps: [],
+                    vms: [{ account: "000071", url: "" }],
+                }),
+            );
+            writeFileSync(
+                join(configDirectory, "credentials/auth.json"),
+                JSON.stringify({
+                    "gitlab-token": "",
+                    "suitecloud-certificates": {
+                        public: "",
+                        private: "",
+                        id: "",
+                    },
+                }),
+            );
+            writeFileSync(
+                join(configDirectory, "credentials/web-mounts.json"),
+                JSON.stringify({
+                    hostRoot: "/project",
+                    platform: "linux",
+                    local: {},
+                    certificates: {},
+                }),
+            );
 
-        const environment = { ...process.env, NODE_PATH: "", NODE_OPTIONS: "", SUITECONTAINER_AUTH: join(configDirectory, "credentials/auth.json") };
-        execFileSync(process.execPath, [join(runtime, "install.js"), "--validate", configPath], {
-            cwd: runtime, env: environment, encoding: "utf8", timeout: 10_000,
-        });
+            const environment = {
+                ...process.env,
+                NODE_PATH: "",
+                NODE_OPTIONS: "",
+                SUITECONTAINER_AUTH: join(
+                    configDirectory,
+                    "credentials/auth.json",
+                ),
+            };
+            execFileSync(
+                process.execPath,
+                [join(runtime, "install.js"), "--validate", configPath],
+                {
+                    cwd: runtime,
+                    env: environment,
+                    encoding: "utf8",
+                    timeout: 10_000,
+                },
+            );
 
-        const probe = join(root, "probe.mjs");
-        writeFileSync(probe, `
+            const probe = join(root, "probe.mjs");
+            writeFileSync(
+                probe,
+                `
 import assert from "node:assert/strict";
 import { once } from "node:events";
 const { startWebServer } = await import(${JSON.stringify(pathToFileURL(join(runtime, "web-server.js")).href)});
@@ -49,12 +113,16 @@ try {
     server.closeAllConnections();
     if (server.listening) await new Promise(resolve => server.close(resolve));
 }
-`);
-        execFileSync(process.execPath, [probe], {
-            cwd: runtime, env: environment, encoding: "utf8", timeout: 15_000,
-        });
-
-    } finally {
-        rmSync(root, { recursive: true, force: true });
-    }
-});
+`,
+            );
+            execFileSync(process.execPath, [probe], {
+                cwd: runtime,
+                env: environment,
+                encoding: "utf8",
+                timeout: 15_000,
+            });
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    },
+);

@@ -6,5 +6,7 @@ test("serves the deployment page", async () => {
     const app = await fixture();
     try {
         assert.equal((await fetch(app.origin + "/")).status, 200);
-    } finally { await app.close(); }
+    } finally {
+        await app.close();
+    }
 });

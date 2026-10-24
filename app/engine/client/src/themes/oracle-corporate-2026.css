@@ -17,124 +17,72 @@
 
 :root,
 :root:not([data-theme="dark"]) {
-  --oracle-slate-170: #2a2f2f;
-  --oracle-slate-150: #3c4545;
-  --oracle-slate-100: #697778;
-  --oracle-slate-50: #c2d4d4;
-  --oracle-neutral-10: #fbf9f8;
-  --oracle-neutral-30: #f1efed;
-  --oracle-neutral-70: #aea8a2;
-  --oracle-neutral-140: #514c47;
-  --oracle-sky-120: #00688c;
-  --oracle-sky-140: #04536f;
-  --oracle-rose-140: #6c3f49;
-  --oracle-red: #c74634;
-  --oracle-brand-170: #f0cc72;
-  --oracle-pine-70: #86b596;
-  --oracle-cover-image: url("/themes/oracle-cover-light.jpg");
-  --oracle-heading-accent: var(--oracle-red);
-  --oracle-summary-color: var(--oracle-sky-120);
-  --oracle-status-color: var(--oracle-rose-140);
-  --oracle-step-background: var(--oracle-slate-50);
-  --oracle-step-color: var(--oracle-slate-170);
-  --oracle-log-background: var(--oracle-neutral-30);
-  --oracle-log-color: var(--oracle-slate-170);
-  --oracle-log-green: #3f6b4b;
-  --oracle-log-yellow: #755100;
-  --oracle-log-blue: var(--oracle-sky-120);
-  --oracle-log-purple: var(--oracle-rose-140);
-  --oracle-log-cyan: #375d61;
-  /* --pico-font-family-sans-serif: "Oracle Corporate Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif;
+    --oracle-slate-170: #2a2f2f;
+    --oracle-slate-150: #3c4545;
+    --oracle-slate-100: #697778;
+    --oracle-slate-50: #c2d4d4;
+    --oracle-neutral-10: #fbf9f8;
+    --oracle-neutral-30: #f1efed;
+    --oracle-neutral-70: #aea8a2;
+    --oracle-neutral-140: #514c47;
+    --oracle-sky-120: #00688c;
+    --oracle-sky-140: #04536f;
+    --oracle-rose-140: #6c3f49;
+    --oracle-red: #c74634;
+    --oracle-brand-170: #f0cc72;
+    --oracle-pine-70: #86b596;
+    --oracle-cover-image: url("/themes/oracle-cover-light.jpg");
+    --oracle-heading-accent: var(--oracle-red);
+    --oracle-summary-color: var(--oracle-sky-120);
+    --oracle-status-color: var(--oracle-rose-140);
+    --oracle-step-background: var(--oracle-slate-50);
+    --oracle-step-color: var(--oracle-slate-170);
+    --oracle-log-background: var(--oracle-neutral-30);
+    --oracle-log-color: var(--oracle-slate-170);
+    --oracle-log-green: #3f6b4b;
+    --oracle-log-yellow: #755100;
+    --oracle-log-blue: var(--oracle-sky-120);
+    --oracle-log-purple: var(--oracle-rose-140);
+    --oracle-log-cyan: #375d61;
+    /* --pico-font-family-sans-serif: "Oracle Corporate Tab", "Oracle Sans Tab", Ubuntu, Arial, sans-serif;
   --pico-font-weight: 400; */
-  --pico-background-color: var(--oracle-neutral-10);
-  --pico-color: var(--oracle-slate-170);
-  --pico-muted-color: var(--oracle-neutral-140);
-  --pico-muted-border-color: var(--oracle-neutral-70);
-  --pico-primary: var(--oracle-sky-120);
-  --pico-primary-hover: var(--oracle-sky-140);
-  --pico-primary-focus: #00688c55;
-  --pico-primary-background: var(--oracle-sky-120);
-  --pico-primary-border: var(--oracle-sky-120);
-  --pico-primary-inverse: #fff;
-  --pico-secondary: var(--oracle-slate-150);
-  --pico-secondary-hover: var(--oracle-slate-170);
-  --pico-secondary-background: var(--oracle-neutral-30);
-  --pico-secondary-border: var(--oracle-neutral-70);
-  --pico-secondary-inverse: var(--oracle-slate-170);
-  --pico-contrast: var(--oracle-slate-170);
-  --pico-contrast-background: var(--oracle-slate-170);
-  --pico-contrast-border: var(--oracle-slate-170);
-  --pico-contrast-inverse: #fff;
-  --pico-card-background-color: var(--oracle-neutral-30);
-  --pico-card-border-color: var(--oracle-neutral-70);
-  --pico-card-box-shadow: none;
-  --pico-form-element-background-color: #fff;
-  --pico-form-element-border-color: var(--oracle-neutral-70);
-  --pico-form-element-color: var(--oracle-slate-170);
-  --pico-form-element-placeholder-color: var(--oracle-slate-100);
-  --pico-form-element-active-background-color: #fff;
-  --pico-form-element-active-border-color: var(--oracle-sky-120);
-  --pico-form-element-focus-color: #00688c55;
-  --pico-switch-background-color: var(--oracle-slate-100);
-  --pico-switch-checked-background-color: var(--oracle-sky-120);
-  --pico-blockquote-border-color: var(--oracle-rose-140);
-  --pico-code-background-color: #e6e3e0;
-  --pico-code-color: var(--oracle-slate-170);
+    --pico-background-color: var(--oracle-neutral-10);
+    --pico-color: var(--oracle-slate-170);
+    --pico-muted-color: var(--oracle-neutral-140);
+    --pico-muted-border-color: var(--oracle-neutral-70);
+    --pico-primary: var(--oracle-sky-120);
+    --pico-primary-hover: var(--oracle-sky-140);
+    --pico-primary-focus: #00688c55;
+    --pico-primary-background: var(--oracle-sky-120);
+    --pico-primary-border: var(--oracle-sky-120);
+    --pico-primary-inverse: #fff;
+    --pico-secondary: var(--oracle-slate-150);
+    --pico-secondary-hover: var(--oracle-slate-170);
+    --pico-secondary-background: var(--oracle-neutral-30);
+    --pico-secondary-border: var(--oracle-neutral-70);
+    --pico-secondary-inverse: var(--oracle-slate-170);
+    --pico-contrast: var(--oracle-slate-170);
+    --pico-contrast-background: var(--oracle-slate-170);
+    --pico-contrast-border: var(--oracle-slate-170);
+    --pico-contrast-inverse: #fff;
+    --pico-card-background-color: var(--oracle-neutral-30);
+    --pico-card-border-color: var(--oracle-neutral-70);
+    --pico-card-box-shadow: none;
+    --pico-form-element-background-color: #fff;
+    --pico-form-element-border-color: var(--oracle-neutral-70);
+    --pico-form-element-color: var(--oracle-slate-170);
+    --pico-form-element-placeholder-color: var(--oracle-slate-100);
+    --pico-form-element-active-background-color: #fff;
+    --pico-form-element-active-border-color: var(--oracle-sky-120);
+    --pico-form-element-focus-color: #00688c55;
+    --pico-switch-background-color: var(--oracle-slate-100);
+    --pico-switch-checked-background-color: var(--oracle-sky-120);
+    --pico-blockquote-border-color: var(--oracle-rose-140);
+    --pico-code-background-color: #e6e3e0;
+    --pico-code-color: var(--oracle-slate-170);
 }
 
 :root[data-theme="dark"] {
-  --oracle-cover-image: url("/themes/oracle-cover-dark.jpg");
-  --oracle-heading-accent: #fff;
-  --oracle-summary-color: var(--oracle-brand-170);
-  --oracle-status-color: #d5a2ae;
-  --oracle-step-background: var(--oracle-slate-100);
-  --oracle-step-color: #fff;
-  --oracle-log-background: #1c1d1d;
-  --oracle-log-color: #fff;
-  --oracle-log-green: var(--oracle-pine-70);
-  --oracle-log-yellow: var(--oracle-brand-170);
-  --oracle-log-blue: #8bbbd0;
-  --oracle-log-purple: #d5a2ae;
-  --oracle-log-cyan: #89b2b0;
-  --pico-background-color: #292b2b;
-  --pico-color: #fff;
-  --pico-muted-color: #d3cdca;
-  --pico-muted-border-color: #777371;
-  --pico-primary: var(--oracle-brand-170);
-  --pico-primary-hover: #ffe1a0;
-  --pico-primary-focus: #f0cc7255;
-  --pico-primary-background: var(--oracle-red);
-  --pico-primary-border: var(--oracle-red);
-  --pico-primary-hover-background: #a83b2d;
-  --pico-primary-hover-border: #a83b2d;
-  --pico-primary-inverse: #fff;
-  --pico-secondary: #e1eeee;
-  --pico-secondary-hover: #fff;
-  --pico-secondary-background: #3a3c3c;
-  --pico-secondary-border: #777371;
-  --pico-secondary-inverse: #fff;
-  --pico-contrast: #fff;
-  --pico-contrast-background: #1c1d1d;
-  --pico-contrast-border: #777371;
-  --pico-contrast-inverse: #fff;
-  --pico-card-background-color: #343636;
-  --pico-card-border-color: #777371;
-  --pico-form-element-background-color: #1c1d1d;
-  --pico-form-element-border-color: #777371;
-  --pico-form-element-color: #fff;
-  --pico-form-element-placeholder-color: #c2d4d4;
-  --pico-form-element-active-background-color: #1c1d1d;
-  --pico-form-element-active-border-color: var(--oracle-brand-170);
-  --pico-form-element-focus-color: #f0cc7255;
-  --pico-switch-background-color: #777371;
-  --pico-switch-checked-background-color: var(--oracle-brand-170);
-  --pico-blockquote-border-color: #d5a2ae;
-  --pico-code-background-color: #1c1d1d;
-  --pico-code-color: #fff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
     --oracle-cover-image: url("/themes/oracle-cover-dark.jpg");
     --oracle-heading-accent: #fff;
     --oracle-summary-color: var(--oracle-brand-170);
@@ -183,61 +131,139 @@
     --pico-blockquote-border-color: #d5a2ae;
     --pico-code-background-color: #1c1d1d;
     --pico-code-color: #fff;
-  }
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --oracle-cover-image: url("/themes/oracle-cover-dark.jpg");
+        --oracle-heading-accent: #fff;
+        --oracle-summary-color: var(--oracle-brand-170);
+        --oracle-status-color: #d5a2ae;
+        --oracle-step-background: var(--oracle-slate-100);
+        --oracle-step-color: #fff;
+        --oracle-log-background: #1c1d1d;
+        --oracle-log-color: #fff;
+        --oracle-log-green: var(--oracle-pine-70);
+        --oracle-log-yellow: var(--oracle-brand-170);
+        --oracle-log-blue: #8bbbd0;
+        --oracle-log-purple: #d5a2ae;
+        --oracle-log-cyan: #89b2b0;
+        --pico-background-color: #292b2b;
+        --pico-color: #fff;
+        --pico-muted-color: #d3cdca;
+        --pico-muted-border-color: #777371;
+        --pico-primary: var(--oracle-brand-170);
+        --pico-primary-hover: #ffe1a0;
+        --pico-primary-focus: #f0cc7255;
+        --pico-primary-background: var(--oracle-red);
+        --pico-primary-border: var(--oracle-red);
+        --pico-primary-hover-background: #a83b2d;
+        --pico-primary-hover-border: #a83b2d;
+        --pico-primary-inverse: #fff;
+        --pico-secondary: #e1eeee;
+        --pico-secondary-hover: #fff;
+        --pico-secondary-background: #3a3c3c;
+        --pico-secondary-border: #777371;
+        --pico-secondary-inverse: #fff;
+        --pico-contrast: #fff;
+        --pico-contrast-background: #1c1d1d;
+        --pico-contrast-border: #777371;
+        --pico-contrast-inverse: #fff;
+        --pico-card-background-color: #343636;
+        --pico-card-border-color: #777371;
+        --pico-form-element-background-color: #1c1d1d;
+        --pico-form-element-border-color: #777371;
+        --pico-form-element-color: #fff;
+        --pico-form-element-placeholder-color: #c2d4d4;
+        --pico-form-element-active-background-color: #1c1d1d;
+        --pico-form-element-active-border-color: var(--oracle-brand-170);
+        --pico-form-element-focus-color: #f0cc7255;
+        --pico-switch-background-color: #777371;
+        --pico-switch-checked-background-color: var(--oracle-brand-170);
+        --pico-blockquote-border-color: #d5a2ae;
+        --pico-code-background-color: #1c1d1d;
+        --pico-code-color: #fff;
+    }
 }
 
 body {
-  background: var(--pico-background-color);
-  background-image: linear-gradient(90deg, var(--pico-background-color), transparent 75%), var(--oracle-cover-image);
-  background-attachment: fixed;
-  background-size: cover;
+    background: var(--pico-background-color);
+    background-image:
+        linear-gradient(90deg, var(--pico-background-color), transparent 75%),
+        var(--oracle-cover-image);
+    background-attachment: fixed;
+    background-size: cover;
 }
 
 @media (max-width: 575px) {
-  main > header { padding: 1.5rem; }
-  main > header > hgroup { max-width: 100%; }
+    main > header {
+        padding: 1.5rem;
+    }
+    main > header > hgroup {
+        max-width: 100%;
+    }
 }
 main mark {
-  background: none;
-  color: var(--oracle-heading-accent);
-  -webkit-text-fill-color: currentColor;
+    background: none;
+    color: var(--oracle-heading-accent);
+    -webkit-text-fill-color: currentColor;
 }
 main article {
-  border-radius: 0.25rem;
+    border-radius: 0.25rem;
 }
-main :is(a, details > summary) { color: var(--oracle-summary-color); }
+main :is(a, details > summary) {
+    color: var(--oracle-summary-color);
+}
 main details > summary {
-  --pico-primary: var(--oracle-summary-color);
-  --pico-accordion-close-summary-color: var(--pico-primary);
-  --pico-accordion-open-summary-color: var(--pico-primary);
-  --pico-accordion-active-summary-color: var(--pico-primary);
+    --pico-primary: var(--oracle-summary-color);
+    --pico-accordion-close-summary-color: var(--pico-primary);
+    --pico-accordion-open-summary-color: var(--pico-primary);
+    --pico-accordion-active-summary-color: var(--pico-primary);
 }
-main .setup-section > summary { color: var(--pico-color); }
+main .setup-section > summary {
+    color: var(--pico-color);
+}
 main .credential-steps > li::before {
-  background: var(--oracle-step-background);
-  color: var(--oracle-step-color);
+    background: var(--oracle-step-background);
+    color: var(--oracle-step-color);
 }
 main .credential-steps > li:not(:last-child)::after {
-  border-color: var(--pico-muted-border-color);
+    border-color: var(--pico-muted-border-color);
 }
 main :is(input:not([type="checkbox"]), textarea, select):enabled {
-  background-color: var(--pico-form-element-background-color);
+    background-color: var(--pico-form-element-background-color);
 }
 main .status-message,
-main blockquote.status-message { --pico-primary: var(--oracle-status-color); }
-main pre {
-  background: var(--oracle-log-background);
-  border-color: var(--pico-muted-border-color);
-  color: var(--oracle-log-color);
+main blockquote.status-message {
+    --pico-primary: var(--oracle-status-color);
 }
-main pre :is(.ansi-fg-2, .ansi-fg-10) { color: var(--oracle-log-green); }
-main pre :is(.ansi-fg-3, .ansi-fg-11) { color: var(--oracle-log-yellow); }
-main pre :is(.ansi-fg-4, .ansi-fg-12) { color: var(--oracle-log-blue); }
-main pre :is(.ansi-fg-5, .ansi-fg-13) { color: var(--oracle-log-purple); }
-main pre :is(.ansi-fg-6, .ansi-fg-14) { color: var(--oracle-log-cyan); }
-main pre :is(.ansi-fg-7, .ansi-fg-15) { color: var(--oracle-log-color); }
-:focus-visible { outline-color: var(--oracle-summary-color); }
+main pre {
+    background: var(--oracle-log-background);
+    border-color: var(--pico-muted-border-color);
+    color: var(--oracle-log-color);
+}
+main pre :is(.ansi-fg-2, .ansi-fg-10) {
+    color: var(--oracle-log-green);
+}
+main pre :is(.ansi-fg-3, .ansi-fg-11) {
+    color: var(--oracle-log-yellow);
+}
+main pre :is(.ansi-fg-4, .ansi-fg-12) {
+    color: var(--oracle-log-blue);
+}
+main pre :is(.ansi-fg-5, .ansi-fg-13) {
+    color: var(--oracle-log-purple);
+}
+main pre :is(.ansi-fg-6, .ansi-fg-14) {
+    color: var(--oracle-log-cyan);
+}
+main pre :is(.ansi-fg-7, .ansi-fg-15) {
+    color: var(--oracle-log-color);
+}
+:focus-visible {
+    outline-color: var(--oracle-summary-color);
+}
 ::selection {
-  background: var(--oracle-summary-color);
-  color: var(--pico-background-color);
+    background: var(--oracle-summary-color);
+    color: var(--pico-background-color);
 }

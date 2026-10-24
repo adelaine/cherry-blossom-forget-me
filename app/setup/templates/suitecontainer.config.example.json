@@ -23,7 +23,7 @@
             "url": "",
             "account": "000071",
             "database": {
-                "service" : "singletonpdb",
+                "service": "singletonpdb",
                 "user": "shared"
             }
         }

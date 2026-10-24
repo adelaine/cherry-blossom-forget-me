@@ -5,9 +5,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { readAuth } from "./step-auth.ts";
 
-const projectRoot = resolve(process.env.SUITECONTAINER_INSTALL_ROOT ??
-    resolve(dirname(fileURLToPath(import.meta.url)), import.meta.url.endsWith(".ts") ? "../../../.." : "../../../../.."));
-const homeRoot = resolve(process.env.SUITECONTAINER_HOST_ROOT ?? join(projectRoot, "home"));
+const projectRoot = resolve(
+    process.env.SUITECONTAINER_INSTALL_ROOT ??
+        resolve(
+            dirname(fileURLToPath(import.meta.url)),
+            import.meta.url.endsWith(".ts") ? "../../../.." : "../../../../..",
+        ),
+);
+const homeRoot = resolve(
+    process.env.SUITECONTAINER_HOST_ROOT ?? join(projectRoot, "home"),
+);
 const help = `Connect SuiteContainer's SFTP service to your deployment scrumbox over SSH.
 Start SuiteContainer with the usual launcher first. From app/engine/: npm run sftp
 
@@ -34,7 +41,9 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
     if (args.includes("--help")) return null;
     const options: SftpOptions = {
         scrumbox: "",
-        remotePort: readAuth(join(homeRoot, "credentials/auth.json")).sftp?.port ?? 8000,
+        remotePort:
+            readAuth(join(homeRoot, "credentials/auth.json")).sftp?.port ??
+            8000,
         remoteBind: "127.0.0.1",
         sshOptions: [],
     };
@@ -83,14 +92,13 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
     }
     if (!options.scrumbox) {
         const config = JSON.parse(
-            readFileSync(
-                join(homeRoot, "suitecontainer.config.json"),
-                "utf8",
-            ),
+            readFileSync(join(homeRoot, "suitecontainer.config.json"), "utf8"),
         );
         const host = config?.vms?.[0]?.url;
         if (typeof host !== "string" || !host)
-            throw new Error("Set vms[0].url or supply --scrumbox nsbuild@HOST.");
+            throw new Error(
+                "Set vms[0].url or supply --scrumbox nsbuild@HOST.",
+            );
         options.scrumbox = `nsbuild@${host}`;
     }
     if (
@@ -189,7 +197,9 @@ export async function serveSftp(options: SftpOptions): Promise<number> {
     ]).split(/\s+/)[1];
     const url = options.scrumbox.split("@").at(-1)!;
     const connection = {
-        username: readAuth(join(homeRoot, "credentials/auth.json")).sftp?.username ?? "suitecontainer",
+        username:
+            readAuth(join(homeRoot, "credentials/auth.json")).sftp?.username ??
+            "suitecontainer",
         url:
             options.remoteBind === "127.0.0.1" ||
             options.remoteBind === "localhost"

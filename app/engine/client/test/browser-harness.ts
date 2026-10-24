@@ -10,31 +10,48 @@ export function initializeBrowser(context: any): void {
     let initialize: (() => void) | undefined;
     let component: any;
     const addEventListener = context.document.addEventListener;
-    context.document.addEventListener = (event: string, handler: any, options: any) => {
+    context.document.addEventListener = (
+        event: string,
+        handler: any,
+        options: any,
+    ) => {
         if (event === "alpine:init") initialize = handler;
         else addEventListener.call(context.document, event, handler, options);
     };
-    context.Alpine = { data(_name: string, factory: () => any) { component = factory(); } };
+    context.Alpine = {
+        data(_name: string, factory: () => any) {
+            component = factory();
+        },
+    };
     const pageElements: any[] = [];
-    for (const match of deploymentPage.html.matchAll(/<(\w+)([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+    for (const match of deploymentPage.html.matchAll(
+        /<(\w+)([^>]*\bid="([^"]+)"[^>]*)>/g,
+    )) {
         const [, tag, attributes, id] = match;
         const element = context.document.getElementById(id);
         element.id = id;
         element.tagName = tag!.toUpperCase();
         element.hidden = /\shidden(?:\s|$)/.test(attributes!);
-        if (tag === "details") element.open = /\sopen(?:\s|$)/.test(attributes!);
+        if (tag === "details")
+            element.open = /\sopen(?:\s|$)/.test(attributes!);
         element.disabled = /\sdisabled(?:\s|$)/.test(attributes!);
         element.textContent = id === "run-state" ? "Loading…" : "";
         const classes = new Set<string>();
-        element.classList ??= { toggle(name: string, force?: boolean) {
-            const present = force ?? !classes.has(name);
-            if (present) classes.add(name); else classes.delete(name);
-            return present;
-        } };
+        element.classList ??= {
+            toggle(name: string, force?: boolean) {
+                const present = force ?? !classes.has(name);
+                if (present) classes.add(name);
+                else classes.delete(name);
+                return present;
+            },
+        };
         pageElements.push(element);
     }
     const querySelectorAll = context.document.querySelectorAll;
-    context.document.querySelectorAll = (selector: string) => selector === "main [id]" ? pageElements : querySelectorAll?.(selector) ?? [];
+    context.document.querySelectorAll = (selector: string) =>
+        selector === "main [id]"
+            ? pageElements
+            : (querySelectorAll?.(selector) ?? []);
     const bridge = `
         Object.assign(globalThis, { refresh, heartbeat, render });
         Object.defineProperties(globalThis, {
@@ -42,19 +59,39 @@ export function initializeBrowser(context: any): void {
           editing: { get: () => editing, set: value => { editing = value; } },
           credentialEditing: { get: () => credentialEditing, set: value => { credentialEditing = value; } },
         });`;
-    runInNewContext(deploymentPage.script.replace("refresh(); setInterval(refresh, 2000);", bridge + "\nrefresh(); setInterval(refresh, 2000);"), context);
+    runInNewContext(
+        deploymentPage.script.replace(
+            "refresh(); setInterval(refresh, 2000);",
+            bridge + "\nrefresh(); setInterval(refresh, 2000);",
+        ),
+        context,
+    );
     initialize!();
-    for (const match of deploymentPage.html.matchAll(/<(\w+)([^>]*\bid="([^"]+)"[^>]*)>/g)) {
+    for (const match of deploymentPage.html.matchAll(
+        /<(\w+)([^>]*\bid="([^"]+)"[^>]*)>/g,
+    )) {
         const [, tag, attributes, id] = match;
         const element = context.document.getElementById(id);
         element.id = id;
         element.tagName = tag!.toUpperCase();
         const values = component.view[id!.replaceAll("-", "_")];
-        for (const property of ["hidden", "disabled", ...(attributes!.includes("x-text=") ? ["textContent"] : [])]) {
+        for (const property of [
+            "hidden",
+            "disabled",
+            ...(attributes!.includes("x-text=") ? ["textContent"] : []),
+        ]) {
             const key = property === "textContent" ? "text" : property;
-            Object.defineProperty(element, property, { configurable: true, get: () => values[key], set: value => { values[key] = value; } });
+            Object.defineProperty(element, property, {
+                configurable: true,
+                get: () => values[key],
+                set: (value) => {
+                    values[key] = value;
+                },
+            });
         }
-        for (const event of attributes!.matchAll(/@(input|click|change)="([^"]+)"/g)) {
+        for (const event of attributes!.matchAll(
+            /@(input|click|change)="([^"]+)"/g,
+        )) {
             element[event[1]!] = () => component[event[2]!].call(component);
         }
     }

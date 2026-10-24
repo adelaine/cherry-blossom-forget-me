@@ -10,17 +10,36 @@ import {
 } from "./step-certificates.ts";
 import { prepareToken, removeToken } from "./step-token.ts";
 import { launchMounts, prepareConfiguration } from "./step-launch.ts";
-import { prepareWebMounts, webPathRequests, webSshTarget } from "./web-mounts.ts";
+import {
+    prepareWebMounts,
+    webPathRequests,
+    webSshTarget,
+} from "./web-mounts.ts";
 import { startWebServer } from "./main.ts";
 
 export function main(args: string[] = process.argv.slice(2)): number {
-    if (args[0] === "--serve") { startWebServer(); return 0; }
-    if (args[0] === "--web-ssh-target") { console.log(webSshTarget("/project")); return 0; }
+    if (args[0] === "--serve") {
+        startWebServer();
+        return 0;
+    }
+    if (args[0] === "--web-ssh-target") {
+        console.log(webSshTarget("/project"));
+        return 0;
+    }
     if (args[0] === "--web-mounts" || args[0] === "--web-paths") {
         const hostRoot = process.env.SUITECONTAINER_HOST_ROOT;
-        if (!hostRoot) throw new Error("The launcher must supply SUITECONTAINER_HOST_ROOT.");
+        if (!hostRoot)
+            throw new Error(
+                "The launcher must supply SUITECONTAINER_HOST_ROOT.",
+            );
         const platform = process.env.SUITECONTAINER_HOST_PLATFORM ?? "linux";
-        console.log((args[0] === "--web-mounts" ? prepareWebMounts : webPathRequests)("/project", hostRoot, platform).join("\n"));
+        console.log(
+            (args[0] === "--web-mounts" ? prepareWebMounts : webPathRequests)(
+                "/project",
+                hostRoot,
+                platform,
+            ).join("\n"),
+        );
         return 0;
     }
     const prepareLaunch = args[0] === "--prepare-launch";
@@ -30,22 +49,39 @@ export function main(args: string[] = process.argv.slice(2)): number {
     const validateOnly = args[0] === "--validate";
     const certificatePathsOnly = args[0] === "--certificate-paths";
     const deploy = args[0] === "--deploy";
-    const prepareCertificatesOnly = args[0] === "--prepare-certificates" || prepareLaunch;
+    const prepareCertificatesOnly =
+        args[0] === "--prepare-certificates" || prepareLaunch;
     const localPathsOnly = args[0] === "--local-paths";
     const configPath = validateOnly
         ? args[1]
         : prepareLaunch || launchMountsOnly
           ? join(projectRoot, "suitecontainer.config.json")
-          : process.env.SUITECONTAINER_CONFIG ?? "/config/suitecontainer.config.json";
-    const authPath = prepareLaunch || launchMountsOnly
-        ? join(projectRoot, "credentials/auth.json")
-        : process.env.SUITECONTAINER_AUTH ?? "/config/credentials/auth.json";
-    const config = readConfig(configPath ?? "", certificatePathsOnly || launchMountsOnly, authPath);
+          : (process.env.SUITECONTAINER_CONFIG ??
+            "/config/suitecontainer.config.json");
+    const authPath =
+        prepareLaunch || launchMountsOnly
+            ? join(projectRoot, "credentials/auth.json")
+            : (process.env.SUITECONTAINER_AUTH ??
+              "/config/credentials/auth.json");
+    const config = readConfig(
+        configPath ?? "",
+        certificatePathsOnly || launchMountsOnly,
+        authPath,
+    );
 
     if (launchMountsOnly) {
         const hostRoot = process.env.SUITECONTAINER_HOST_ROOT;
-        if (!hostRoot) throw new Error("The launcher must supply SUITECONTAINER_HOST_ROOT.");
-        console.log(launchMounts(config, hostRoot, process.env.SUITECONTAINER_HOST_PLATFORM ?? "linux").join("\n"));
+        if (!hostRoot)
+            throw new Error(
+                "The launcher must supply SUITECONTAINER_HOST_ROOT.",
+            );
+        console.log(
+            launchMounts(
+                config,
+                hostRoot,
+                process.env.SUITECONTAINER_HOST_PLATFORM ?? "linux",
+            ).join("\n"),
+        );
         return 0;
     }
 
@@ -71,7 +107,11 @@ export function main(args: string[] = process.argv.slice(2)): number {
     }
     if (prepareCertificatesOnly) {
         const generated = prepareLaunch
-            ? prepareCertificates(config, join(projectRoot, "credentials"), authPath)
+            ? prepareCertificates(
+                  config,
+                  join(projectRoot, "credentials"),
+                  authPath,
+              )
             : prepareCertificates(config);
         if (generated) {
             console.log(
@@ -83,7 +123,8 @@ export function main(args: string[] = process.argv.slice(2)): number {
             // The launchers treat this status as a successful stop for registration.
             return 10;
         }
-        if (prepareLaunch) mkdirSync(join(projectRoot, "repos"), { recursive: true });
+        if (prepareLaunch)
+            mkdirSync(join(projectRoot, "repos"), { recursive: true });
         return 0;
     }
     if (certificatePathsOnly) {
@@ -96,9 +137,15 @@ export function main(args: string[] = process.argv.slice(2)): number {
         // Deployment settings are checked here after handling an empty SuiteApp list.
         validateConfig(config, true);
     }
-    const privateKeyPath = deploy ? verifyCertificates(process.env.SUITECONTAINER_PUBLIC_KEY, process.env.SUITECONTAINER_PRIVATE_KEY) : null;
+    const privateKeyPath = deploy
+        ? verifyCertificates(
+              process.env.SUITECONTAINER_PUBLIC_KEY,
+              process.env.SUITECONTAINER_PRIVATE_KEY,
+          )
+        : null;
     try {
-        if (!config.PM_MODE && config.suiteapps.some((repo) => !repo.localPath)) prepareToken(authPath);
+        if (!config.PM_MODE && config.suiteapps.some((repo) => !repo.localPath))
+            prepareToken(authPath);
         cloneRepos(config.suiteapps, config.PM_MODE);
         if (deploy) {
             deployRepos(config, privateKeyPath!);

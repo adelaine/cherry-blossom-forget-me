@@ -8,7 +8,9 @@ export class HeartbeatDeadline {
         this.now = now;
         this.lastHeartbeat = now();
     }
-    heartbeat(): void { this.lastHeartbeat = this.now(); }
+    heartbeat(): void {
+        this.lastHeartbeat = this.now();
+    }
     expired(busy: boolean): boolean {
         if (busy) {
             this.heartbeat();
