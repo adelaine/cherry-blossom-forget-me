@@ -4,5 +4,5 @@
         "noEmit": true,
         "rootDir": "."
     },
-    "include": ["server/**/*.ts", "client/**/*.ts"]
+    "include": ["server/**/*.ts", "site/**/*.ts"]
 }

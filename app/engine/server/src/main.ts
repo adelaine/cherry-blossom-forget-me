@@ -4,7 +4,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { Hono } from "hono";
 import { createAdaptorServer } from "@hono/node-server";
-import { deploymentPage } from "../../client/src/web-page.ts";
+import { deploymentPage } from "../../site/src/web-page.ts";
 import { HeartbeatDeadline } from "./web-inactivity.ts";
 import {
     createServices,
@@ -267,13 +267,13 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
     const alpine = readFileSync(
         sourceMode
             ? require.resolve("@alpinejs/csp/dist/cdn.min.js")
-            : new URL("../../client/src/assets/alpine.js", import.meta.url),
+            : new URL("../../site/src/assets/alpine.js", import.meta.url),
         "utf8",
     );
     const pico = readFileSync(
         sourceMode
             ? require.resolve("@picocss/pico/css/pico.min.css")
-            : new URL("../../client/src/assets/pico.css", import.meta.url),
+            : new URL("../../site/src/assets/pico.css", import.meta.url),
         "utf8",
     );
     for (const [path, contentType, content] of [
@@ -289,7 +289,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         });
     for (const name of ["netsuite-2026.css", "oracle-corporate-2026.css"]) {
         const content = readFileSync(
-            new URL("../../client/src/themes/" + name, import.meta.url),
+            new URL("../../site/src/themes/" + name, import.meta.url),
             "utf8",
         );
         app.get("/themes/" + name, (c) => {
@@ -299,7 +299,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
     }
     for (const name of ["favicon.png", "advanced-configuration.png"]) {
         const content = readFileSync(
-            new URL("../../client/src/assets/" + name, import.meta.url),
+            new URL("../../site/src/assets/" + name, import.meta.url),
         );
         app.get("/" + name, (c) => {
             c.header("Content-Type", "image/png");
@@ -312,7 +312,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         "netsuite-divider-dark.jpg",
     ]) {
         const content = readFileSync(
-            new URL("../../client/src/themes/" + name, import.meta.url),
+            new URL("../../site/src/themes/" + name, import.meta.url),
         );
         app.get("/themes/" + name, (c) => {
             c.header("Content-Type", "image/jpeg");
@@ -326,7 +326,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         "Ubuntu-Bold.ttf",
     ]) {
         const content = readFileSync(
-            new URL("../../client/src/assets/fonts/" + name, import.meta.url),
+            new URL("../../site/src/assets/fonts/" + name, import.meta.url),
         );
         app.get("/fonts/" + name, (c) => {
             c.header("Content-Type", "font/ttf");

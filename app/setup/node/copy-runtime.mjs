@@ -23,9 +23,9 @@ if (
     throw new Error("Runtime output must be the app's own dist directory.");
 }
 // Each build owns its emitted files. Do not remove another build's output.
-const clientDirectory = join(appDirectory, "client");
-const clientOutput = join(outputDirectory, "client", "src");
-mkdirSync(join(clientOutput, "assets"), { recursive: true });
+const siteDirectory = join(appDirectory, "site");
+const siteOutput = join(outputDirectory, "site", "src");
+mkdirSync(join(siteOutput, "assets"), { recursive: true });
 
 const require = createRequire(join(appDirectory, "package.json"));
 // These packages have no runtime dependencies beyond the adapter's Hono peer.
@@ -57,19 +57,19 @@ for (const name of ["hono", "@hono/node-server"]) {
     });
 }
 // Keep frontend paths identical in source and compiled server modules.
-cpSync(join(clientDirectory, "src/assets"), join(clientOutput, "assets"), {
+cpSync(join(siteDirectory, "src/assets"), join(siteOutput, "assets"), {
     recursive: true,
 });
-cpSync(join(clientDirectory, "src/themes"), join(clientOutput, "themes"), {
+cpSync(join(siteDirectory, "src/themes"), join(siteOutput, "themes"), {
     recursive: true,
 });
 copyFileSync(
     require.resolve("@alpinejs/csp/dist/cdn.min.js"),
-    join(clientOutput, "assets/alpine.js"),
+    join(siteOutput, "assets/alpine.js"),
 );
 copyFileSync(
     require.resolve("@picocss/pico/css/pico.min.css"),
-    join(clientOutput, "assets/pico.css"),
+    join(siteOutput, "assets/pico.css"),
 );
 writeFileSync(
     join(outputDirectory, "package.json"),

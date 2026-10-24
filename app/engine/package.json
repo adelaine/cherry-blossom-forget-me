@@ -8,13 +8,13 @@
         "dev": "vite --config server/vite.config.ts",
         "start": "node dist/install.js --serve",
         "sftp": "node --experimental-strip-types server/src/sftp.ts",
-        "format:files": "prettier --config .prettierrc client server \"*.json\" .prettierrc ../setup/node ../setup/playwright ../setup/templates ../docs",
+        "format:files": "prettier --config .prettierrc site server \"*.json\" .prettierrc ../setup/node ../setup/playwright ../setup/templates ../docs",
         "format": "npm run format:files -- --write",
         "format:check": "npm run format:files -- --check",
-        "lint": "cd .. && oxlint engine/client engine/server setup/node setup/playwright",
+        "lint": "cd .. && oxlint engine/site engine/server setup/node setup/playwright",
         "lint:fix": "npm run lint -- --fix",
         "test": "npm run test:client && npm run test:server",
-        "test:client": "node --experimental-strip-types --test \"client/test/**/*.spec.ts\"",
+        "test:client": "node --experimental-strip-types --test \"site/test/**/*.spec.ts\"",
         "test:server": "node --experimental-strip-types --test \"server/test/**/*.spec.ts\""
     },
     "dependencies": {

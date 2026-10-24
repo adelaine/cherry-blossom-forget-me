@@ -10,10 +10,10 @@ app/engine/*
 app/engine/server/*
 !app/engine/server/src/
 !app/engine/server/src/**
-!app/engine/client/
-app/engine/client/*
-!app/engine/client/src/
-!app/engine/client/src/**
+!app/engine/site/
+app/engine/site/*
+!app/engine/site/src/
+!app/engine/site/src/**
 !app/setup/
 app/setup/*
 !app/setup/Containerfile

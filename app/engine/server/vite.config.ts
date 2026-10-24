@@ -90,7 +90,7 @@ export default defineConfig(() => {
                     ...[
                         appDirectory,
                         serverDirectory,
-                        resolve(appDirectory, "client"),
+                        resolve(appDirectory, "site"),
                     ].flatMap((directory) => [
                         resolve(directory, "dist/**"),
                         resolve(directory, "build/**"),
@@ -114,7 +114,7 @@ export default defineConfig(() => {
                     const owner = await getLifecycle(server);
                     server.watcher.add([
                         resolve(serverDirectory, "src"),
-                        resolve(appDirectory, "client/src"),
+                        resolve(appDirectory, "site/src"),
                         resolve(appDirectory, "package.json"),
                         resolve(appDirectory, "package-lock.json"),
                     ]);
@@ -239,7 +239,7 @@ export default defineConfig(() => {
                 exclude: [
                     /^\/@(?:vite|id|fs)\//,
                     /^\/node_modules\//,
-                    /^\/(?:src|server\/src|client\/src)\//,
+                    /^\/(?:src|server\/src|site\/src)\//,
                 ],
                 ignoreWatching: ignored,
                 async loadModule(server, path) {

@@ -66,7 +66,7 @@ RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=typ
     && node /opt/suitecontainer/run-npm.mjs ci --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund
 COPY app/engine/tsconfig.build.json ./tsconfig.build.json
 COPY app/engine/server/src ./server/src
-COPY app/engine/client/src ./client/src
+COPY app/engine/site/src ./site/src
 COPY app/setup/node/copy-runtime.mjs /setup/node/copy-runtime.mjs
 RUN npm run build
 
