@@ -7,6 +7,8 @@ import { deploymentPage } from "../src/web-page.ts";
 export function initializeBrowser(context: any): void {
     context.document.documentElement ??= { dataset: {} };
     context.matchMedia ??= () => ({ matches: false, addEventListener() {} });
+    context.window ??= {};
+    context.window.addEventListener ??= () => {};
     let initialize: (() => void) | undefined;
     let component: any;
     const addEventListener = context.document.addEventListener;
@@ -52,21 +54,25 @@ export function initializeBrowser(context: any): void {
         selector === "main [id]"
             ? pageElements
             : (querySelectorAll?.(selector) ?? []);
-    const bridge = `
-        Object.assign(globalThis, { refresh, heartbeat, render });
-        Object.defineProperties(globalThis, {
-          state: { get: () => state },
-          editing: { get: () => editing, set: value => { editing = value; } },
-          credentialEditing: { get: () => credentialEditing, set: value => { credentialEditing = value; } },
-        });`;
-    runInNewContext(
-        deploymentPage.script.replace(
-            "refresh(); setInterval(refresh, 2000);",
-            bridge + "\nrefresh(); setInterval(refresh, 2000);",
-        ),
-        context,
-    );
+    runInNewContext(deploymentPage.script, context);
     initialize!();
+    const runtime = component.$runtime;
+    Object.assign(context, {
+        refresh: runtime.refresh,
+        heartbeat: runtime.heartbeat,
+        render: runtime.render,
+    });
+    Object.defineProperties(context, {
+        state: { get: () => runtime.state },
+        editing: {
+            get: () => runtime.settings.editing,
+            set: (value) => { runtime.settings.editing = value; },
+        },
+        credentialEditing: {
+            get: () => runtime.credentials.editing,
+            set: (value) => { runtime.credentials.editing = value; },
+        },
+    });
     for (const match of deploymentPage.html.matchAll(
         /<(\w+)([^>]*\bid="([^"]+)"[^>]*)>/g,
     )) {
