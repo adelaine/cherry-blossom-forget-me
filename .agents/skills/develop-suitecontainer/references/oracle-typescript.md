@@ -45,6 +45,9 @@ Read a linked rule before relying on details not reproduced here.
 
 ### Formatting and TSX
 
+- Use tabs for indentation.
+- Keep source lines no longer than 120 characters.
+  Prettier's `printWidth` is a wrapping target, not a hard maximum.
 - Use double quotes.
 - Parenthesize arrow-function parameters, including a single parameter.
 - Use trailing commas in TypeScript/TSX objects where the formatter allows them.
@@ -65,21 +68,27 @@ Read a linked rule before relying on details not reproduced here.
   Do not invent ownership or change copyright years in unrelated files.
   The linked legal-notice page was not inspected for this snapshot.
 
-## Explicit SuiteContainer differences
+## Applying the Oracle standard
 
-The user selected this guide as a reference for SuiteContainer.
-Existing project configuration and the user's explicit instructions take precedence over generic source conventions.
-These differences are deliberate applicability decisions, not claims that Oracle's source says something different.
+The user selected the Oracle TypeScript standard as SuiteContainer's style authority.
+Do not override it with a project preference for spaces, a different line-length policy, or universal `const` arrow functions.
+Use existing Prettier, TypeScript, and lint tooling to implement the standard.
+If configuration conflicts with the standard, report the mismatch and update configuration only when that change is authorized.
 
-| Oracle source | SuiteContainer application |
-| --- | --- |
-| Tabs for indentation. | Preserve `app/engine/.prettierrc`: four spaces and no tabs. |
-| Lines no longer than 120 characters. | Preserve the repository's formatter configuration; do not impose a separate width or reformat unrelated code. |
-| Content-dependent PascalCase/camelCase/JET file naming. | Preserve existing kebab-case modules and Preact conventions; do not rename files to match JET examples. |
-| Tests named `<component>.test.ts`. | Preserve existing `.spec.ts` files and their current runners. |
-| Uppercase Markdown filenames. | Preserve established lowercase reference/document paths and required `SKILL.md` naming. |
-| Utility examples use ordinary functions. | Prefer `const` arrow functions under SuiteContainer's working conventions; retain methods or declarations when semantics require them. |
+### Names and functions
 
+- Follow the source's content-dependent PascalCase, camelCase, and JET naming rules where applicable.
+  Read the linked naming guidance before relying on details not reproduced in this snapshot.
+- Name new TypeScript test files `<component>.test.ts`.
+  Include compatible test discovery when a task authorizes adding or migrating tests.
+- Use uppercase Markdown filenames as specified by the Oracle page.
+  Keep required skill entrypoints and manifest-declared resource paths discoverable.
+- The Oracle utility examples use ordinary functions.
+  They do not establish a requirement to convert every function to a `const` arrow.
+  Choose function forms according to the source guidance and JavaScript/TypeScript semantics.
+
+Apply the standard within the requested scope.
+A guidance update does not authorize reformatting application code, renaming existing modules or tests, or replacing framework integrations.
 The Oracle page does not require adopting JET, replacing Oxlint with ESLint, introducing a translation framework, creating globals, or rewriting every service as a singleton.
 Do not import additional rules from the older code-review seed as though they were stated in this page.
 Follow the user's targeted-check policy.

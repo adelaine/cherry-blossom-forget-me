@@ -56,23 +56,23 @@ Example:
 
 ```json
 {
-    "suiteapps": [
-        {
-            "url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bsp-nsn.git",
-            "directory": "bsp-nsn",
-            "branch": "develop"
-        }
-    ],
-    "vms": [
-        {
-            "url": "your-scrumbox.vm.eng.netsuite.com",
-            "account": "000071",
-            "database": {
-                "user": "shared",
-                "service": "singletonpdb"
-            }
-        }
-    ]
+	"suiteapps": [
+		{
+			"url": "https://gitlab.eng.netsuite.com/erpsuiteapps-prod/cash-management/bsp-nsn.git",
+			"directory": "bsp-nsn",
+			"branch": "develop"
+		}
+	],
+	"vms": [
+		{
+			"url": "your-scrumbox.vm.eng.netsuite.com",
+			"account": "000071",
+			"database": {
+				"user": "shared",
+				"service": "singletonpdb"
+			}
+		}
+	]
 }
 ```
 
@@ -89,8 +89,8 @@ Set `localPath` to an existing Git checkout on the computer running the launcher
 
 ```json
 {
-    "directory": "bsp-nsn",
-    "localPath": "C:/webdev/bsp-nsn"
+	"directory": "bsp-nsn",
+	"localPath": "C:/webdev/bsp-nsn"
 }
 ```
 

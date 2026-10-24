@@ -27,11 +27,11 @@ For ABSI, the settings are:
 
 ```json
 {
-    "enabled": true,
-    "project": "absi-nsn/FileCabinet/SuiteApps/com.netsuite.autobankstmtimport/test/test-pw",
-    "browser": "local-chrome",
-    "testFile": "",
-    "workers": 1
+	"enabled": true,
+	"project": "absi-nsn/FileCabinet/SuiteApps/com.netsuite.autobankstmtimport/test/test-pw",
+	"browser": "local-chrome",
+	"testFile": "",
+	"workers": 1
 }
 ```
 
