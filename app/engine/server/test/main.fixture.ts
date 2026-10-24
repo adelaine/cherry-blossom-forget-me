@@ -11,21 +11,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startWebServer, type ServerOptions } from "../src/main.ts";
 
-export async function fixture(
+export const fixture = async (
     config = {
         suiteapps: [] as object[],
         vms: [{ account: "000071", url: "" }],
     },
     options: ServerOptions = {},
-) {
+) => {
     const root = mkdtempSync(join(tmpdir(), "suitecontainer-server-test-"));
     const credentials = join(root, "credentials");
     mkdirSync(credentials);
     const authPath = join(credentials, "auth.json");
-    writeFileSync(
-        join(root, "suitecontainer.config.json"),
-        JSON.stringify(config),
-    );
+    writeFileSync(join(root, "suitecontainer.json"), JSON.stringify(config));
     writeFileSync(authPath, "{}");
     writeFileSync(
         join(credentials, "web-mounts.json"),
@@ -86,4 +83,4 @@ export async function fixture(
             rmSync(root, { recursive: true, force: true });
         },
     };
-}
+};

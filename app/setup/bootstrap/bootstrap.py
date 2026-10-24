@@ -212,18 +212,27 @@ def prepare_host():
     home = home_directory()
     home.mkdir(exist_ok=True)
     credentials_created = not (home / "credentials").exists()
-    for name in ("credentials", "repos", "sftp-files", "container-image"):
+    for name in ("config", "credentials", "repos", "sftp-files", "container-image"):
         (home / name).mkdir(exist_ok=True)
     # Existing checkouts can have a credentials directory owned by a different
     # setup account. Protect every credential file without changing that owner.
     if credentials_created:
         secure_path(home / "credentials")
-    for source, target in (("suitecontainer.config.example.json", "suitecontainer.config.json"),
+    legacy_config = home / "suitecontainer.config.json"
+    config = home / "config/suitecontainer.json"
+    if legacy_config.is_file() and not config.exists():
+        legacy_config.rename(config)
+    for legacy_name, filename in ((".sql-default", ".sql-default.enc"), (".sql-user", ".sql-user.enc")):
+        legacy = home / "credentials" / legacy_name
+        destination = home / "credentials" / filename
+        if legacy.is_file() and not destination.exists():
+            legacy.rename(destination)
+    for source, target in (("suitecontainer.example.json", "config/suitecontainer.json"),
                            ("auth.example.json", "credentials/auth.json"),
-                           (".sql-default", "credentials/.sql-default")):
+                           (".sql-default.enc", "credentials/.sql-default.enc")):
         destination = home / target
         if not destination.exists():
-            shutil.copyfile(setup_directory() / "templates" / source, destination)
+            shutil.copyfile(setup_directory() / "config-example" / source, destination)
     nems = Path(os.environ.get("SUITECONTAINER_NEMS_DIR", Path.home() / ".codex"))
     sources = [PROJECT / ".codex/config.toml", nems / "config.toml", PROJECT / ".nems.env", nems / ".nems.env"]
     if not os.environ.get("SUITECONTAINER_NEMS_DIR"):
@@ -348,7 +357,7 @@ def confirm_owner(info):
 
 def pm_mode():
     try:
-        config = json.loads((home_directory() / "suitecontainer.config.json").read_text(encoding="utf-8-sig"))
+        config = json.loads((home_directory() / "config/suitecontainer.json").read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         config = {}
     return isinstance(config, dict) and config.get("PM_MODE") is True
@@ -447,7 +456,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
                        "--mount", f"type=bind,src={setup_directory()},dst=/setup,ro=true",
                        "--entrypoint", "node"] if OPTIONS.dev else [])
     helper = [IMAGE, "--experimental-strip-types", "/app/server/src/install.ts"] if OPTIONS.dev else [IMAGE]
-    base = ["--mount", f"type=bind,src={home_directory()},dst=/project,ro=true", "--mount", f"type=bind,src={setup_directory() / 'templates'},dst=/templates,ro=true", *host, *helper_options]
+    base = ["--mount", f"type=bind,src={home_directory()},dst=/project,ro=true", "--mount", f"type=bind,src={setup_directory() / 'config-example'},dst=/config-example,ro=true", *host, *helper_options]
     target = podman("run", "--rm", "--cgroups=disabled", *base, *helper, "--web-ssh-target", capture=True).stdout.strip()
     resolved = ""
     if target and shutil.which("ssh"):
@@ -461,7 +470,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
     if WINDOWS:
         ssh += ["--env", f"SUITECONTAINER_SSH_PROGRAMDATA={os.environ.get('ProgramData', '')}"]
     requests = podman("run", "--rm", "--cgroups=disabled", *base, *ssh, *helper, "--web-paths", capture=True).stdout
-    staged = ["--mount", f"type=bind,src={home_directory()},dst=/project", "--mount", f"type=bind,src={setup_directory() / 'templates'},dst=/templates,ro=true", *helper_options]
+    staged = ["--mount", f"type=bind,src={home_directory()},dst=/project", "--mount", f"type=bind,src={setup_directory() / 'config-example'},dst=/config-example,ro=true", *helper_options]
     for request in requests.splitlines():
         if not request:
             continue
@@ -598,7 +607,7 @@ console.log(state.busy?'busy':'idle');"""
 
 
 def playwright_runner(name, machine, info):
-    config = json.loads((home_directory() / "suitecontainer.config.json").read_text(encoding="utf-8-sig"))
+    config = json.loads((home_directory() / "config/suitecontainer.json").read_text(encoding="utf-8-sig"))
     settings = config.get("playwright", {})
     if not isinstance(settings, dict):
         raise RuntimeError("The Playwright settings must be an object.")
@@ -854,7 +863,7 @@ def main(args=()):
         OPTIONS.no_browser = True
     if OPTIONS.project:
         PROJECT = OPTIONS.project.expanduser().resolve()
-    if not PROJECT.is_dir() or not (setup_directory() / "templates/suitecontainer.config.example.json").is_file():
+    if not PROJECT.is_dir() or not (setup_directory() / "config-example/suitecontainer.example.json").is_file():
         raise RuntimeError("The selected project must contain the SuiteContainer checkout or distribution.")
     IMAGE = "suitecontainer-workspace:dev" if OPTIONS.dev else "suitecontainer-workspace"
     with redirect_stdout(sys.stderr) if OPTIONS.json else redirect_stdout(sys.stdout):

@@ -37,7 +37,7 @@ export type SftpOptions = {
     sshOptions: string[];
 };
 
-export function parseSftpOptions(args: string[]): SftpOptions | null {
+export const parseSftpOptions = (args: string[]): SftpOptions | null => {
     if (args.includes("--help")) return null;
     const options: SftpOptions = {
         scrumbox: "",
@@ -92,7 +92,7 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
     }
     if (!options.scrumbox) {
         const config = JSON.parse(
-            readFileSync(join(homeRoot, "suitecontainer.config.json"), "utf8"),
+            readFileSync(join(homeRoot, "config/suitecontainer.json"), "utf8"),
         );
         const host = config?.vms?.[0]?.url;
         if (typeof host !== "string" || !host)
@@ -110,7 +110,7 @@ export function parseSftpOptions(args: string[]): SftpOptions | null {
             "Use USER@HOST or an SSH configuration alias for --scrumbox.",
         );
     return options;
-}
+};
 
 function command(executable: string, args: string[]): string {
     const result = spawnSync(executable, args, {

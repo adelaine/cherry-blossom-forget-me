@@ -1,11 +1,21 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+    chmodSync,
+    copyFileSync,
+    existsSync,
+    mkdirSync,
+    renameSync,
+} from "node:fs";
 import { join, posix, win32 } from "node:path";
 import type { Config } from "./step-config.ts";
 
-export function prepareConfiguration(
+export const prepareConfiguration = (
     projectRoot: string,
-    templatesDirectory = "/templates",
-): boolean {
+    templatesDirectory = "/config-example",
+): boolean => {
+    const directory = join(projectRoot, "config");
+    mkdirSync(directory, { recursive: true });
+    const config = join(directory, "suitecontainer.json");
+    const legacy = join(projectRoot, "suitecontainer.config.json");
     const credentials = join(projectRoot, "credentials");
     mkdirSync(credentials, { recursive: true, mode: 0o700 });
     const auth = join(credentials, "auth.json");
@@ -16,32 +26,32 @@ export function prepareConfiguration(
             "Created credentials/auth.json. Set gitlab-token there; supply certificate paths or leave both empty to generate them.",
         );
     }
-    const config = join(projectRoot, "suitecontainer.config.json");
     if (existsSync(config)) return false;
+    if (existsSync(legacy)) {
+        renameSync(legacy, config);
+        return false;
+    }
     copyFileSync(
-        join(templatesDirectory, "suitecontainer.config.example.json"),
+        join(templatesDirectory, "suitecontainer.example.json"),
         config,
     );
     console.log(
-        "Created suitecontainer.config.json from the template. Add your SuiteApps and VMs, then run the start script again.",
+        "Created config/suitecontainer.json from the template. Add your SuiteApps and VMs, then run the start script again.",
     );
     return true;
-}
+};
 
-export function launchMounts(
+export const launchMounts = (
     config: Config,
     hostRoot: string,
     platform: string,
-): string[] {
+): string[] => {
     const paths = platform === "win32" ? win32 : posix;
     const hostPath = (path: string) => paths.resolve(hostRoot, path);
     const mount = (source: string, destination: string, readOnly = false) =>
         `type=bind,src=${hostPath(source)},dst=${destination}${readOnly ? ",ro=true" : ""}`;
     return [
-        mount(
-            "suitecontainer.config.json",
-            "/config/suitecontainer.config.json",
-        ),
+        mount("config/suitecontainer.json", "/config/suitecontainer.json"),
         mount("credentials/auth.json", "/config/credentials/auth.json", true),
         mount("repos", "/workspace"),
         mount(config.certificates!.public, "/config/certs/public.pem", true),
@@ -52,4 +62,4 @@ export function launchMounts(
                 mount(repo.localPath!, `/workspace/${repo.directory}`),
             ),
     ];
-}
+};

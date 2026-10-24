@@ -4,6 +4,7 @@ import {
     chmodSync,
     existsSync,
     readFileSync,
+    renameSync,
 } from "node:fs";
 import { join } from "node:path";
 import type { ChildProcess } from "node:child_process";
@@ -60,10 +61,13 @@ export class SqlService {
         this.operations = operations;
         this.suiteapps = suiteapps;
         this.options = options;
-        this.userPath = join(configuration.credentialsDirectory, ".sql-user");
+        this.userPath = join(
+            configuration.credentialsDirectory,
+            ".sql-user.enc",
+        );
         this.defaultPath = join(
             configuration.credentialsDirectory,
-            ".sql-default",
+            ".sql-default.enc",
         );
         try {
             this.prepareUser();
@@ -72,6 +76,17 @@ export class SqlService {
         }
     }
     private prepareUser() {
+        for (const [legacyName, destination] of [
+            [".sql-default", this.defaultPath],
+            [".sql-user", this.userPath],
+        ]) {
+            const legacy = join(
+                this.configuration.credentialsDirectory,
+                legacyName,
+            );
+            if (!existsSync(destination) && existsSync(legacy))
+                renameSync(legacy, destination);
+        }
         if (existsSync(this.userPath) || !existsSync(this.defaultPath)) return;
         try {
             copyFileSync(
@@ -83,7 +98,7 @@ export class SqlService {
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "EEXIST")
                 throw new Error(
-                    "Cannot create credentials/.sql-user. Check the credentials folder permissions or enter the SQL password manually.",
+                    "Cannot create credentials/.sql-user.enc. Check the credentials folder permissions or enter the SQL password manually.",
                 );
         }
     }
@@ -143,7 +158,7 @@ export class SqlService {
                             ).trim();
                         } catch {
                             throw new Error(
-                                "Cannot read credentials/.sql-user. Enter the SQL password manually or restore the encrypted user file.",
+                                "Cannot read credentials/.sql-user.enc. Enter the SQL password manually or restore the encrypted user file.",
                             );
                         }
                         decrypted = await decryptSqlPassword(

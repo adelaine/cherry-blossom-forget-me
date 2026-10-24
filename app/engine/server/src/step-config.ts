@@ -29,11 +29,11 @@ export type Config = {
     status?: { "deploy-start-ok"?: 0 | 1; theme?: "light" | "dark" };
 };
 
-function invalidConfig(message: string): never {
+const invalidConfig: (message: string) => never = (message) => {
     throw new Error(
-        `${message} Update ${message.includes("credentials/auth.json") ? "credentials/auth.json" : "suitecontainer.config.json"} and run the start script again.`,
+        `${message} Update ${message.includes("credentials/auth.json") ? "credentials/auth.json" : "config/suitecontainer.json"} and run the start script again.`,
     );
-}
+};
 
 export function gitlabHttpsUrl(raw: unknown): string | null {
     if (typeof raw !== "string") return null;

@@ -8,7 +8,7 @@
         "dev": "vite --config server/vite.config.ts",
         "start": "node dist/install.js --serve",
         "sftp": "node --experimental-strip-types server/src/sftp.ts",
-        "format:files": "prettier --config .prettierrc site server \"*.json\" .prettierrc ../setup/node ../setup/playwright ../setup/templates ../docs",
+        "format:files": "prettier --config .prettierrc site server \"*.json\" .prettierrc ../setup/node ../setup/playwright ../setup/config-example ../docs",
         "format": "npm run format:files -- --write",
         "format:check": "npm run format:files -- --check",
         "lint": "cd .. && oxlint engine/site engine/server setup/node setup/playwright",

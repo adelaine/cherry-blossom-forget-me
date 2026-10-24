@@ -17,7 +17,7 @@ import {
 } from "./web-mounts.ts";
 import { startWebServer } from "./main.ts";
 
-export function main(args: string[] = process.argv.slice(2)): number {
+export const main = (args: string[] = process.argv.slice(2)): number => {
     if (args[0] === "--serve") {
         startWebServer();
         return 0;
@@ -55,9 +55,9 @@ export function main(args: string[] = process.argv.slice(2)): number {
     const configPath = validateOnly
         ? args[1]
         : prepareLaunch || launchMountsOnly
-          ? join(projectRoot, "suitecontainer.config.json")
+          ? join(projectRoot, "config/suitecontainer.json")
           : (process.env.SUITECONTAINER_CONFIG ??
-            "/config/suitecontainer.config.json");
+            "/config/suitecontainer.json");
     const authPath =
         prepareLaunch || launchMountsOnly
             ? join(projectRoot, "credentials/auth.json")
@@ -95,7 +95,7 @@ export function main(args: string[] = process.argv.slice(2)): number {
 
     if (config.suiteapps.length === 0 && !certificatePathsOnly) {
         console.log(
-            "There are no SuiteApps to install in suitecontainer.config.json.",
+            "There are no SuiteApps to install in config/suitecontainer.json.",
         );
         return prepareCertificatesOnly ? 10 : 0;
     }
@@ -157,7 +157,7 @@ export function main(args: string[] = process.argv.slice(2)): number {
         removeToken();
     }
     return 0;
-}
+};
 
 if (
     process.argv[1] &&

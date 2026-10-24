@@ -33,7 +33,10 @@ test("runs SQL using the saved password", async () => {
             unlock,
             SQL_PASSWORD_SALT,
         );
-        writeFileSync(join(app.credentials, ".sql-default"), encrypted + "\n");
+        writeFileSync(
+            join(app.credentials, ".sql-default.enc"),
+            encrypted + "\n",
+        );
         await app.post("sql", {
             config: JSON.stringify(config),
             account: "TEST_USER",

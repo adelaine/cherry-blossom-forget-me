@@ -21,7 +21,7 @@ export class ConfigurationService {
     constructor(directory: string, operations: OperationsService) {
         this.directory = directory;
         this.operations = operations;
-        this.path = join(directory, "suitecontainer.config.json");
+        this.path = join(directory, "suitecontainer.json");
         this.credentialsDirectory = join(directory, "credentials");
         this.authPath = join(this.credentialsDirectory, "auth.json");
         this.mounts = JSON.parse(

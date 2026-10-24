@@ -26,10 +26,10 @@ class LauncherTests(unittest.TestCase):
         self.home = self.root / "home"
         (self.home / "credentials").mkdir(parents=True)
         (self.home / "repos").mkdir()
-        templates = self.root / "app/setup/templates"
+        templates = self.root / "app/setup/config-example"
         templates.mkdir(parents=True)
-        for name in ("suitecontainer.config.example.json", "auth.example.json", ".sql-default"):
-            shutil.copyfile(REPOSITORY / "app/setup/templates" / name, templates / name)
+        for name in ("suitecontainer.example.json", "auth.example.json", ".sql-default.enc"):
+            shutil.copyfile(REPOSITORY / "app/setup/config-example" / name, templates / name)
         (self.home / "credentials/auth.json").write_text('{"gitlab-token": "fixture-token"}')
         self.stack.enter_context(patch.object(bootstrap, "PROJECT", self.root))
         self.stack.enter_context(patch.object(bootstrap, "secure_path"))
@@ -168,7 +168,7 @@ class LauncherTests(unittest.TestCase):
         bootstrap.main()
         self.assertTrue((self.home / "credentials/auth.json").is_file())
         self.assertTrue((self.home / "repos").is_dir())
-        config = json.loads((self.home / "suitecontainer.config.json").read_text())
+        config = json.loads((self.home / "config/suitecontainer.json").read_text())
         self.assertEqual(config["vms"][0]["url"], "")
         self.assertTrue(self.calls_with("--serve"))
 

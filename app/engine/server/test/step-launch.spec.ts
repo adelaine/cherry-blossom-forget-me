@@ -26,17 +26,17 @@ test("creates first-run configuration", () => {
     withConfigFixture((directory) => {
         mkdirSync(join(directory, "credentials"));
         const template = '{"suiteapps":[],"vms":[]}\n';
-        writeFileSync(
-            join(directory, "suitecontainer.config.example.json"),
-            template,
-        );
+        writeFileSync(join(directory, "suitecontainer.example.json"), template);
         writeFileSync(
             join(directory, "auth.example.json"),
             '{"gitlab-token":"fixture-token"}',
         );
         prepareConfiguration(directory, directory);
         assert.equal(
-            readFileSync(join(directory, "suitecontainer.config.json"), "utf8"),
+            readFileSync(
+                join(directory, "config", "suitecontainer.json"),
+                "utf8",
+            ),
             template,
         );
     });

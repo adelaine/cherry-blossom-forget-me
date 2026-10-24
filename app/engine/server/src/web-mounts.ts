@@ -12,11 +12,11 @@ export type MountRecord = {
     ssh?: SshSettings;
 };
 
-export function webSshTarget(projectRoot: string): string {
+export const webSshTarget = (projectRoot: string): string => {
     try {
         const target = JSON.parse(
             readFileSync(
-                join(projectRoot, "suitecontainer.config.json"),
+                join(projectRoot, "config/suitecontainer.json"),
                 "utf8",
             ),
         )?.vms?.[0]?.url;
@@ -27,7 +27,7 @@ export function webSshTarget(projectRoot: string): string {
     } catch {
         return "";
     }
-}
+};
 
 export function hostPath(record: MountRecord, path: string): string {
     const paths = record.platform === "win32" ? win32 : posix;
@@ -55,11 +55,11 @@ export function credentialPath(
     return record.certificates[hostPath(record, path)] ?? null;
 }
 
-export function webPathRequests(
+export const webPathRequests = (
     projectRoot: string,
     hostRoot: string,
     platform: string,
-): string[] {
+): string[] => {
     const paths = platform === "win32" ? win32 : posix;
     const result: string[] = [];
     const seen = new Set<string>();
@@ -83,7 +83,7 @@ export function webPathRequests(
     try {
         const config = JSON.parse(
             readFileSync(
-                join(projectRoot, "suitecontainer.config.json"),
+                join(projectRoot, "config/suitecontainer.json"),
                 "utf8",
             ),
         );
@@ -124,13 +124,13 @@ export function webPathRequests(
             throw error;
     }
     return result;
-}
+};
 
-export function prepareWebMounts(
+export const prepareWebMounts = (
     projectRoot: string,
     hostRoot: string,
     platform: string,
-): string[] {
+): string[] => {
     const paths = platform === "win32" ? win32 : posix;
     const record: MountRecord = {
         hostRoot,
@@ -149,7 +149,7 @@ export function prepareWebMounts(
             `type=bind,src=${absolute},dst=${destination}${readOnly ? ",ro=true" : ""}`,
         );
     };
-    mount("suitecontainer.config.json", "/config/suitecontainer.config.json");
+    mount("config/suitecontainer.json", "/config/suitecontainer.json");
     mount("credentials", "/config/credentials");
     mount("repos", "/workspace");
     const ssh = hostSshSettings(hostRoot, platform);
@@ -173,7 +173,7 @@ export function prepareWebMounts(
     try {
         config = JSON.parse(
             readFileSync(
-                join(projectRoot, "suitecontainer.config.json"),
+                join(projectRoot, "config/suitecontainer.json"),
                 "utf8",
             ),
         );
@@ -234,4 +234,4 @@ export function prepareWebMounts(
         { mode: 0o600 },
     );
     return mounts;
-}
+};

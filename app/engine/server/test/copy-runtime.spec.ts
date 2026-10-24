@@ -55,10 +55,7 @@ test(
             mkdirSync(join(configDirectory, "credentials"), {
                 recursive: true,
             });
-            const configPath = join(
-                configDirectory,
-                "suitecontainer.config.json",
-            );
+            const configPath = join(configDirectory, "suitecontainer.json");
             writeFileSync(
                 configPath,
                 JSON.stringify({
