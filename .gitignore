@@ -1,35 +1,41 @@
-# Dependencies and build output
+# Dependencies, builds, and temporary output
 node_modules/
 dist/
 build/
 *.tsbuildinfo
-
-# Tests and coverage
 coverage/
 .nyc_output/
-
-# Logs
+.cache/
+tmp/
+temp/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+/app/setup/python/*.tar.gz
 
-# Local environment and secrets
-/suitecontainer.config.json
-/credentials/*
-!/credentials/auth.example.json
-!/credentials/.sql-default
+# Private SuiteContainer data
+/home/
+
+# Local environment and credentials
 .env
 .env.*
 !.env.example
 !.env.sample
+.nems.env
+.npmrc
 *.key
 *.pem
 *.p12
 *.pfx
 
-# IDEs and editors
+# Local agent and editor state
+.ai-docs/
+.claude/
+.codex/
+.cursor/
+.aider*
 .idea/
 *.iml
 .vscode/*
@@ -41,45 +47,9 @@ pnpm-debug.log*
 *.swo
 *~
 
-# macOS
+# Operating system metadata
 .DS_Store
-.AppleDouble
-.LSOverride
 ._*
-.Spotlight-V100/
-.Trashes/
-
-# Windows
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-
-# Temporary files
-tmp/
-temp/
-.cache/
-/setup/python/*.tar.gz
-
-# Local AI agent state
-.ai-docs/
-.claude/settings.local.json
-.claude/worktrees/
-.codex/auth.json
-.codex/sessions/
-.codex/log/
-.codex/tmp/
-.codex/agents
-.codex/skills
-.cursor/worktrees/
-.aider.chat.history.md
-.aider.input.history
-.aider.tags.cache*/
-
-# Cloned SuiteApp repositories
-/repos/
-/sftp-files/*
-!/sftp-files/.gitkeep
-
-# Shared container image copied in by each user
-/container-image/*
-!/container-image/.gitkeep
