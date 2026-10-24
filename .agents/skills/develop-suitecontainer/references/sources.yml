@@ -1,0 +1,19 @@
+templates:
+  suitecontainer-typescript:
+    description: "Oracle TypeScript source changes relevant to SuiteContainer."
+    sections:
+      - Source Snapshot
+      - Updated Guidance
+      - Potential Conflicts
+    conflict_section: Potential Conflicts
+    refresh_policy:
+      source_scope: all_configured_sources
+      partial_refresh: prohibited
+
+references:
+  - output: oracle-typescript.md
+    template: suitecontainer-typescript
+    sources:
+      - page_id: "896762988"
+        url: https://confluence.nsgbu.netsuitecorp.com/pages/viewpage.action?pageId=896762988
+        role: primary

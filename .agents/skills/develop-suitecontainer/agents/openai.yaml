@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop SuiteContainer"
+  short_description: "Develop SuiteContainer with repository conventions"
+  default_prompt: "Use $develop-suitecontainer to implement the requested SuiteContainer change."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SuiteContainer"
+  short_description: "Use SuiteContainer for SuiteApp development tasks"
+  default_prompt: "Use $suitecontainer to complete the requested SuiteApp operation through SuiteContainer."
