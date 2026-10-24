@@ -1,13 +1,13 @@
 {
-    "gitlab-token": "",
-    "suitecloud-certificates": {
-        "id": "",
-        "public": "",
-        "private": ""
-    },
-    "sftp": {
-        "port": 8000,
-        "username": "suitecontainer",
-        "password": ""
-    }
+	"gitlab-token": "",
+	"suitecloud-certificates": {
+		"id": "",
+		"public": "",
+		"private": ""
+	},
+	"sftp": {
+		"port": 8000,
+		"username": "suitecontainer",
+		"password": ""
+	}
 }

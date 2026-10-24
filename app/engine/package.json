@@ -1,38 +1,38 @@
 {
-    "name": "ns-suitecontainer",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build --config site/vite.config.ts && node ../setup/node/copy-runtime.mjs . && tsc -p tsconfig.build.json",
-        "typecheck": "tsc -p tsconfig.json && tsc -p site/tsconfig.json",
-        "dev": "vite --config server/vite.config.ts",
-        "start": "node dist/install.js --serve",
-        "sftp": "node --experimental-strip-types server/src/sftp.ts",
-        "format:files": "prettier --config .prettierrc site server \"*.json\" .prettierrc ../setup/node ../setup/playwright ../setup/config-example ../docs",
-        "format": "npm run format:files -- --write",
-        "format:check": "npm run format:files -- --check",
-        "lint": "cd .. && oxlint engine/site engine/server setup/node setup/playwright",
-        "lint:fix": "npm run lint -- --fix",
-        "test": "npm run test:client && npm run test:server",
-        "test:client": "tsx --tsconfig site/tsconfig.json --test \"site/test/**/*.spec.ts\"",
-        "test:server": "node --experimental-strip-types --test \"server/test/**/*.spec.ts\""
-    },
-    "dependencies": {
-        "@hono/node-server": "^2.1.3",
-        "@picocss/pico": "^2.1.1",
-        "hono": "^4.13.12",
-        "oxlint": "^1.89.0",
-        "preact": "^11.0.2"
-    },
-    "devDependencies": {
-        "@hono/vite-dev-server": "0.26.1",
-        "@types/node": "^24.19.1",
-        "prettier": "3.9.10",
-        "tsx": "^4.23.0",
-        "typescript": "^7.0.2",
-        "vite": "^6.4.1"
-    },
-    "allowScripts": {
-        "esbuild@0.28.2": true
-    }
+	"name": "ns-suitecontainer",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "vite build --config site/vite.config.ts && node ../setup/node/copy-runtime.mjs . && tsc -p tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json && tsc -p site/tsconfig.json",
+		"dev": "vite --config server/vite.config.ts",
+		"start": "node dist/install.js --serve",
+		"sftp": "node --experimental-strip-types server/src/sftp.ts",
+		"format:files": "prettier --config .prettierrc site server \"*.json\" .prettierrc ../setup/node ../setup/playwright ../setup/config-example ../docs",
+		"format": "npm run format:files -- --write",
+		"format:check": "npm run format:files -- --check",
+		"lint": "cd .. && oxlint engine/site engine/server setup/node setup/playwright",
+		"lint:fix": "npm run lint -- --fix",
+		"test": "npm run test:client && npm run test:server",
+		"test:client": "tsx --tsconfig site/tsconfig.json --test \"site/test/**/*.spec.ts\"",
+		"test:server": "node --experimental-strip-types --test \"server/test/**/*.spec.ts\""
+	},
+	"dependencies": {
+		"@hono/node-server": "^2.1.3",
+		"@picocss/pico": "^2.1.1",
+		"hono": "^4.13.12",
+		"oxlint": "^1.89.0",
+		"preact": "^11.0.2"
+	},
+	"devDependencies": {
+		"@hono/vite-dev-server": "0.26.1",
+		"@types/node": "^24.19.1",
+		"prettier": "3.9.10",
+		"tsx": "^4.23.0",
+		"typescript": "^7.0.2",
+		"vite": "^6.4.1"
+	},
+	"allowScripts": {
+		"esbuild@0.28.2": true
+	}
 }

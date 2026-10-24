@@ -1,8 +1,8 @@
 {
-    "extends": "./tsconfig.build.json",
-    "compilerOptions": {
-        "noEmit": true,
-        "rootDir": "."
-    },
-    "include": ["server/**/*.ts", "site/src/index.ts", "site/src/web-page.ts"]
+	"extends": "./tsconfig.build.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"rootDir": "."
+	},
+	"include": ["server/**/*.ts", "site/src/index.ts", "site/src/web-page.ts"]
 }

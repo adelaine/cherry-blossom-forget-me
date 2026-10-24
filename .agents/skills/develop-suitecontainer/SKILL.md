@@ -37,22 +37,27 @@ Do not treat pending work in `.ai-docs/` as implemented behavior.
 ## TypeScript and code style
 
 For TypeScript or TSX changes, load the Oracle reference through the resolution workflow below.
-[references/oracle-typescript.md](references/oracle-typescript.md) records the NEMS-sourced standard and explicit SuiteContainer differences.
-Use the repository's `.prettierrc`, TypeScript configuration, and installed lint tooling as the formatting and compilation authorities.
-Do not replace them with a different standards toolchain.
+[references/oracle-typescript.md](references/oracle-typescript.md) records the NEMS-sourced Oracle standard.
+Follow the resolved Oracle standard for TypeScript and TSX style.
+Use the existing Prettier, TypeScript, and lint tooling to implement it.
+Report configuration conflicts with the standard instead of treating existing settings as an exemption.
+Do not replace the standards toolchain.
 
 - Use ESM and explicit `.ts`/`.tsx` relative import extensions, consistent with adjacent source.
 - Use `import type` for imports used only as types.
 - Preserve strict TypeScript and describe external data with types and runtime validation.
-- Prefer arrow functions assigned to `const` for components, reusable helpers, and handlers.
-- Use anonymous arrow functions for inline callbacks when readable.
-- Keep meaningful reusable function names through their variables.
-- Use ordinary functions or methods when JavaScript/TypeScript semantics require them.
+- Use named function declarations for module utilities, following Oracle's utility guidance.
+- Follow the Oracle language-feature guidance when choosing arrows and methods elsewhere.
+- Preserve meaningful function names and required JavaScript/TypeScript semantics.
+- Do not require every reusable function to be converted to a `const` arrow.
 - Prefer direct typed functions to wrappers that add no behavior.
 - Apply conventions to new or modified code without restyling unrelated functions.
 
-The current formatter uses four spaces, double quotes, and trailing commas.
-Keep the existing kebab-case module paths and `.spec.ts` test naming.
+Use tabs for indentation, double quotes, parenthesized arrow parameters, and trailing commas where supported.
+Keep source lines within Oracle's 120-character limit.
+Prettier's `printWidth` is a wrapping target, not a hard maximum; formatting alone does not prove line-length compliance.
+Follow the Oracle filename conventions described in the reference for new files.
+Do not mass-rename existing modules or change test discovery unless the task includes that migration.
 
 For TypeScript or TSX changes, resolve `oracle-typescript.md` through `workspace-reference-cache` when available.
 Pass the current workspace root, consumer name `develop-suitecontainer`, this skill's absolute root, and output `oracle-typescript.md` from `references/sources.yml`.

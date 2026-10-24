@@ -5,4 +5,4 @@ export const SQL_DEFAULTS = { service: "", user: "" };
 export const SQL_PASSWORD_SALT = "sodiumchloride";
 // A human-readable hint, displayed beneath the password field.
 export const SQL_PASSWORD_HINT =
-    "Type 🎄 (two words, small letters, no spaces)";
+	"Type 🎄 (two words, small letters, no spaces)";

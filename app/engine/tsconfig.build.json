@@ -1,21 +1,17 @@
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "module": "NodeNext",
-        "strict": true,
-        "verbatimModuleSyntax": true,
-        "rewriteRelativeImportExtensions": true,
-        "skipLibCheck": true,
-        "types": ["node"],
-        "jsx": "react-jsx",
-        "jsxImportSource": "hono/jsx",
-        "noEmit": false,
-        "rootDir": ".",
-        "outDir": "./dist"
-    },
-    "include": [
-        "server/src/**/*.ts",
-        "site/src/index.ts",
-        "site/src/web-page.ts"
-    ]
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "NodeNext",
+		"strict": true,
+		"verbatimModuleSyntax": true,
+		"rewriteRelativeImportExtensions": true,
+		"skipLibCheck": true,
+		"types": ["node"],
+		"jsx": "react-jsx",
+		"jsxImportSource": "hono/jsx",
+		"noEmit": false,
+		"rootDir": ".",
+		"outDir": "./dist"
+	},
+	"include": ["server/src/**/*.ts", "site/src/index.ts", "site/src/web-page.ts"]
 }
