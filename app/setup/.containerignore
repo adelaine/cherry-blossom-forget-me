@@ -6,6 +6,7 @@ app/engine/*
 !app/engine/package.json
 !app/engine/package-lock.json
 !app/engine/tsconfig.build.json
+!app/engine/tsconfig.json
 !app/engine/server/
 app/engine/server/*
 !app/engine/server/src/
@@ -14,6 +15,10 @@ app/engine/server/*
 app/engine/site/*
 !app/engine/site/src/
 !app/engine/site/src/**
+!app/engine/site/public/
+!app/engine/site/public/**
+!app/engine/site/tsconfig.json
+!app/engine/site/vite.config.ts
 !app/setup/
 app/setup/*
 !app/setup/Containerfile
