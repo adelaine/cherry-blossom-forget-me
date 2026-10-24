@@ -68,6 +68,8 @@ temp/
 .codex/sessions/
 .codex/log/
 .codex/tmp/
+.codex/agents
+.codex/skills
 .cursor/worktrees/
 .aider.chat.history.md
 .aider.input.history
