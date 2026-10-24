@@ -4,7 +4,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { Hono } from "hono";
 import { createAdaptorServer } from "@hono/node-server";
-import { deploymentPage } from "../../src/web-page.ts";
+import { deploymentPage } from "../../client/src/web-page.ts";
 import { HeartbeatDeadline } from "../../src/web-inactivity.ts";
 import { createServices, type ServiceOptions, type Services, type SharedServiceState } from "./services/system.ts";
 import { OperationsService } from "./services/operations.ts";
@@ -106,17 +106,20 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
         if (!internalHealth && !/^(?:localhost|127\.0\.0\.1):\d+$/.test(c.req.header("host") ?? "")) return c.json(failure(new ServiceError("invalid_host", "Open the app through its localhost address.", 403)), 403);
         await next();
     });
-    const require = createRequire(import.meta.url); const sourceMode = import.meta.url.endsWith(".ts");
-    const alpine = readFileSync(sourceMode ? require.resolve("@alpinejs/csp/dist/cdn.min.js") : new URL("../../src/assets/alpine.js", import.meta.url), "utf8");
-    const pico = readFileSync(sourceMode ? require.resolve("@picocss/pico/css/pico.min.css") : new URL("../../src/assets/pico.css", import.meta.url), "utf8");
-    for (const [path, contentType, content] of [["/", "text/html", deploymentPage.html], ["/page.js", "text/javascript", deploymentPage.script], ["/page.css", "text/css", deploymentPage.style], ["/alpine.js", "text/javascript", alpine], ["/pico.css", "text/css", pico]]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
+    const require = createRequire(new URL("../../client/package.json", import.meta.url)); const sourceMode = import.meta.url.endsWith(".ts");
+    const html = lifecycle.options.mode === "development"
+        ? deploymentPage.html.replace("</head>", '<script type="module" src="/@vite/client"></script></head>')
+        : deploymentPage.html;
+    const alpine = readFileSync(sourceMode ? require.resolve("@alpinejs/csp/dist/cdn.min.js") : new URL("../../client/src/assets/alpine.js", import.meta.url), "utf8");
+    const pico = readFileSync(sourceMode ? require.resolve("@picocss/pico/css/pico.min.css") : new URL("../../client/src/assets/pico.css", import.meta.url), "utf8");
+    for (const [path, contentType, content] of [["/", "text/html", html], ["/page.js", "text/javascript", deploymentPage.script], ["/page.css", "text/css", deploymentPage.style], ["/alpine.js", "text/javascript", alpine], ["/pico.css", "text/css", pico]]) app.get(path!, c => { c.header("Content-Type", contentType + "; charset=utf-8"); return c.body(content!); });
     for (const name of ["netsuite-2026.css", "oracle-corporate-2026.css"]) {
-        const content = readFileSync(new URL(sourceMode ? "../../src/themes/" + name : "../../src/assets/" + name, import.meta.url), "utf8");
+        const content = readFileSync(new URL("../../client/src/themes/" + name, import.meta.url), "utf8");
         app.get("/themes/" + name, c => { c.header("Content-Type", "text/css; charset=utf-8"); return c.body(content); });
     }
-    for (const name of ["favicon.png", "advanced-configuration.png"]) { const content = readFileSync(new URL("../../src/assets/" + name, import.meta.url)); app.get("/" + name, c => { c.header("Content-Type", "image/png"); return c.body(new Uint8Array(content)); }); }
-    for (const name of ["oracle-cover-dark.jpg", "oracle-cover-light.jpg", "netsuite-divider-dark.jpg"]) { const content = readFileSync(new URL(sourceMode ? "../../src/themes/" + name : "../../src/assets/" + name, import.meta.url)); app.get("/themes/" + name, c => { c.header("Content-Type", "image/jpeg"); return c.body(new Uint8Array(content)); }); }
-    for (const name of ["Ubuntu-Light.ttf", "Ubuntu-Regular.ttf", "Ubuntu-Medium.ttf", "Ubuntu-Bold.ttf"]) { const content = readFileSync(new URL("../../src/assets/fonts/" + name, import.meta.url)); app.get("/fonts/" + name, c => { c.header("Content-Type", "font/ttf"); return c.body(new Uint8Array(content)); }); }
+    for (const name of ["favicon.png", "advanced-configuration.png"]) { const content = readFileSync(new URL("../../client/src/assets/" + name, import.meta.url)); app.get("/" + name, c => { c.header("Content-Type", "image/png"); return c.body(new Uint8Array(content)); }); }
+    for (const name of ["oracle-cover-dark.jpg", "oracle-cover-light.jpg", "netsuite-divider-dark.jpg"]) { const content = readFileSync(new URL("../../client/src/themes/" + name, import.meta.url)); app.get("/themes/" + name, c => { c.header("Content-Type", "image/jpeg"); return c.body(new Uint8Array(content)); }); }
+    for (const name of ["Ubuntu-Light.ttf", "Ubuntu-Regular.ttf", "Ubuntu-Medium.ttf", "Ubuntu-Bold.ttf"]) { const content = readFileSync(new URL("../../client/src/assets/fonts/" + name, import.meta.url)); app.get("/fonts/" + name, c => { c.header("Content-Type", "font/ttf"); return c.body(new Uint8Array(content)); }); }
     app.get("/health", c => c.json(c.req.query("activity") === "1" ? { ready: true, instanceId: lifecycle.instanceId, busy: lifecycle.busy(), localBusy: lifecycle.operations.list().some(op => ["preparing", "running"].includes(op.state) && op.kind !== "playwright") || lifecycle.services.playwright.starting } : { ready: true }));
     app.use("*", async (c, next) => {
         const browser = c.req.header("x-session-token"); const authorization = c.req.header("authorization"); const origin = c.req.header("origin");

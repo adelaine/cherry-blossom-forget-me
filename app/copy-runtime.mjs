@@ -9,7 +9,9 @@ if (dirname(outputDirectory) !== appDirectory || (existsSync(outputDirectory) &&
     throw new Error("Runtime output must be the app's own dist directory.");
 }
 // Each build owns its emitted files. Do not remove another build's output.
-mkdirSync(join(outputDirectory, "assets"), { recursive: true });
+const clientDirectory = join(appDirectory, "client");
+const clientOutput = join(outputDirectory, "client", "src");
+mkdirSync(join(clientOutput, "assets"), { recursive: true });
 
 const require = createRequire(import.meta.url);
 // These packages have no runtime dependencies beyond the adapter's Hono peer.
@@ -27,19 +29,12 @@ for (const name of ["hono", "@hono/node-server"]) {
     copyFileSync(join(packageDirectory, "LICENSE"), join(destination, "LICENSE"));
     cpSync(join(packageDirectory, "dist"), join(destination, "dist"), { recursive: true });
 }
-copyFileSync(require.resolve("@alpinejs/csp/dist/cdn.min.js"), join(outputDirectory, "assets/alpine.js"));
-copyFileSync(require.resolve("@picocss/pico/css/pico.min.css"), join(outputDirectory, "assets/pico.css"));
-copyFileSync(join(appDirectory, "src/themes/netsuite-2026.css"), join(outputDirectory, "assets/netsuite-2026.css"));
-copyFileSync(join(appDirectory, "src/themes/netsuite-divider-dark.jpg"), join(outputDirectory, "assets/netsuite-divider-dark.jpg"));
-copyFileSync(join(appDirectory, "src/themes/oracle-corporate-2026.css"), join(outputDirectory, "assets/oracle-corporate-2026.css"));
-copyFileSync(join(appDirectory, "src/themes/oracle-cover-dark.jpg"), join(outputDirectory, "assets/oracle-cover-dark.jpg"));
-copyFileSync(join(appDirectory, "src/themes/oracle-cover-light.jpg"), join(outputDirectory, "assets/oracle-cover-light.jpg"));
-cpSync(join(appDirectory, "src/assets/fonts"), join(outputDirectory, "assets/fonts"), { recursive: true });
-copyFileSync(join(appDirectory, "src/assets/favicon.png"), join(outputDirectory, "assets/favicon.png"));
-copyFileSync(join(appDirectory, "src/assets/advanced-configuration.png"), join(outputDirectory, "assets/advanced-configuration.png"));
-// Keep relative imports identical in source and compiled server modules.
-cpSync(join(outputDirectory, "assets"), join(outputDirectory, "src/assets"), { recursive: true });
-cpSync(join(appDirectory, "src/themes"), join(outputDirectory, "src/themes"), { recursive: true });
+// Keep frontend paths identical in source and compiled server modules.
+cpSync(join(clientDirectory, "src/assets"), join(clientOutput, "assets"), { recursive: true });
+cpSync(join(clientDirectory, "src/themes"), join(clientOutput, "themes"), { recursive: true });
+const clientRequire = createRequire(join(clientDirectory, "package.json"));
+copyFileSync(clientRequire.resolve("@alpinejs/csp/dist/cdn.min.js"), join(clientOutput, "assets/alpine.js"));
+copyFileSync(clientRequire.resolve("@picocss/pico/css/pico.min.css"), join(clientOutput, "assets/pico.css"));
 writeFileSync(join(outputDirectory, "package.json"), JSON.stringify({ type: "module" }) + "\n");
 // Preserve the established container and packaged helper entry paths.
 writeFileSync(join(outputDirectory, "install.js"), `import { main } from "./src/install.js";

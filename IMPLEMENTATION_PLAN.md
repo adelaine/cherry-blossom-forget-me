@@ -18,13 +18,13 @@ Use controlled fixtures and fake executables for work-starting requests.
 
 ## 2. Development reload acceptance
 
-- Edit a route and a stateless helper from Windows. Confirm the source mount and configured watcher update the application without rebuilding the image. Verify the Vite client and WebSocket use the advertised published endpoint.
+- Exercise automatic reload of API route modules and stateless server helpers.
 - During a fake active job, reload routes and confirm instance identity, authentication, reservations, operation records, and process handles remain available.
 - Edit a process-owning service. Confirm state and readiness report a pending restart, conflicting work is rejected, and replacement happens after jobs drain. Confirm the refreshed service dependency graph is used.
 - Confirm managed SFTP reports why an idle service replacement is blocked. Verify idle Playwright service handover preserves the launcher-owned runner.
 - Confirm lifecycle and coordinator source changes report the documented explicit-launcher restart requirement instead of silently retaining stale code or restarting the process automatically.
 - Edit worker code and confirm only subsequent executions load the change.
-- Change dependency inputs. Confirm refresh stays pending until an explicit idle development launch, uses the lockfile and project-owned Linux volumes, and never installs beneath an active job. Verify both root and server workspace dependencies remain isolated from host node_modules.
+- Change dependency inputs. Confirm refresh stays pending until an explicit idle development launch, uses the lockfile and project-owned Linux volumes, and never installs beneath an active job. Verify root, server, and client workspace dependencies remain isolated from host node_modules.
 - Verify development stays available without browser heartbeats and Vite filesystem routes cannot serve credentials, runtime connection files, private keys, cloned repositories, logs, or build output.
 
 ## 3. Discovery, shutdown, and distribution acceptance
@@ -33,12 +33,11 @@ Use controlled fixtures and fake executables for work-starting requests.
 - Exercise explicit project paths with spaces and Unicode through the Windows wrapper chain. Confirm project selection comes from the wrapper or `--project`, rather than an unrelated current directory.
 - Exercise stale descriptors, startup failure, full restart, and shutdown. Confirm instance-owned descriptor cleanup, rotated identity and credentials after a full restart, loopback-only discovery, and rejection of mismatched identity, redirects, and proxy routing before credentials are sent.
 - Exercise API stop and process termination with controlled workers. Confirm protected jobs block API stop and actual termination cleans up workers, process groups, connections, timers, temporary snapshots, and listeners. Cleanup must remain idempotent.
-- Build and exercise the production container and Windows distribution ZIP. Confirm the compiled server, internal worker, bootstrap helpers, platform wrappers, and frontend assets are present and work without Vite, TypeScript, or other development dependencies.
-- Inspect distribution contents for accidental inclusion of access tokens, runtime descriptors, credentials, local configuration, tests, or local agent notes.
+- Exercise a fresh Windows installation from an extracted distribution ZIP, including its Python bootstrap and the current shared image when using PM mode.
 
 ## Execution boundaries
 
-Mirror backend source subdirectories and module names under `app/server/test`, including `api/` and `services/`. Backend checks for the remaining `app/src` helpers keep those modules' names. Frontend tests stay under `app/test` beside `app/src`; preserve their existing cases. Keep backend checks focused on successful workflows with minimal assertions. Keep shared fixtures beside the relevant tests:
+Mirror backend source subdirectories and module names under `app/server/test`, including `api/` and `services/`. Backend checks for the remaining `app/src` helpers keep those modules' names. Frontend tests stay under `app/client/test` beside `app/client/src`; preserve their existing cases. Keep backend checks focused on successful workflows with minimal assertions. Keep shared fixtures beside the relevant tests:
 
 ```text
 app/server/

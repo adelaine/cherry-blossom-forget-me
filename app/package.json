@@ -3,7 +3,8 @@
     "private": true,
     "type": "module",
     "workspaces": [
-        "server"
+        "server",
+        "client"
     ],
     "scripts": {
         "build": "node copy-runtime.mjs && tsc -p tsconfig.build.json",
@@ -13,17 +14,13 @@
         "sftp": "node --experimental-strip-types src/sftp.ts",
         "format": "prettier --config ../setup/.prettierrc --write .",
         "test": "npm run test:frontend && npm --workspace server run test",
-        "test:frontend": "node --experimental-strip-types --test test/ansi.spec.ts test/web-page.spec.ts"
+        "test:frontend": "npm --workspace client run test"
     },
     "dependencies": {
-        "@alpinejs/csp": "^3.17.4",
         "@hono/node-server": "^2.1.3",
-        "@picocss/pico": "^2.1.1",
-        "alpinejs": "^3.17.4",
         "hono": "^4.13.12"
     },
     "devDependencies": {
-        "@types/alpinejs": "^3.17.0",
         "@types/node": "^24.19.1",
         "prettier": "3.9.9",
         "tsx": "^4.23.0",

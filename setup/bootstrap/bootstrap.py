@@ -110,7 +110,7 @@ def write_private_json(path, value):
 
 
 def dependency_fingerprint():
-    paths = ["app/package.json", "app/server/package.json", "app/package-lock.json"]
+    paths = ["app/package.json", "app/server/package.json", "app/client/package.json", "app/package-lock.json"]
     digest = hashlib.sha256()
     for relative in paths:
         path = PROJECT / relative
@@ -425,6 +425,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
     helper_options = (["--mount", f"type=bind,src={PROJECT / 'app'},dst=/app,ro=true",
                        "--mount", f"type=volume,src={development_volume(name)},dst=/app/node_modules",
                        "--mount", f"type=volume,src={development_volume(name)}-server,dst=/app/server/node_modules",
+                       "--mount", f"type=volume,src={development_volume(name)}-client,dst=/app/client/node_modules",
                        "--entrypoint", "node"] if OPTIONS.dev else [])
     helper = [IMAGE, "--experimental-strip-types", "/app/src/install.ts"] if OPTIONS.dev else [IMAGE]
     base = ["--mount", f"type=bind,src={PROJECT},dst=/project,ro=true", *host, *helper_options]
@@ -475,6 +476,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
                       "--mount", f"type=bind,src={PROJECT / 'app'},dst=/app",
                       "--mount", f"type=volume,src={volume},dst=/app/node_modules",
                       "--mount", f"type=volume,src={volume}-server,dst=/app/server/node_modules",
+                      "--mount", f"type=volume,src={volume}-client,dst=/app/client/node_modules",
                       "--workdir", "/app", "--entrypoint", "npm"]
         if WINDOWS and "SUITECONTAINER_WATCH_POLLING" not in os.environ:
             arguments += ["--env", "SUITECONTAINER_WATCH_POLLING=1"]
@@ -539,12 +541,13 @@ def prepare_dependencies(name, fingerprint):
     volume = development_volume(name)
     exists = podman("volume", "exists", volume, optional=True)
     server_exists = podman("volume", "exists", volume + "-server", optional=True)
-    if previous.get("fingerprint") == fingerprint and exists.returncode == 0 and server_exists.returncode == 0:
-        return
-    if exists.returncode not in (0, 1) or server_exists.returncode not in (0, 1):
-        raise RuntimeError("Cannot inspect development dependency storage. Check Podman permissions and relaunch.")
-    for relative in ("app/node_modules", "app/server/node_modules"):
+    client_exists = podman("volume", "exists", volume + "-client", optional=True)
+    for relative in ("app/node_modules", "app/server/node_modules", "app/client/node_modules"):
         (PROJECT / relative).mkdir(exist_ok=True)
+    if previous.get("fingerprint") == fingerprint and all(result.returncode == 0 for result in (exists, server_exists, client_exists)):
+        return
+    if any(result.returncode not in (0, 1) for result in (exists, server_exists, client_exists)):
+        raise RuntimeError("Cannot inspect development dependency storage. Check Podman permissions and relaunch.")
     print("Refreshing development dependencies from the committed lockfile...", flush=True)
     # This runs only during an explicit launch, after the old app has been stopped while idle.
     with development_npm_inputs() as npm_inputs:
@@ -552,6 +555,7 @@ def prepare_dependencies(name, fingerprint):
                "--mount", f"type=bind,src={PROJECT / 'app'},dst=/app,ro=true",
                "--mount", f"type=volume,src={volume},dst=/app/node_modules",
                "--mount", f"type=volume,src={volume}-server,dst=/app/server/node_modules",
+               "--mount", f"type=volume,src={volume}-client,dst=/app/client/node_modules",
                "--workdir", "/app", "--entrypoint", "node", IMAGE,
                "/opt/suitecontainer/run-npm.mjs", "ci", "--ignore-scripts", "--no-audit", "--no-fund")
     write_private_json(record, {"fingerprint": fingerprint, "volume": volume})

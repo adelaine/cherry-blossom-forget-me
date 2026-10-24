@@ -6,12 +6,18 @@
         "verbatimModuleSyntax": true,
         "rewriteRelativeImportExtensions": true,
         "skipLibCheck": true,
-        "types": ["node"],
+        "types": [
+            "node"
+        ],
         "jsx": "react-jsx",
         "jsxImportSource": "hono/jsx",
         "noEmit": false,
         "rootDir": ".",
         "outDir": "./dist"
     },
-    "include": ["src/**/*.ts", "server/src/**/*.ts"]
+    "include": [
+        "src/**/*.ts",
+        "server/src/**/*.ts",
+        "client/src/**/*.ts"
+    ]
 }

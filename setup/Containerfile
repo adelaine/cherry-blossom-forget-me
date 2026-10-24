@@ -61,6 +61,7 @@ FROM tools AS build
 WORKDIR /app
 COPY app/package.json app/package-lock.json ./
 COPY app/server/package.json ./server/package.json
+COPY app/client/package.json ./client/package.json
 RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=type=secret,id=npm-rootrc --mount=type=secret,id=npm-projectrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
     if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
     && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
@@ -68,6 +69,7 @@ RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=typ
 COPY app/tsconfig.build.json ./tsconfig.build.json
 COPY app/src ./src
 COPY app/server/src ./server/src
+COPY app/client/src ./client/src
 COPY app/copy-runtime.mjs ./copy-runtime.mjs
 RUN npm run build
 

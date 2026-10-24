@@ -12,6 +12,10 @@ app/*
 !app/server/package.json
 !app/server/src/
 !app/server/src/**
+!app/client/
+!app/client/package.json
+!app/client/src/
+!app/client/src/**
 !setup/
 setup/*
 !setup/Containerfile

@@ -25,7 +25,7 @@ export default defineConfig(() => {
             const module = await server.ssrLoadModule(entry);
             lifecycle = module.createServerLifecycle({
                 mode: "development",
-                onStop: () => { void server.close(); },
+                onStop: () => { setImmediate(() => { void server.close(); }); },
             }) as Lifecycle;
             return lifecycle;
         })();
@@ -34,7 +34,7 @@ export default defineConfig(() => {
         const path = file.replaceAll("\\", "/");
         return (path.includes("/server/src/services/") && !path.endsWith("/services/operations.ts")) ||
             (path.startsWith(appDirectory.replaceAll("\\", "/") + "/src/") &&
-                !/\/(?:assets|themes)\/|\/web-page\.ts$|\/install\.ts$|\/step-deploy\.ts$|\/step-token\.ts$/.test(path));
+                !/\/(?:install|step-deploy|step-token)\.ts$/.test(path));
     };
 
     return {
@@ -53,7 +53,7 @@ export default defineConfig(() => {
             fs: {
                 strict: true,
                 allow: [appDirectory],
-                deny: ["**/.env", "**/.env.*", "**/.npmrc", "**/*.{pem,key,p12,pfx,crt}", "**/credentials/**", "**/.cache/**", "**/repos/**", "**/.git/**", "**/test/**", "**/*.log", "**/dist/**", "**/build/**"],
+                deny: ["**/.env", "**/.env.*", "**/.npmrc", "**/*.{pem,key,p12,pfx,crt}", "**/credentials/**", "**/.cache/**", "**/repos/**", "**/.git/**", "**/test/**", "**/*.log", ...[appDirectory, serverDirectory, resolve(appDirectory, "client")].flatMap(directory => [resolve(directory, "dist/**"), resolve(directory, "build/**")])],
             },
             watch: {
                 ignored,
@@ -67,7 +67,7 @@ export default defineConfig(() => {
                 enforce: "pre",
                 async configureServer(server) {
                     const owner = await getLifecycle(server);
-                    server.watcher.add([resolve(appDirectory, "src"), resolve(appDirectory, "package.json"), resolve(appDirectory, "package-lock.json")]);
+                    server.watcher.add([resolve(appDirectory, "src"), resolve(appDirectory, "client/src"), resolve(appDirectory, "client/package.json"), resolve(appDirectory, "package.json"), resolve(appDirectory, "package-lock.json")]);
                     // Vite configuration reloads must not recreate backend owners.
                     // They require the same explicit launcher path as process restarts.
                     server.restart = async () => {
@@ -125,9 +125,10 @@ export default defineConfig(() => {
             },
             devServer({
                 entry,
+                injectClientScript: false,
                 // Keep existing application JS/CSS routes in Hono. Only Vite's
                 // own modules and explicitly requested source use its file server.
-                exclude: [/^\/@(?:vite|id|fs)\//, /^\/node_modules\//, /^\/(?:src|server\/src)\//],
+                exclude: [/^\/@(?:vite|id|fs)\//, /^\/node_modules\//, /^\/(?:src|server\/src|client\/src)\//],
                 ignoreWatching: ignored,
                 async loadModule(server, path) {
                     const owner = await getLifecycle(server);
