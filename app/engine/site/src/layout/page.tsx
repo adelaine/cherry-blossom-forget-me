@@ -1,13 +1,9 @@
 /** @jsxImportSource preact */
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
-import { siteModules } from "../common/module.ts";
 import { SiteProvider, SiteRuntime, useSite } from "../common/runtime.ts";
 import { errorMessage, parseConfiguration } from "../common/state.ts";
-import { features } from "../features/index.ts";
-import { tools } from "../tools/index.ts";
-
-export const modules = siteModules([...features, ...tools]);
+import { modules } from "../modules.ts";
 
 function Appearance() {
     const runtime = useSite();

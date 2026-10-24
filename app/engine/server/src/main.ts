@@ -273,6 +273,7 @@ export function createApplication(lifecycle: ServerLifecycle): ApiApp {
     for (const [path, contentType, content] of [
         ["/", "text/html", html],
         ["/pico.css", "text/css", pico],
+        ["/styles.css", "text/css", readFileSync(new URL("../../site/public/styles.css", import.meta.url), "utf8")],
     ])
         app.get(path!, (c) => {
             c.header("Content-Type", contentType + "; charset=utf-8");

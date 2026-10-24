@@ -64,6 +64,10 @@ cpSync(join(siteDirectory, "public/themes"), join(siteOutput, "themes"), {
     recursive: true,
 });
 copyFileSync(
+    join(siteDirectory, "public/styles.css"),
+    join(siteOutput, "styles.css"),
+);
+copyFileSync(
     require.resolve("@picocss/pico/css/pico.min.css"),
     join(siteOutput, "assets/pico.css"),
 );

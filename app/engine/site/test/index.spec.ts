@@ -5,7 +5,6 @@ import { readFileSync } from "node:fs";
 import { ACTIVITY_GRACE_MS } from "../../server/src/web-inactivity.ts";
 import { ansiToHtml, ansiStyles } from "../src/common/ansi.ts";
 import { deploymentPage } from "../src/web-page.ts";
-import { siteStyle } from "../src/styles.ts";
 import { initializeBrowser } from "./browser-harness.ts";
 
 test("ANSI converter and styles are included in the compiled browser assets", () => {
@@ -15,7 +14,8 @@ test("ANSI converter and styles are included in the compiled browser assets", ()
         '<span class="ansi-fg-1">&lt;red&gt;</span>',
     );
     assert.ok(script.includes("data-ansi-fg"));
-    assert.ok(siteStyle.includes(ansiStyles));
+    const styles = readFileSync(new URL("../public/styles.css", import.meta.url), "utf8");
+    assert.ok(styles.replace(/\s+/g, "").replace(/;}/g, "}").includes(ansiStyles));
     assert.ok(deploymentPage.html.includes('type="module" src="/page.js"'));
 });
 

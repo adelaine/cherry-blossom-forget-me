@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { siteStyle } from "./src/styles.ts";
+import { moduleStyles } from "./src/modules.ts";
 
 const siteDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +25,7 @@ export default defineConfig({
     plugins: [{
         name: "suitecontainer-module-styles",
         generateBundle() {
-            this.emitFile({ type: "asset", fileName: "page.css", source: siteStyle });
+            this.emitFile({ type: "asset", fileName: "page.css", source: moduleStyles });
         },
     }],
 });

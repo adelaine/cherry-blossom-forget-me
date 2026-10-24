@@ -173,9 +173,9 @@ export default defineConfig(() => {
                                 const source = resolve(appDirectory, "site/src/main.tsx").replaceAll("\\", "/");
                                 response.end(`import ${JSON.stringify("/@fs/" + source)};`);
                             } else {
-                                const styles = await server.ssrLoadModule(resolve(appDirectory, "site/src/styles.ts"));
+                                const styles = await server.ssrLoadModule(resolve(appDirectory, "site/src/modules.ts"));
                                 response.setHeader("Content-Type", "text/css; charset=utf-8");
-                                response.end(styles.siteStyle);
+                                response.end(styles.moduleStyles);
                             }
                         } catch (error) { next(error); }
                     });
