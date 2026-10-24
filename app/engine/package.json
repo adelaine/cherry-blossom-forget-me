@@ -8,11 +8,12 @@
         "dev": "vite --config server/vite.config.ts",
         "start": "node dist/install.js --serve",
         "sftp": "node --experimental-strip-types server/src/sftp.ts",
-        "format": "node ../setup/node/format.mjs --write",
-        "test": "npm run test:frontend && npm run test:backend",
-        "test:frontend": "node --experimental-strip-types --test client/test/ansi.spec.ts client/test/web-page.spec.ts",
-        "test:backend": "node --experimental-strip-types --test server/test/api/credentials.spec.ts server/test/api/deployment.spec.ts server/test/api/sql.spec.ts server/test/copy-runtime.spec.ts server/test/main.spec.ts server/test/sql-password-crypto.spec.ts server/test/step-config.spec.ts server/test/step-deploy.spec.ts server/test/step-launch.spec.ts",
-        "format:check": "node ../setup/node/format.mjs --check"
+        "format:files": "prettier --config .prettierrc client server \"*.json\" .prettierrc ../setup/node ../setup/playwright ../setup/templates ../docs",
+        "format": "npm run format:files -- --write",
+        "format:check": "npm run format:files -- --check",
+        "test": "npm run test:client && npm run test:server",
+        "test:client": "node --experimental-strip-types --test \"client/test/**/*.spec.ts\"",
+        "test:server": "node --experimental-strip-types --test \"server/test/**/*.spec.ts\""
     },
     "dependencies": {
         "@alpinejs/csp": "^3.17.4",
