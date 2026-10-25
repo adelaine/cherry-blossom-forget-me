@@ -127,9 +127,9 @@ export const main = (args: string[] = process.argv.slice(2)): number => {
 				)
 			: null;
 	try {
-		if (!config.PM_MODE && config.suiteapps.some((repo) => !repo.localPath))
+		if (config.suiteapps.some((repo) => !repo.localPath))
 			prepareToken(authPath);
-		cloneRepos(config.suiteapps, config.PM_MODE);
+		cloneRepos(config.suiteapps);
 		if (deploy) {
 			deployRepos(config, privateKeyPath!);
 		} else {

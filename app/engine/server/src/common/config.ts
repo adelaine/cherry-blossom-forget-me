@@ -14,7 +14,6 @@ export interface Vm {
 	database?: { user?: string; service?: string };
 }
 export type Config = {
-	PM_MODE?: boolean;
 	suiteapps: SuiteApp[];
 	certificates?: { public: string; private: string; id: string };
 	authentication?: Auth["suitecloud-authentication"];

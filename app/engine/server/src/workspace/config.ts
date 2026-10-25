@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { readAuth, type Auth } from "../common/auth.ts";
+import { readAuth } from "../common/auth.ts";
 
 import type { Config } from "../common/config.ts";
 const invalidConfig: (message: string) => never = (message) => {
@@ -56,7 +56,6 @@ export const validBranch = (branch: unknown): boolean => {
 export const validateConfig = (
 	value: unknown,
 	requireDeploymentSettings = false,
-	auth?: Auth,
 ): Config => {
 	if (
 		!value ||
@@ -130,12 +129,6 @@ export const validateConfig = (
 			);
 		}
 	}
-	if (config.PM_MODE !== undefined && typeof config.PM_MODE !== "boolean") {
-		invalidConfig(
-			"The setting that controls local deployment must be true or false.",
-		);
-	}
-	if (auth && !auth["gitlab-token"]?.trim()) config.PM_MODE = true;
 	if (
 		config.status !== undefined &&
 		(!config.status ||
@@ -203,7 +196,7 @@ export const validateConfig = (
 			!repo ||
 			typeof repo !== "object" ||
 			Array.isArray(repo) ||
-			(!config.PM_MODE && !repo.localPath && !gitlabHttpsUrl(repo.url))
+			(!repo.localPath && !gitlabHttpsUrl(repo.url))
 		) {
 			invalidConfig(
 				`SuiteApp ${index + 1} needs a localPath or a GitLab HTTPS or SSH URL from gitlab.eng.netsuite.com.`,
@@ -230,7 +223,7 @@ export const validateConfig = (
 		) {
 			invalidConfig(`SuiteApp ${index + 1} has an invalid "localPath".`);
 		}
-		if (!config.PM_MODE && repo.localPath && repo.branch !== undefined) {
+		if (repo.localPath && repo.branch !== undefined) {
 			invalidConfig(
 				`SuiteApp ${index + 1} cannot set both "localPath" and "branch".`,
 			);
@@ -255,7 +248,7 @@ export const readConfig = (
 		invalidConfig("The JSON file could not be read or has a syntax error.");
 	}
 	const auth = readAuth(authPath);
-	const config = validateConfig(value, false, auth);
+	const config = validateConfig(value);
 	config.certificates = auth["suitecloud-certificates"];
 	config.authentication = auth["suitecloud-authentication"] ?? {
 		method: "browser",

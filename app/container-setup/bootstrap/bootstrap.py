@@ -355,14 +355,6 @@ def confirm_owner(info):
         raise RuntimeError("Another container has this app name. It will not be reused or removed.")
 
 
-def pm_mode():
-    try:
-        config = json.loads((home_directory() / "config/suitecontainer.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        config = {}
-    return isinstance(config, dict) and config.get("PM_MODE") is True
-
-
 def machine_path(path):
     path = str(Path(path).resolve())
     if not re.match(r"^[A-Za-z]:[\\/]", path):
@@ -788,8 +780,7 @@ def launch():
     source_available = (engine_directory() / "package.json").is_file() and (container_setup_directory() / "Containerfile").is_file()
     if OPTIONS.dev and not source_available:
         raise RuntimeError("Development mode requires the application source checkout.")
-    shared_image_mode = pm_mode() and not OPTIONS.dev
-    build_from_source = source_available and not shared_image_mode
+    build_from_source = source_available
     running = bool(info and info.get("State", {}).get("Running"))
     dependencies = dependency_fingerprint() if OPTIONS.dev else None
     runner = playwright_runner(name, machine, info)
@@ -812,8 +803,6 @@ def launch():
             image = podman("image", "exists", IMAGE, optional=True)
             if image.returncode:
                 raise RuntimeError(f"The archive did not contain the {IMAGE} image: {archive}")
-        elif image.returncode == 1 and shared_image_mode:
-            raise RuntimeError(f"Copy the shared {IMAGE} image archive to {archive}, then run the launcher again.")
         elif image.returncode == 1:
             build_image(machine)
         elif image.returncode:
@@ -837,7 +826,7 @@ def launch():
             raise RuntimeError("Could not compare the running app with the updated image. The running app was left untouched.")
         replace_app = replace_app or current_image != running_image
     if runner:
-        runner.plan(shared_image_mode)
+        runner.plan(not source_available)
         replace_app = replace_app or runner.app_changed
     if running and (replace_app or (runner and runner.runner_changed)):
         runner_stopped = bool(runner and runner.enabled and (not runner.info or not runner.info.get("State", {}).get("Running")))

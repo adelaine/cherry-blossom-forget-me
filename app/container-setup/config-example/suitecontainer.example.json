@@ -28,7 +28,6 @@
 			}
 		}
 	],
-	"PM_MODE": false,
 	"playwright": {
 		"enabled": false,
 		"project": "",

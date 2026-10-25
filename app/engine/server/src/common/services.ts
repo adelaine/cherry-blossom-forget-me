@@ -109,7 +109,6 @@ export const createServices = (
 			error: credentialError || ready.error,
 			credentialError,
 			tokenPresent: !!auth["gitlab-token"]?.trim(),
-			PM_MODE: !auth["gitlab-token"]?.trim() || config.PM_MODE === true,
 			deploymentStarted: savedStatus?.["deploy-start-ok"] === 1,
 			theme: savedStatus?.theme,
 			authentication: authentication.status(),

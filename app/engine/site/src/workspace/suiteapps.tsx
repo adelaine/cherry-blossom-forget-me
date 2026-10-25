@@ -3,7 +3,11 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
 import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
-import { errorMessage, parseConfiguration } from "../common/state.ts";
+import {
+	errorMessage,
+	isSuiteAppValidationError,
+	parseConfiguration,
+} from "../common/state.ts";
 
 type SuiteApp = Record<string, unknown>;
 type SuiteAppConfig = Record<string, unknown> & { suiteapps: SuiteApp[] };
@@ -35,6 +39,9 @@ export const directoryFromUrl = (value: string): string => {
 
 export const SuiteApps = () => {
 	const runtime = useSite();
+	const validation = [runtime.actionError, runtime.snapshot?.error].find(
+		isSuiteAppValidationError,
+	);
 	const [message, setMessage] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [focusKey, setFocusKey] = useState<number>();
@@ -280,7 +287,7 @@ export const SuiteApps = () => {
 				<p id="suiteapps-message" role="status">
 					{!config
 						? "Fix the configuration JSON in Advanced configuration to edit SuiteApps. Your JSON edits are preserved."
-						: message}
+						: validation || message}
 				</p>
 			</article>
 		</>

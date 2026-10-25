@@ -8,7 +8,7 @@ The computer or **codebox** runs the container. A **deployment scrumbox**, liste
 
 Run the launcher for your platform from `start/`: [Windows](../../start/start-windows.cmd), [macOS](../../start/start-macos.command), or [codebox](../../start/start-codebox). The launcher first tries the internal base image and falls back to Oracle’s public `ghcr.io/oracle/oraclelinux9-nodejs:24` image if the internal image cannot be pulled. Package downloads use your existing npm configuration and may still require internal registry access. Copying SuiteApps from GitLab needs GitLab access. Deployment needs access to your scrumboxes.
 
-In PM Mode (`"PM_MODE": true`), copy the shared image archive to `home/container-image/suitecontainer-workspace.tar` before launching. The launcher loads it into Podman automatically. The archive is not included in Git or the team ZIP. Use an image built for the recipient's computer architecture. Local SuiteApp checkouts can be used without GitLab access.
+When application source files are unavailable, copy the shared image archive to `home/container-image/suitecontainer-workspace.tar` before launching. The launcher loads it into Podman automatically if the image is missing. The archive is not included in Git or the team ZIP. Use an image built for the recipient's computer architecture. SuiteApps with an explicit `localPath` can be used without GitLab access.
 
 ### npm registry fallback
 

@@ -305,7 +305,7 @@ export const Credentials = () => {
 	return (
 		<section id="credentials-section" aria-labelledby="setup-heading">
 			<h2 id="setup-heading">
-				<Icon name="building-2" /> NS Account
+				<Icon name="building-2" /> NetSuite Account
 			</h2>
 			<article class="credentials-card">
 				<ol class="credential-steps" role="list">
@@ -318,16 +318,39 @@ export const Credentials = () => {
 							ref={vmSection}
 						>
 							<summary>
-								<span>
-									VM<small>Choose your scrumbox</small>
-								</span>
+								<span>NetSuite Account</span>
 							</summary>
+							<div
+								class="credential-sub-type"
+								role="radiogroup"
+								aria-label="Account type"
+							>
+								<span>Account type</span>
+								<label>
+									<input
+										type="radio"
+										name="account-type"
+										value="scrumbox"
+										checked
+										disabled
+									/>
+									Scrumbox VM
+								</label>
+								<label>
+									<input
+										type="radio"
+										name="account-type"
+										value="production"
+										disabled
+									/>
+									Production account
+								</label>
+							</div>
 							<div class="grid">
 								<div>
 									<label for="vm">Current VM (scrumbox domain)</label>
 									<input
 										id="vm"
-										aria-describedby="vm-help"
 										placeholder="your-scrumbox.vm.eng.netsuite.com"
 										disabled={disabled}
 										value={vmDisplay.current.url}
@@ -349,12 +372,6 @@ export const Credentials = () => {
 									/>
 								</div>
 							</div>
-							<p id="vm-help">
-								<small>
-									Enter only the domain, without <code>https://</code>. SQL and
-									SFTP use the first configured VM.
-								</small>
-							</p>
 						</details>
 					</li>
 					<li>
@@ -365,22 +382,55 @@ export const Credentials = () => {
 							ref={certificatesSection}
 						>
 							<summary>
-								<span>
-									SuiteCloud Authentication
-									<small>Sign in with your browser or use certificates</small>
-								</span>
+								<span>SuiteCloud Authentication</span>
 							</summary>
+							<div
+								class="credential-sub-type"
+								role="radiogroup"
+								aria-label="Authentication method"
+							>
+								<label>
+									<input
+										type="radio"
+										name="authentication-method"
+										value="browser"
+										checked={!certificateMode}
+										disabled={disabled}
+										onChange={() =>
+											editCredential("authenticationMethod", "browser")
+										}
+									/>
+									Browser-based
+								</label>
+								<label>
+									<input
+										type="radio"
+										name="authentication-method"
+										value="certificates"
+										checked={certificateMode}
+										disabled={disabled}
+										onChange={() =>
+											editCredential("authenticationMethod", "certificates")
+										}
+									/>
+									Certificates
+								</label>
+							</div>
 							<div hidden={certificateMode}>
 								<p hidden={account?.connected}>
 									Sign in to NetSuite using this browser. Your account and role
 									will be saved for future deployments.
 								</p>
-								<p id="suitecloud-authentication-status" role="status">
+								<blockquote
+									class="status-message"
+									id="suitecloud-authentication-status"
+									role="status"
+								>
 									{account?.connected
 										? `Signed in to ${account.company} as ${account.role}.`
 										: next?.authentication?.error ||
 											"Sign in to connect this VM. Sign in again after a SuiteCloud SDK update."}
-								</p>
+								</blockquote>
 								<button
 									id="suitecloud-sign-in"
 									disabled={disabled || !host}
@@ -396,23 +446,7 @@ export const Credentials = () => {
 									Cancel sign-in
 								</button>
 							</div>
-							<label for="use-certificates">
-								<input
-									id="use-certificates"
-									type="checkbox"
-									checked={certificateMode}
-									disabled={disabled}
-									onChange={(event) =>
-										editCredential(
-											"authenticationMethod",
-											event.currentTarget.checked ? "certificates" : "browser",
-										)
-									}
-								/>
-								Use certificates instead
-							</label>
-							<details id="certificates-section" hidden={!certificateMode}>
-								<summary>Certificates</summary>
+							<div id="certificates-section" hidden={!certificateMode}>
 								<details id="cert-details" ref={certificateDetails}>
 									<summary>View certificate paths</summary>
 									<p>
@@ -539,7 +573,7 @@ export const Credentials = () => {
 										certificate.
 									</small>
 								</p>
-							</details>
+							</div>
 						</details>
 					</li>
 					<li>
@@ -550,10 +584,7 @@ export const Credentials = () => {
 							ref={adminSection}
 						>
 							<summary>
-								<span>
-									AdminDocs
-									<small>Configure Features and Preferences</small>
-								</span>
+								<span>Additional Features and Preferences</span>
 							</summary>
 							<aside
 								class="setup-hint"
@@ -564,8 +595,14 @@ export const Credentials = () => {
 								</h3>
 								<ol>
 									<li>
-										In <strong>Canary</strong>, enable{" "}
-										<code>SUITE_SCRIPT_SFTP_ALLOW_INTERNAL_IPS</code>.
+										For <strong>ABSI</strong> (if using Next OneWorld account),
+										go to{" "}
+										<strong>Setup &gt; Company &gt; Enable Features</strong> and
+										enable <strong>Custom Records</strong>.
+									</li>
+									<li>
+										For <strong>ABSI</strong>, in <strong>Canary</strong>,
+										enable <code>SUITE_SCRIPT_SFTP_ALLOW_INTERNAL_IPS</code>.
 									</li>
 									<li>
 										In <strong>AdminDocs &gt; Enable Features</strong>, set{" "}
@@ -574,6 +611,10 @@ export const Credentials = () => {
 											Connectivity imports of the same Format Profile:
 										</q>{" "}
 										to <code>0</code>.
+									</li>
+									<li>
+										For <strong>Bank Feeds</strong>, use the SQL tool to insert
+										NSN Bank Feeds API Secrets (confluence).
 									</li>
 								</ol>
 							</aside>
@@ -623,10 +664,7 @@ export const Credentials = () => {
 							ref={tokenSection}
 						>
 							<summary>
-								<span>
-									GitLab token
-									<small>Used to clone SuiteApps from GitLab</small>
-								</span>
+								<span>(Optional) GitLab token</span>
 							</summary>
 							<blockquote class="status-message" id="token-state">
 								{next?.tokenPresent
@@ -690,6 +728,9 @@ export const credentials: SiteModule = {
 	},
 	styleOrder: 1,
 	style: /* css */ `.credential-steps{list-style:none;padding:0;counter-reset:credential-step}
+.credential-sub-type{margin-bottom:1rem;border:0;background:transparent;color:var(--pico-muted-color);font-size:0.9rem}
+.credential-sub-type>span{display:block;margin-bottom:0.5rem}
+.credential-sub-type>label{display:inline-block;margin-inline-end:1.5rem;color:inherit;font-size:inherit}
 .credential-steps{margin:0}
 .credential-steps>li{position:relative;counter-increment:credential-step;padding:1.25rem 1.5rem 1.25rem 4.5rem;margin:0;border-bottom:1px solid var(--pico-muted-border-color)}
 .credential-steps>li::before{content:counter(credential-step);position:absolute;inset-inline-start:1.25rem;inset-block-start:1.1rem;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;background:var(--pico-secondary-background);color:var(--pico-secondary-inverse);font-weight:500}
