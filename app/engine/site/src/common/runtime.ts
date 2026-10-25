@@ -99,6 +99,7 @@ export class SiteRuntime {
 		signal?: AbortSignal,
 	): Promise<Response> => this.client.request(path, data, key, signal);
 	get busy(): boolean {
+		if (this.snapshot?.authentication?.state === "running") return true;
 		return (
 			this.snapshot?.run.state === "running" ||
 			this.snapshot?.sql?.state === "running" ||
@@ -108,6 +109,7 @@ export class SiteRuntime {
 		);
 	}
 	get preventStop(): boolean {
+		if (this.snapshot?.authentication?.state === "running") return true;
 		return (
 			this.snapshot?.run.state === "running" ||
 			this.snapshot?.sql?.state === "running" ||

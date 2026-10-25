@@ -39,6 +39,12 @@ RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=typ
     && javac -version \
     && suitecloud --version
 
+COPY app/setup/suitecloud/BrowserHandoff.java /tmp/suitecloud-handoff/BrowserHandoff.java
+RUN cd /tmp/suitecloud-handoff \
+    && javac --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED BrowserHandoff.java \
+    && printf 'Premain-Class: BrowserHandoff\n' > manifest.mf \
+    && jar cfm /opt/suitecontainer/browser-handoff.jar manifest.mf BrowserHandoff*.class
+
 COPY app/setup/gitlab-askpass.sh /usr/local/bin/
 COPY app/setup/sftp/start.sh /usr/local/bin/start-sftp
 RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \

@@ -12,6 +12,10 @@ export const credentialContracts: ApiContract[] = [
 				public: { type: "string" },
 				private: { type: "string" },
 				id: { type: "string" },
+				authenticationMethod: {
+					type: "string",
+					enum: ["browser", "certificates"],
+				},
 			},
 		},
 		responseFields: ["config", "certificates", "ready"],
@@ -29,6 +33,16 @@ export const credentialContracts: ApiContract[] = [
 		path: "/api/certificate",
 		responseFields: [],
 		contentType: "application/x-pem-file",
+	},
+	{
+		method: "POST",
+		path: "/api/suitecloud/login",
+		schema: {
+			required: ["targetId"],
+			fields: { targetId: { type: "string" } },
+		},
+		responseFields: ["operationId", "url"],
+		cancelSupported: true,
 	},
 ];
 export const credentialsApi = (
@@ -50,4 +64,7 @@ export const credentialsApi = (
 			new Uint8Array(lifecycle.services.credentials.publicCertificate()),
 		);
 	});
+	register(app, lifecycle, credentialContracts[3], (input) =>
+		lifecycle.services.authentication.start(input.targetId),
+	);
 };

@@ -126,12 +126,13 @@ export const main = (args: string[] = process.argv.slice(2)): number => {
 		// Deployment settings are checked here after handling an empty SuiteApp list.
 		validateConfig(config, true);
 	}
-	const privateKeyPath = deploy
-		? verifyCertificates(
-				process.env.SUITECONTAINER_PUBLIC_KEY,
-				process.env.SUITECONTAINER_PRIVATE_KEY,
-			)
-		: null;
+	const privateKeyPath =
+		deploy && config.authentication?.method !== "browser"
+			? verifyCertificates(
+					process.env.SUITECONTAINER_PUBLIC_KEY,
+					process.env.SUITECONTAINER_PRIVATE_KEY,
+				)
+			: null;
 	try {
 		if (!config.PM_MODE && config.suiteapps.some((repo) => !repo.localPath))
 			prepareToken(authPath);

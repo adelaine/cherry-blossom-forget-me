@@ -2,6 +2,20 @@ import { readFileSync } from "node:fs";
 import { posix, win32 } from "node:path";
 
 export interface Auth {
+	"suitecloud-authentication"?: {
+		method: "browser" | "certificates";
+		accounts?: Record<
+			string,
+			{
+				authId: string;
+				sdkVersion: string;
+				company: string;
+				role: string;
+				account: string;
+				url: string;
+			}
+		>;
+	};
 	"gitlab-token"?: string;
 	sftp?: { port: number; username: string; password: string; path?: string };
 	"suitecloud-certificates"?: { public: string; private: string; id: string };

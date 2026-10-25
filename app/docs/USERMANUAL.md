@@ -22,7 +22,15 @@ On a remote codebox, follow the SSH port-forwarding instructions printed by the 
 
 Starting the app does not deploy anything. Deployment begins when you click **Deploy**.
 
-## Credentials and certificate registration
+## SuiteCloud authentication
+
+SuiteContainer uses browser authentication by default. Set your VM domain and account, then open **SuiteCloud Authentication** and click **Sign in with browser**. Complete the NetSuite login and select the account and role. The saved sign-in and its encryption passkey are stored privately under `home/credentials/` and survive container replacement. Sign in again when authorization expires or the SuiteCloud SDK version changes.
+
+The launcher publishes the browser callback on host loopback port **52300**. On a remote codebox, forward that port as well as the application port using the launcher's printed SSH command.
+
+To use certificates, select **Use certificates instead**, expand **Certificates**, and follow the registration steps below. Click **Save credentials** to save your authentication method.
+
+## Certificate registration
 
 1. Set **Current VM** to your scrumbox domain, without `https://` or `/devhome`.
 2. Enter a GitLab token if you use remote repositories. Configurations using only local checkouts do not need a GitLab token.

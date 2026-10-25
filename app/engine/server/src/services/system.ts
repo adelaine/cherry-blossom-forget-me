@@ -6,6 +6,7 @@ import { DeploymentService } from "./deployment.ts";
 import { SqlService } from "./sql.ts";
 import { SftpApplicationService } from "./sftp.ts";
 import { PlaywrightService } from "./playwright.ts";
+import { SuiteCloudAuthenticationService } from "./SuiteCloudAuthenticationService.ts";
 import type { OperationsService } from "./operations.ts";
 import { message } from "./errors.ts";
 import type { Auth } from "../step-auth.ts";
@@ -36,6 +37,11 @@ export const createServices = (
 	);
 	const credentials = new CredentialsService(configuration, shared);
 	const suiteapps = new SuiteAppsService(configuration, credentials);
+	const authentication = new SuiteCloudAuthenticationService(
+		configuration,
+		credentials,
+		suiteapps,
+	);
 	const deployment = new DeploymentService(
 		configuration,
 		suiteapps,
@@ -104,6 +110,7 @@ export const createServices = (
 			PM_MODE: !auth["gitlab-token"]?.trim() || config.PM_MODE === true,
 			deploymentStarted: savedStatus?.["deploy-start-ok"] === 1,
 			theme: savedStatus?.theme,
+			authentication: authentication.status(),
 			certificates: {
 				public: /[\r\n]/.test(auth["suitecloud-certificates"]?.public ?? "")
 					? ""
@@ -132,6 +139,7 @@ export const createServices = (
 	const dispose = async (options: { preserveRunner?: boolean } = {}) => {
 		sftp.dispose();
 		await Promise.all([
+			authentication.dispose(),
 			deployment.dispose(),
 			sql.dispose(),
 			playwright.dispose(!options.preserveRunner),
@@ -140,6 +148,7 @@ export const createServices = (
 	return {
 		configuration,
 		credentials,
+		authentication,
 		suiteapps,
 		deployment,
 		sql,

@@ -17,6 +17,7 @@ export const systemContracts: ApiContract[] = [
 			"apiVersion",
 			"config",
 			"ready",
+			"authentication",
 			"blockers",
 			"run",
 			"sql",

@@ -6,6 +6,8 @@ import type { Auth } from "../step-auth.ts";
 import { configObject, type ConfigurationService } from "./configuration.ts";
 import type { CredentialsService } from "./credentials.ts";
 import { message, ServiceError } from "./errors.ts";
+import { basename } from "node:path";
+import { browserAccountKey, suitecloudSdk } from "../suitecloud-auth.ts";
 
 export interface Target {
 	id: string;
@@ -144,7 +146,25 @@ export class SuiteAppsService {
 					"Relaunch required: local repositories or certificate paths need different mounts.",
 				);
 			const cert = this.credentials.certificateState(auth);
-			if (cert.error)
+			config.authentication = auth["suitecloud-authentication"] ?? {
+				method: "browser",
+			};
+			if (config.authentication.method === "browser") {
+				for (const vm of config.vms) {
+					const account =
+						config.authentication.accounts?.[browserAccountKey(vm)];
+					if (!account)
+						throw new ServiceError(
+							"browser_authentication_required",
+							"Sign in with your browser under SuiteCloud Authentication.",
+						);
+					if (account.sdkVersion !== basename(suitecloudSdk()))
+						throw new ServiceError(
+							"browser_authentication_required",
+							"SuiteCloud SDK changed. Sign in with your browser again.",
+						);
+				}
+			} else if (cert.error)
 				throw new ServiceError("certificate_required", cert.error);
 			config.certificates = auth["suitecloud-certificates"];
 			validateConfig(config, true);

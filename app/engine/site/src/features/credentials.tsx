@@ -9,6 +9,7 @@ import {
 } from "../common/state.ts";
 
 type CredentialDraft = {
+	authenticationMethod: "browser" | "certificates";
 	public: string;
 	private: string;
 	id: string;
@@ -41,6 +42,10 @@ export const Credentials = () => {
 	const vmDisplay = useRef<VmDraft>({ url: "", account: "" });
 	const vmSource = useRef<string | undefined>(undefined);
 	const values: CredentialDraft = draft || {
+		authenticationMethod:
+			next?.authentication?.method === "certificates"
+				? "certificates"
+				: "browser",
 		public: next?.certificates.public || "",
 		private: next?.certificates.private || "",
 		id: next?.certificates.id || "",
@@ -63,6 +68,12 @@ export const Credentials = () => {
 		}
 	}
 	const host = targetHost(runtime.configText);
+	const certificateMode = values.authenticationMethod === "certificates";
+	const loginRunning = next?.authentication?.state === "running";
+	const account = Object.values(next?.authentication?.accounts ?? {}).find(
+		(value) =>
+			value.url === host && value.account === vmDisplay.current.account,
+	);
 	const link = (path: string) => (host ? "https://" + host + path : undefined);
 
 	useEffect(
@@ -115,7 +126,10 @@ export const Credentials = () => {
 		}
 	};
 
-	const editCredential = (field: keyof CredentialDraft, value: string) => {
+	const editCredential = <K extends keyof CredentialDraft>(
+		field: K,
+		value: CredentialDraft[K],
+	) => {
 		if (disabled) return;
 		setDraft({ ...values, [field]: value });
 		runtime.setCredentialEditing(true);
@@ -181,7 +195,13 @@ export const Credentials = () => {
 			if (signal.aborted) return;
 			const editing = !!values.token.trim();
 			setDraft(
-				editing ? { ...result.certificates, token: values.token } : undefined,
+				editing
+					? {
+							...result.certificates,
+							token: values.token,
+							authenticationMethod: values.authenticationMethod,
+						}
+					: undefined,
 			);
 			runtime.setCredentialEditing(editing);
 			runtime.accept(result);
@@ -219,6 +239,66 @@ export const Credentials = () => {
 				}, 1000),
 			};
 		});
+	};
+
+	const signIn = () => {
+		const popup = window.open("about:blank", "suitecloud-authentication");
+		if (!popup) {
+			setMessage(
+				"Allow pop-ups for SuiteContainer, then click Sign in with browser again.",
+			);
+			return;
+		}
+		popup.opener = null;
+		return perform("login", async (signal) => {
+			try {
+				const text = runtime.configText;
+				const saved = await runtime.api(
+					"credentials",
+					{ ...values, authenticationMethod: "browser", config: text },
+					undefined,
+					signal,
+				);
+				runtime.saved(saved, text);
+				setDraft(undefined);
+				runtime.setCredentialEditing(false);
+				const { targets } = await runtime.api<{
+					targets: { id: string; account: string; url: string }[];
+				}>("targets", undefined, undefined, signal);
+				const target = targets.find(
+					(value) =>
+						value.url === host && value.account === vmDisplay.current.account,
+				);
+				if (!target)
+					throw new Error("Save a VM domain and account before signing in.");
+				const result = await runtime.api<{ url: string }>(
+					"suitecloud/login",
+					{ targetId: target.id },
+					undefined,
+					signal,
+				);
+				popup.location.replace(result.url);
+				runtime.accept(
+					await runtime.api("state", undefined, undefined, signal),
+				);
+				setMessage("Complete the SuiteCloud sign-in in the browser tab.");
+			} catch (error) {
+				popup.close();
+				throw error;
+			}
+		});
+	};
+	const cancelSignIn = async () => {
+		try {
+			await runtime.api(
+				`operations/${next?.authentication.operationId}/cancel`,
+				{},
+			);
+			runtime.accept(await runtime.api("state"));
+			setMessage("Sign-in cancelled.");
+		} catch (error) {
+			setMessage(errorMessage(error));
+		}
 	};
 
 	return (
@@ -271,141 +351,186 @@ export const Credentials = () => {
 					<li>
 						<details
 							class="setup-section"
-							id="certificates-section"
+							id="suitecloud-authentication-section"
 							ref={certificatesSection}
+							open
 						>
 							<summary>
 								<span>
-									Certificates
-									<small>
-										Generate, register, and save your certificate ID
-									</small>
+									SuiteCloud Authentication
+									<small>Sign in with your browser or use certificates</small>
 								</span>
 							</summary>
-							<details id="cert-details" ref={certificateDetails}>
-								<summary>View certificate paths</summary>
-								<p>
-									If you have existing certificates, you may override the
-									generated certificates. Changing paths requires relaunching.
+							<div hidden={certificateMode}>
+								<p hidden={account?.connected}>
+									Sign in to NetSuite using this browser. Your account and role
+									will be saved for future deployments.
 								</p>
-								<label for="public">Public certificate path</label>
-								<input
-									id="public"
-									disabled={disabled}
-									value={values.public}
-									onInput={(event) =>
-										editCredential("public", event.currentTarget.value)
-									}
-								/>
-								<label for="private">Private key path</label>
-								<input
-									id="private"
-									disabled={disabled}
-									value={values.private}
-									onInput={(event) =>
-										editCredential("private", event.currentTarget.value)
-									}
-								/>
-							</details>
-							<fieldset class="grid" aria-label="Certificate actions">
+								<p id="suitecloud-authentication-status" role="status">
+									{account?.connected
+										? `Signed in to ${account.company} as ${account.role}.`
+										: next?.authentication?.error ||
+											"Sign in to connect this VM. Sign in again after a SuiteCloud SDK update."}
+								</p>
 								<button
-									class="secondary outline"
-									id="generate"
-									disabled={disabled}
-									onClick={generate}
+									id="suitecloud-sign-in"
+									disabled={disabled || !host}
+									onClick={signIn}
 								>
-									Generate new certificates
+									Sign in with browser
 								</button>
 								<button
 									class="secondary"
-									id="download"
-									hidden={!next?.certificates.canDownload}
-									disabled={disabled}
-									onClick={downloadCertificate}
+									hidden={!loginRunning}
+									onClick={cancelSignIn}
 								>
-									Download public certificate
+									Cancel sign-in
 								</button>
-							</fieldset>
-							<p id="cert-message">{next?.certificates.error}</p>
-							<div id="registration">
-								<p>Register the public certificate on your scrumbox:</p>
-								<ol>
-									<li>
-										Open{" "}
-										<strong>
-											Setup → Integration → Manage Authentication → OAuth 2.0
-											Client Credentials (M2M) Setup
-										</strong>
-										.
-									</li>
-									<li>
-										Select <strong>SuiteCloud Development Integration</strong>{" "}
-										and the appropriate entity and role.
-									</li>
-									<li>
-										Upload <strong>public.pem</strong>.
-									</li>
-									<li>Paste the certificate ID generated by NetSuite below.</li>
-									<li>
-										Enable <strong>Custom Records</strong>.
-									</li>
-								</ol>
-								<nav class="quick-links" aria-label="Certificate setup links">
-									<a
-										href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0422011927.html"
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										NetSuite Guide
-									</a>
-									<span
-										class="scrumbox-links"
-										id="scrumbox-links"
-										hidden={!host}
-									>
-										<span>Scrumbox:</span>
-										<a
-											id="scrumbox-link"
-											href={link("/devhome")}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Devhome
-										</a>
-										<a
-											id="scrumbox-oauth-link"
-											href={link("/app/oauth2/clientcredentials/setup.nl")}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											OAuth2.0 Client
-										</a>
-										<a
-											id="scrumbox-features-link"
-											href={link("/app/setup/features.nl")}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Enable Features
-										</a>
-									</span>
-								</nav>
 							</div>
-							<label for="id">Certificate ID assigned by NetSuite</label>
-							<input
-								id="id"
-								disabled={disabled}
-								value={values.id}
-								onInput={(event) =>
-									editCredential("id", event.currentTarget.value)
-								}
-							/>
-							<p>
-								<small>
-									This is the ID given by NetSuite when you uploaded the
-									certificate.
-								</small>
-							</p>
+							<label for="use-certificates">
+								<input
+									id="use-certificates"
+									type="checkbox"
+									checked={certificateMode}
+									disabled={disabled}
+									onChange={(event) =>
+										editCredential(
+											"authenticationMethod",
+											event.currentTarget.checked ? "certificates" : "browser",
+										)
+									}
+								/>
+								Use certificates instead
+							</label>
+							<details id="certificates-section" hidden={!certificateMode}>
+								<summary>Certificates</summary>
+								<details id="cert-details" ref={certificateDetails}>
+									<summary>View certificate paths</summary>
+									<p>
+										If you have existing certificates, you may override the
+										generated certificates. Changing paths requires relaunching.
+									</p>
+									<label for="public">Public certificate path</label>
+									<input
+										id="public"
+										disabled={disabled}
+										value={values.public}
+										onInput={(event) =>
+											editCredential("public", event.currentTarget.value)
+										}
+									/>
+									<label for="private">Private key path</label>
+									<input
+										id="private"
+										disabled={disabled}
+										value={values.private}
+										onInput={(event) =>
+											editCredential("private", event.currentTarget.value)
+										}
+									/>
+								</details>
+								<fieldset class="grid" aria-label="Certificate actions">
+									<button
+										class="secondary outline"
+										id="generate"
+										disabled={disabled}
+										onClick={generate}
+									>
+										Generate new certificates
+									</button>
+									<button
+										class="secondary"
+										id="download"
+										hidden={!next?.certificates.canDownload}
+										disabled={disabled}
+										onClick={downloadCertificate}
+									>
+										Download public certificate
+									</button>
+								</fieldset>
+								<p id="cert-message">{next?.certificates.error}</p>
+								<div id="registration">
+									<p>Register the public certificate on your scrumbox:</p>
+									<ol>
+										<li>
+											Open{" "}
+											<strong>
+												Setup → Integration → Manage Authentication → OAuth 2.0
+												Client Credentials (M2M) Setup
+											</strong>
+											.
+										</li>
+										<li>
+											Select <strong>SuiteCloud Development Integration</strong>{" "}
+											and the appropriate entity and role.
+										</li>
+										<li>
+											Upload <strong>public.pem</strong>.
+										</li>
+										<li>
+											Paste the certificate ID generated by NetSuite below.
+										</li>
+										<li>
+											Enable <strong>Custom Records</strong>.
+										</li>
+									</ol>
+									<nav class="quick-links" aria-label="Certificate setup links">
+										<a
+											href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0422011927.html"
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											NetSuite Guide
+										</a>
+										<span
+											class="scrumbox-links"
+											id="scrumbox-links"
+											hidden={!host}
+										>
+											<span>Scrumbox:</span>
+											<a
+												id="scrumbox-link"
+												href={link("/devhome")}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												Devhome
+											</a>
+											<a
+												id="scrumbox-oauth-link"
+												href={link("/app/oauth2/clientcredentials/setup.nl")}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												OAuth2.0 Client
+											</a>
+											<a
+												id="scrumbox-features-link"
+												href={link("/app/setup/features.nl")}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												Enable Features
+											</a>
+										</span>
+									</nav>
+								</div>
+								<label for="id">Certificate ID assigned by NetSuite</label>
+								<input
+									id="id"
+									disabled={disabled}
+									value={values.id}
+									onInput={(event) =>
+										editCredential("id", event.currentTarget.value)
+									}
+								/>
+								<p>
+									<small>
+										This is the ID given by NetSuite when you uploaded the
+										certificate.
+									</small>
+								</p>
+							</details>
 						</details>
 					</li>
 					<li>

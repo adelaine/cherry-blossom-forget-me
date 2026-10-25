@@ -24,6 +24,7 @@ export type Config = {
 	PM_MODE?: boolean;
 	suiteapps: SuiteApp[];
 	certificates?: { public: string; private: string; id: string };
+	authentication?: Auth["suitecloud-authentication"];
 	vms: Vm[];
 	playwright?: PlaywrightSettings;
 	status?: { "deploy-start-ok"?: 0 | 1; theme?: "light" | "dark" };
@@ -201,7 +202,10 @@ export const validateConfig = (
 			}
 		}
 	}
-	if (requireDeploymentSettings) {
+	if (
+		requireDeploymentSettings &&
+		config.authentication?.method !== "browser"
+	) {
 		const certs = config.certificates;
 		if (
 			!certs ||
@@ -281,5 +285,8 @@ export const readConfig = (
 	const auth = readAuth(authPath);
 	const config = validateConfig(value, false, auth);
 	config.certificates = auth["suitecloud-certificates"];
+	config.authentication = auth["suitecloud-authentication"] ?? {
+		method: "browser",
+	};
 	return validateConfig(config, requireDeploymentSettings);
 };

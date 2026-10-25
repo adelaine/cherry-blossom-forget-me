@@ -27,6 +27,8 @@ app/setup/*
 !app/setup/node/**
 !app/setup/sftp/
 !app/setup/sftp/start.sh
+!app/setup/suitecloud/
+!app/setup/suitecloud/**
 !app/setup/playwright/
 !app/setup/playwright/**
 !app/setup/.containerignore

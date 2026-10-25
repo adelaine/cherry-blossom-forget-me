@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Config } from "./step-config.ts";
 import { authenticationError } from "./step-suitecloud-errors.ts";
+import { browserAccountKey, browserEnvironment } from "./suitecloud-auth.ts";
 
 const suitecloudEnv = (
 	passkey: string,
@@ -26,6 +27,7 @@ const runSuitecloud = (
 	deploying = false,
 	domain = "",
 	spawn: typeof spawnSync = spawnSync,
+	browser = false,
 ): void => {
 	const authenticating = args[0] === "account:setup:ci";
 	const result = spawn("suitecloud", args, {
@@ -33,7 +35,9 @@ const runSuitecloud = (
 		stdio: authenticating ? ["inherit", "pipe", "pipe"] : "inherit",
 		encoding: "utf8",
 		maxBuffer: 16 * 1024 * 1024,
-		env: suitecloudEnv(passkey, deploying),
+		env: browser
+			? browserEnvironment(process.env.SUITECONTAINER_BROWSER_CREDENTIALS)
+			: suitecloudEnv(passkey, deploying),
 	});
 	if (result.error) throw result.error;
 	if (result.status !== 0) {
@@ -60,6 +64,7 @@ export const deployRepos = (
 	options: { workspaceRoot?: string; spawn?: typeof spawnSync } = {},
 ): void => {
 	const certificates = config.certificates!;
+	const browser = config.authentication?.method === "browser";
 	const passkey =
 		process.env.SUITECONTAINER_DEPLOY_PASSKEY ||
 		randomBytes(32).toString("hex");
@@ -70,7 +75,7 @@ export const deployRepos = (
 		cwd: string,
 		deploying = false,
 		domain = "",
-	) => runSuitecloud(args, cwd, passkey, deploying, domain, spawn);
+	) => runSuitecloud(args, cwd, passkey, deploying, domain, spawn, browser);
 
 	for (const repo of config.suiteapps) {
 		const destination = join(workspaceRoot, repo.directory);
@@ -96,7 +101,23 @@ export const deployRepos = (
 		let authenticationReady = false;
 		for (const repo of config.suiteapps) {
 			const destination = join(workspaceRoot, repo.directory);
-			if (!authenticationReady) {
+			if (browser) {
+				const account =
+					config.authentication?.accounts?.[browserAccountKey(vm)];
+				if (!account)
+					throw new Error(
+						"Sign in with your browser under SuiteCloud Authentication before deploying.",
+					);
+				const project = join(destination, "project.json");
+				const saved = existsSync(project)
+					? JSON.parse(readFileSync(project, "utf8"))
+					: {};
+				writeFileSync(
+					project,
+					JSON.stringify({ ...saved, defaultAuthId: account.authId }, null, 2) +
+						"\n",
+				);
+			} else if (!authenticationReady) {
 				const existing = spawn(
 					"suitecloud",
 					["account:manageauth", "--info", authId],

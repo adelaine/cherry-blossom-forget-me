@@ -139,7 +139,7 @@ def dependency_fingerprint():
 
 def tooling_fingerprint():
     digest = hashlib.sha256()
-    for relative in ("app/setup/Containerfile", "app/setup/gitlab-askpass.sh", "app/setup/sftp/start.sh", "app/setup/node/run-npm.mjs"):
+    for relative in ("app/setup/Containerfile", "app/setup/gitlab-askpass.sh", "app/setup/sftp/start.sh", "app/setup/node/run-npm.mjs", "app/setup/suitecloud/BrowserHandoff.java"):
         digest.update(relative.encode())
         digest.update((PROJECT / relative).read_bytes())
     return digest.hexdigest()
@@ -489,6 +489,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
         confirm_owner(info)
         podman("rm", name, capture=True)
     arguments = ["run", "-d", "--name", name, "--label", f"{OWNER}={PROJECT}", "--cgroups=disabled", "--publish", "127.0.0.1::8080", "--publish", "127.0.0.1::8000", "--env", "SUITECONTAINER_SFTP=1"]
+    arguments += ["--publish", "127.0.0.1:52300:52300"]
     if instance_id:
         directory = runtime_directory()
         arguments += ["--label", f"suitecontainer.instance={instance_id}",
@@ -746,7 +747,7 @@ def open_page(name, connection=None):
         secure_path(browser_file)
         port = urllib.parse.urlsplit(connection["baseUrl"]).port
         hostname = command("hostname", "-f", capture=True).stdout.strip()
-        print(f"From your computer, forward the port: ssh -N -L {port}:127.0.0.1:{port} {getpass.getuser()}@{hostname}")
+        print(f"From your computer, forward the ports: ssh -N -L {port}:127.0.0.1:{port} -L 52300:127.0.0.1:52300 {getpass.getuser()}@{hostname}")
         print(f"Open the private browser address stored in {browser_file} after forwarding the port.")
     print("The application is ready. Use Stop app to stop it, or run the launcher to reopen it.")
 

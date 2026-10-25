@@ -112,6 +112,8 @@ export class DeploymentService {
 					SUITECONTAINER_PRIVATE_KEY: ready.cert.privatePath!,
 					SUITECONTAINER_NONINTERACTIVE: "1",
 					SUITECONTAINER_DEPLOY_PASSKEY: this.passkey,
+					SUITECONTAINER_BROWSER_CREDENTIALS:
+						this.configuration.credentialsDirectory,
 				},
 			});
 			this.worker = worker;

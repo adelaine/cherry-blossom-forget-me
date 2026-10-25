@@ -50,24 +50,26 @@ export const Deployment = () => {
 	};
 
 	const validation =
-		runtime.actionError ||
-		(runtime.busy
-			? next?.playwright?.state === "running" ||
-				runtime.pending.has("playwright")
-				? "Playwright tests are running. Stop the tests or wait for them to finish before deploying or changing settings."
-				: next?.sql?.preparing
-					? "Unlocking the saved SQL password. Please wait."
-					: next?.sql?.state === "running" || runtime.pending.has("sql")
-						? "SQL is running. Wait for it to finish before deploying or changing settings."
-						: "Deployment is running. Wait for it to finish before changing settings or credentials."
-			: next?.relaunch
-				? "Relaunch required. Save your changes, stop this app, and start the launcher again."
-				: next?.error ||
-					(runtime.credentialEditing
-						? "Save your credential changes before deploying."
-						: runtime.editing
-							? "Settings are ready."
-							: "Ready to deploy."));
+		next?.authentication?.state === "running"
+			? "Complete SuiteCloud sign-in in the browser tab, or cancel sign-in under Setup."
+			: runtime.actionError ||
+				(runtime.busy
+					? next?.playwright?.state === "running" ||
+						runtime.pending.has("playwright")
+						? "Playwright tests are running. Stop the tests or wait for them to finish before deploying or changing settings."
+						: next?.sql?.preparing
+							? "Unlocking the saved SQL password. Please wait."
+							: next?.sql?.state === "running" || runtime.pending.has("sql")
+								? "SQL is running. Wait for it to finish before deploying or changing settings."
+								: "Deployment is running. Wait for it to finish before changing settings or credentials."
+					: next?.relaunch
+						? "Relaunch required. Save your changes, stop this app, and start the launcher again."
+						: next?.error ||
+							(runtime.credentialEditing
+								? "Save your credential changes before deploying."
+								: runtime.editing
+									? "Settings are ready."
+									: "Ready to deploy."));
 	const status = next
 		? {
 				idle: "No deployment started.",

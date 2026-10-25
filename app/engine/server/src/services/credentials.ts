@@ -78,6 +78,18 @@ export class CredentialsService {
 	save(input: Record<string, unknown>): void {
 		this.config.operations.assertIdle();
 		const auth = this.read();
+		if (input.authenticationMethod !== undefined) {
+			if (
+				!["browser", "certificates"].includes(
+					String(input.authenticationMethod),
+				)
+			)
+				throw new Error("Choose browser or certificate authentication.");
+			auth["suitecloud-authentication"] = {
+				...auth["suitecloud-authentication"],
+				method: input.authenticationMethod as "browser" | "certificates",
+			};
+		}
 		if (input.token !== undefined) {
 			if (typeof input.token !== "string" || /[\r\n\0]/.test(input.token))
 				throw new Error("Enter a valid GitLab token.");
