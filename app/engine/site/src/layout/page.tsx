@@ -132,7 +132,7 @@ export const Page = ({
 			(module) =>
 				module.placement === "feature" && (module.slot ?? "setup") === name,
 		);
-	const pages = [
+	const panels = [
 		{ id: "setup", items: slot("setup") },
 		{ id: "suiteapps", items: slot("suiteapps") },
 		{
@@ -142,22 +142,22 @@ export const Page = ({
 		...inventory
 			.filter((module) => module.placement === "tool")
 			.map((module) => ({ id: module.id, items: [module] })),
-	].filter((page) => page.items.length);
-	const [selectedPage, setSelectedPage] = useState("setup");
-	const activePage = pages.some((page) => page.id === selectedPage)
-		? selectedPage
-		: pages[0]?.id;
+	].filter((panel) => panel.items.length);
+	const [selectedPanel, setSelectedPanel] = useState("setup");
+	const activePanel = panels.some((panel) => panel.id === selectedPanel)
+		? selectedPanel
+		: panels[0]?.id;
 	useLayoutEffect(() => {
 		const tool = inventory.find(
-			(module) => module.placement === "tool" && module.id === activePage,
+			(module) => module.placement === "tool" && module.id === activePanel,
 		);
 		const target =
 			tool?.navigation && document.getElementById(tool.navigation.target);
 		if (target instanceof HTMLDetailsElement) target.open = true;
-	}, [activePage, inventory]);
+	}, [activePanel, inventory]);
 	return (
 		<main class="container">
-			<header class="page-header">
+			<header class="app-header">
 				<hgroup>
 					<h1>
 						<mark>SuiteContainer</mark>
@@ -170,19 +170,19 @@ export const Page = ({
 				<Appearance />
 			</header>
 			<nav class="section-nav" aria-label="SuiteContainer">
-				{pages.map((page) => {
-					const navigation = page.items.find(
+				{panels.map((panel) => {
+					const navigation = panel.items.find(
 						(module) => module.navigation,
 					)?.navigation;
 					return (
 						navigation && (
 							<a
-								key={page.id}
+								key={panel.id}
 								href={"#" + navigation.target}
-								aria-current={activePage === page.id ? "page" : undefined}
+								aria-current={activePanel === panel.id ? "page" : undefined}
 								onClick={(event) => {
 									event.preventDefault();
-									setSelectedPage(page.id);
+									setSelectedPanel(panel.id);
 									const target = document.getElementById(navigation.target);
 									if (target instanceof HTMLDetailsElement) target.open = true;
 								}}
@@ -215,32 +215,32 @@ export const Page = ({
 				{runtime.connectionFailed ? runtime.connectionMessage : ""}
 			</p>
 			<p
-				id="page-message"
+				id="app-message"
 				role="status"
 				hidden={
-					activePage === "deployment" ||
+					activePanel === "deployment" ||
 					!(runtime.stopMessage || runtime.actionError)
 				}
 			>
 				{runtime.stopMessage || runtime.actionError}
 			</p>
-			<div class="subpages">
-				{pages.map((page) => (
+			<div class="subpanels">
+				{panels.map((panel) => (
 					<div
-						key={page.id}
-						id={page.id + "-page"}
-						class="subpage"
-						hidden={activePage !== page.id}
+						key={panel.id}
+						id={panel.id + "-panel"}
+						class="subpanel"
+						hidden={activePanel !== panel.id}
 					>
-						{page.id === "suiteapps" ? (
+						{panel.id === "suiteapps" ? (
 							<section
 								id="suiteapps-section"
 								aria-labelledby="suiteapps-heading"
 							>
-								<Contributions items={page.items} />
+								<Contributions items={panel.items} />
 							</section>
 						) : (
-							<Contributions items={page.items} />
+							<Contributions items={panel.items} />
 						)}
 					</div>
 				))}

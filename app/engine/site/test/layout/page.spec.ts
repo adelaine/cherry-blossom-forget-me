@@ -30,20 +30,20 @@ test("Stop app renders the stop result and explains blocked closure", async (t) 
 				await view.element("stop").click();
 				if (success) {
 					assert.equal(view.element("stop").disabled, true);
-					assert.equal(view.element("page-message").hidden, false);
+					assert.equal(view.element("app-message").hidden, false);
 					assert.match(
-						view.element("page-message").textContent,
+						view.element("app-message").textContent,
 						/Attempting to close this page/,
 					);
 					await updateSite(() => [...fixture.timers.values()][0]!.callback());
 					assert.match(
-						view.element("page-message").textContent,
+						view.element("app-message").textContent,
 						/browser kept this page open/,
 					);
 				} else {
 					assert.equal(view.element("stop").disabled, false);
 					assert.match(
-						view.element("page-message").textContent,
+						view.element("app-message").textContent,
 						/Deployment is running/,
 					);
 				}
@@ -86,19 +86,19 @@ test("connection feedback preserves edits and disables actions until recovery", 
 	assert.equal(view.element("download").disabled, false);
 });
 
-test("page composition places configuration after deployment on the Deploy page", async (t) => {
+test("page composition places configuration after deployment on the Deploy panel", async (t) => {
 	const view = await renderSite(createRuntimeFixture(), [
 		settings,
 		sql,
 		deployment,
 	]);
 	t.after(view.cleanup);
-	const deployPage = view.element("deployment-page");
-	const html = deployPage.innerHTML;
+	const deployPanel = view.element("deployment-panel");
+	const html = deployPanel.innerHTML;
 	assert.ok(
 		html.indexOf("Configuration JSON") > html.indexOf("Deploy SuiteApps"),
 	);
-	assert.equal(deployPage.hidden, false);
-	assert.equal(view.element("sql-page").hidden, true);
+	assert.equal(deployPanel.hidden, false);
+	assert.equal(view.element("sql-panel").hidden, true);
 	assert.ok(!html.includes("SQL queries"));
 });

@@ -206,18 +206,18 @@ button {
 	gap: 1rem;
 	flex-wrap: wrap;
 }
-.page-header {
+.app-header {
 	display: flex;
 	align-items: flex-start;
 	flex-wrap: wrap;
 	gap: 1rem;
 }
-.page-header > hgroup {
+.app-header > hgroup {
 	flex: 1 1 30rem;
 	min-width: 0;
 	margin: 0;
 }
-.page-header > #theme-message {
+.app-header > #theme-message {
 	flex-basis: 100%;
 	margin: 0;
 }
@@ -293,7 +293,7 @@ button {
 	outline: 2px solid var(--pico-primary);
 	outline-offset: 2px;
 }
-.page-icon {
+.panel-icon {
 	display: inline-block;
 	width: 1.125em;
 	height: 1.125em;
@@ -304,7 +304,7 @@ button {
 	mask-repeat: no-repeat;
 	mask-size: contain;
 }
-h2 > .page-icon {
+h2 > .panel-icon {
 	margin-inline-end: 0.65rem;
 }
 .scrumbox-links {
@@ -328,13 +328,13 @@ article {
 	margin: 2rem auto;
 	padding: 1.5rem;
 }
-.subpage > section {
+.subpanel > section {
 	margin-block: 2rem;
 }
-.subpage > section > h2 {
+.subpanel > section > h2 {
 	margin-bottom: 1rem;
 }
-.subpage > article:first-child {
+.subpanel > article:first-child {
 	margin-top: 0;
 }
 .credentials-card,

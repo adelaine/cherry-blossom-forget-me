@@ -4,7 +4,7 @@ import test from "node:test";
 import { renderSite } from "../browser-harness.ts";
 import { createRuntimeFixture } from "../runtime-fixture.ts";
 
-test("page links follow the registered inventory and point to rendered sections", async (t) => {
+test("panel links follow the registered inventory and point to rendered sections", async (t) => {
 	const view = await renderSite(createRuntimeFixture());
 	t.after(view.cleanup);
 	const navigation = view.root.querySelector("nav");
@@ -24,11 +24,11 @@ test("page links follow the registered inventory and point to rendered sections"
 	);
 	for (const link of links) assert.ok(view.element(link.hash.slice(1)));
 	assert.equal(links[0].getAttribute("aria-current"), "page");
-	assert.equal(view.element("setup-page").hidden, false);
-	assert.equal(view.element("deployment-page").hidden, true);
+	assert.equal(view.element("setup-panel").hidden, false);
+	assert.equal(view.element("deployment-panel").hidden, true);
 });
 
-test("tool navigation opens the selected page and preserves mounted drafts", async (t) => {
+test("tool navigation opens the selected panel and preserves mounted drafts", async (t) => {
 	const view = await renderSite(createRuntimeFixture());
 	t.after(view.cleanup);
 	const navigation = view.root.querySelector("nav");
@@ -45,12 +45,12 @@ test("tool navigation opens the selected page and preserves mounted drafts", asy
 		const event = await link.click();
 		assert.equal(event.defaultPrevented, true);
 		assert.equal(target.open, true);
-		assert.equal(view.element(id.replace("-section", "-page")).hidden, false);
-		assert.equal(view.element("setup-page").hidden, true);
+		assert.equal(view.element(id.replace("-section", "-panel")).hidden, false);
+		assert.equal(view.element("setup-panel").hidden, true);
 		assert.equal(link.getAttribute("aria-current"), "page");
 	}
-	assert.equal(view.element("sql-page").hidden, true);
-	assert.equal(view.element("sftp-page").hidden, true);
+	assert.equal(view.element("sql-panel").hidden, true);
+	assert.equal(view.element("sftp-panel").hidden, true);
 	assert.equal(view.element("sql-statement").value, "select 1 from dual");
 });
 
@@ -61,13 +61,13 @@ test("NS Account navigation preserves its accordion state and Help does nothing"
 	vm.open = false;
 	const links = view.root.querySelector("nav")!.querySelectorAll("a");
 	await links.find((node) => node.hash === "#deployment-section")!.click();
-	assert.equal(view.element("deployment-page").hidden, false);
+	assert.equal(view.element("deployment-panel").hidden, false);
 	const link = links.find((node) => node.hash === "#credentials-section");
 	assert.ok(link);
 	await link.click();
 	assert.equal(vm.open, false);
-	assert.equal(view.element("setup-page").hidden, false);
-	assert.equal(view.element("deployment-page").hidden, true);
+	assert.equal(view.element("setup-panel").hidden, false);
+	assert.equal(view.element("deployment-panel").hidden, true);
 	await view.element("help").click();
-	assert.equal(view.element("setup-page").hidden, false);
+	assert.equal(view.element("setup-panel").hidden, false);
 });

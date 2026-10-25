@@ -8,7 +8,7 @@ export type IconName =
 export function Icon({ name }: { name: IconName }) {
 	return (
 		<span
-			class="page-icon"
+			class="panel-icon"
 			style={{ maskImage: `url("/images/${name}.svg")` }}
 			aria-hidden="true"
 		/>

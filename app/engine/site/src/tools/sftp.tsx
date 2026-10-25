@@ -123,7 +123,7 @@ export const Sftp = () => {
 		probedTarget.current = probeTarget;
 		if (remote.probe !== "idle") return;
 		const controller = new AbortController();
-		// The mounted page owns this probe, while the backend owns its SSH work.
+		// The mounted panel owns this probe, while the backend owns its SSH work.
 		const timer = setTimeout(() => {
 			void runtime
 				.api("sftp", { action: "probe" }, undefined, controller.signal)
