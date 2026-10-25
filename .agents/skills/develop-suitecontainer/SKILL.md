@@ -97,6 +97,9 @@ Use `suitecontainer` when the task needs operating procedures.
 
 ## Checks for the change
 
+Before committing, run the repository's lint and formatter for the pending changes.
+Reuse passing results when the relevant files have not changed.
+
 Run only existing checks relevant to the specific change.
 Do not run the full suite or add tests or verification scripts unless requested.
 Run each selected check once per relevant change.

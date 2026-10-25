@@ -9,7 +9,7 @@ import { initializeBrowser } from "./browser-harness.ts";
 
 test("ANSI converter and styles are included in the compiled browser assets", () => {
 	const script = readFileSync(
-		new URL("../../dist/site/assets/page.js", import.meta.url),
+		new URL("../../dist/site/public/assets/page.js", import.meta.url),
 		"utf8",
 	);
 	assert.equal(

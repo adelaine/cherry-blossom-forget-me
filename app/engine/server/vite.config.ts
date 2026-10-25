@@ -62,7 +62,7 @@ export default defineConfig(() => {
 
 	return {
 		root: serverDirectory,
-		publicDir: false,
+		publicDir: resolve(appDirectory, "site/public"),
 		esbuild: { jsx: "automatic", jsxImportSource: "preact" },
 		cacheDir: resolve(appDirectory, "node_modules/.vite"),
 		clearScreen: false,
@@ -247,8 +247,8 @@ export default defineConfig(() => {
 			devServer({
 				entry,
 				injectClientScript: false,
-				// Keep existing application JS/CSS routes in Hono. Only Vite's
-				// own modules and explicitly requested source use its file server.
+				// Vite serves public files and its source modules; Hono retains the
+				// generated page and authenticated API routes.
 				exclude: [
 					/^\/@(?:vite|id|fs)\//,
 					/^\/node_modules\//,

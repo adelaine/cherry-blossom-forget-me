@@ -23,9 +23,6 @@ if (
 	throw new Error("Runtime output must be the app's own dist directory.");
 }
 // Each build owns its emitted files. Do not remove another build's output.
-const siteDirectory = join(appDirectory, "site");
-const siteOutput = join(outputDirectory, "site", "public");
-mkdirSync(join(siteOutput, "assets"), { recursive: true });
 
 const require = createRequire(join(appDirectory, "package.json"));
 // These packages have no runtime dependencies beyond the adapter's Hono peer.
@@ -53,21 +50,7 @@ for (const name of ["hono", "@hono/node-server"]) {
 		recursive: true,
 	});
 }
-// Keep frontend paths identical in source and compiled server modules.
-cpSync(join(siteDirectory, "public/assets"), join(siteOutput, "assets"), {
-	recursive: true,
-});
-cpSync(join(siteDirectory, "public/themes"), join(siteOutput, "themes"), {
-	recursive: true,
-});
-copyFileSync(
-	join(siteDirectory, "public/styles.css"),
-	join(siteOutput, "styles.css"),
-);
-copyFileSync(
-	require.resolve("@picocss/pico/css/pico.min.css"),
-	join(siteOutput, "assets/pico.css"),
-);
+// Vite copies the complete public directory into dist/site/public.
 writeFileSync(
 	join(outputDirectory, "package.json"),
 	JSON.stringify({ type: "module" }) + "\n",
