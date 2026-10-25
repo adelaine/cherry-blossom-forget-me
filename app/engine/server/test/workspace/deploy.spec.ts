@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { deployRepos } from "../src/workspace/deploy.ts";
-import { vms } from "./step-config.fixture.ts";
+import { deployRepos } from "../../src/workspace/deploy.ts";
+import { vms } from "./config.fixture.ts";
 
 test("deploys each SuiteApp in order for each VM", (t) => {
 	const root = mkdtempSync(join(tmpdir(), "suitecontainer-deploy-test-"));

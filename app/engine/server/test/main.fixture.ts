@@ -1,46 +1,25 @@
+/* Copyright (c) 2026, Oracle and/or its affiliates. */
 import { once } from "node:events";
-import {
-	mkdtempSync,
-	mkdirSync,
-	readFileSync,
-	writeFileSync,
-	rmSync,
-} from "node:fs";
+import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startWebServer, type ServerOptions } from "../src/main.ts";
+import { startWebServer } from "../src/main.ts";
+import { createWorkspaceFixture } from "./workspace.fixture.ts";
 
-export const fixture = async (
-	config = {
-		suiteapps: [] as object[],
-		vms: [{ account: "000071", url: "" }],
-	},
-	options: ServerOptions = {},
-) => {
-	const root = mkdtempSync(join(tmpdir(), "suitecontainer-server-test-"));
-	const credentials = join(root, "credentials");
-	mkdirSync(credentials);
-	const authPath = join(credentials, "auth.json");
-	writeFileSync(join(root, "suitecontainer.json"), JSON.stringify(config));
-	writeFileSync(authPath, "{}");
-	writeFileSync(
-		join(credentials, "web-mounts.json"),
-		JSON.stringify({
-			hostRoot: "/project",
-			platform: "linux",
-			local: {},
-			certificates: {},
-		}),
-	);
-	const sessionFile = join(root, "session");
+/** Start the production listener for transport smoke tests. */
+export async function createTransportFixture() {
+	const workspace = createWorkspaceFixture();
+	const sessionFile = join(workspace.root, "session");
+	let disposed = () => {};
+	const stopped = new Promise<void>((resolve) => {
+		disposed = resolve;
+	});
 	const server = startWebServer({
-		...options,
-		configDirectory: root,
+		configDirectory: workspace.root,
 		port: 0,
 		host: "127.0.0.1",
 		sessionFile,
-		onStop() {},
+		onStop: disposed,
 		signalHandlers: false,
 	});
 	await once(server, "listening");
@@ -50,35 +29,24 @@ export const fixture = async (
 		"Content-Type": "application/json",
 		Origin: origin,
 	};
-	const state = async () =>
-		(await fetch(origin + "/api/state", { headers })).json();
 	return {
-		root,
-		credentials,
-		authPath,
 		origin,
-		async post(path: string, input: object) {
-			const response = await fetch(origin + "/api/" + path, {
+		async close() {
+			const response = await fetch(origin + "/api/stop", {
 				method: "POST",
 				headers,
-				body: JSON.stringify(input),
+				body: "{}",
 			});
-			const value = await response.json();
-			if (!response.ok) throw new Error(value.error);
-			return value;
-		},
-		async finish(kind: "run" | "sql") {
-			for (let attempt = 0; attempt < 100; attempt++) {
-				const next = (await state())[kind];
-				if (next.state !== "running") return next;
-				await new Promise((resolve) => setTimeout(resolve, 20));
+			if (!response.ok) {
+				throw new Error(
+					`Cannot stop the test server: ${await response.text()}`,
+				);
 			}
-			throw new Error("Worker did not finish.");
-		},
-		async close() {
+			await response.arrayBuffer();
 			server.closeAllConnections();
-			await new Promise<void>((resolve) => server.close(() => resolve()));
-			rmSync(root, { recursive: true, force: true });
+			// onStop runs only after listener closure and service disposal complete.
+			await stopped;
+			workspace.close();
 		},
 	};
-};
+}

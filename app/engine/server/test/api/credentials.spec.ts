@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { fixture } from "../main.fixture.ts";
+import { createApplicationFixture } from "./application.fixture.ts";
 
 test("saves credentials", async () => {
-	const app = await fixture();
+	const app = createApplicationFixture();
 	try {
-		await app.post("credentials", { token: "fixture-token" });
+		const response = await app.post("credentials", { token: "fixture-token" });
+		assert.equal(response.status, 200);
 		assert.equal(
 			JSON.parse(readFileSync(app.authPath, "utf8"))["gitlab-token"],
 			"fixture-token",

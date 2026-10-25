@@ -13,9 +13,10 @@
 		"format:check": "npm run format:files -- --check",
 		"lint": "cd .. && oxlint engine/site engine/server container-setup/node container-setup/playwright",
 		"lint:fix": "npm run lint -- --fix",
-		"test": "npm run test:client && npm run test:server",
-		"test:client": "tsx --tsconfig site/tsconfig.json --test \"site/test/**/*.spec.ts\"",
-		"test:server": "node --experimental-strip-types --test \"server/test/**/*.spec.ts\""
+		"test": "npm run test:client && npm run test:server && npm run test:build",
+		"test:client": "tsx --tsconfig site/tsconfig.json --test \"site/test/**/*.{spec,test}.ts\"",
+		"test:server": "node --experimental-strip-types --test \"server/test/**/*.{spec,test}.ts\"",
+		"test:build": "node --experimental-strip-types --test \"server/build-test/**/*.test.ts\""
 	},
 	"dependencies": {
 		"@hono/node-server": "^2.1.3",

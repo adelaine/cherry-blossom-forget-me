@@ -1,18 +1,27 @@
+/* Copyright (c) 2026, Oracle and/or its affiliates. */
 import { createElement, render } from "preact";
 import { act } from "preact/test-utils";
-import { SiteRuntime, type RuntimeEnvironment } from "../src/common/runtime.ts";
+import type { SiteModule } from "../src/common/module.ts";
 import { App } from "../src/layout/page.tsx";
+import { createRuntimeFixture, flushRequests } from "./runtime-fixture.ts";
 
-// These DOM doubles exercise the actual Preact tree while keeping the existing
-// controlled request and timer fixtures independent from external tool services.
-class TestNode {
+interface TestEvent {
+	type: string;
+	target: TestNode;
+	currentTarget: TestNode;
+	isTrusted: boolean;
+	preventDefault(): void;
+	stopPropagation(): void;
+}
+
+/** Minimal DOM used to render the actual Preact components in controlled tests. */
+export class TestNode {
 	parentNode: TestNode | null = null;
 	childNodes: TestNode[] = [];
 	data = "";
 	nodeType: number;
 	localName: string;
 	namespaceURI = "http://www.w3.org/1999/xhtml";
-	ownerDocument: any;
 	value = "";
 	checked = false;
 	disabled = false;
@@ -32,20 +41,18 @@ class TestNode {
 		},
 	};
 	attributes = new Map<string, string>();
-	listeners = new Map<string, (event: any) => unknown>();
+	listeners = new Map<string, (event: TestEvent) => unknown>();
 	onclick = null;
 	oninput = null;
 	onchange = null;
-	private identifier = "";
 	private rawHtml: string | undefined;
 	constructor(
 		name: string,
-		readonly context: any,
+		readonly ownerDocument: TestDocument,
 		text = false,
 	) {
 		this.nodeType = text ? 3 : 1;
 		this.localName = name;
-		this.ownerDocument = context.document;
 	}
 	get nodeName() {
 		return this.nodeType === 3 ? "#text" : this.localName.toUpperCase();
@@ -57,54 +64,17 @@ class TestNode {
 		return this.childNodes[0] ?? null;
 	}
 	get nextSibling(): TestNode | null {
-		if (!this.parentNode) return null;
 		return (
-			this.parentNode.childNodes[
+			this.parentNode?.childNodes[
 				this.parentNode.childNodes.indexOf(this) + 1
 			] ?? null
 		);
 	}
 	get id() {
-		return this.identifier;
+		return this.attributes.get("id") ?? "";
 	}
 	set id(value: string) {
-		this.identifier = value;
 		this.attributes.set("id", value);
-		this.context.nodes.set(value, this);
-		const fixture = this.context.fixtureElement(value);
-		if (!fixture || fixture === this) return;
-		for (const key of [
-			"value",
-			"checked",
-			"disabled",
-			"hidden",
-			"open",
-			"textContent",
-			"innerHTML",
-			"id",
-			"tagName",
-			"href",
-			"scrollTop",
-			"scrollHeight",
-			"clientHeight",
-		]) {
-			Object.defineProperty(fixture, key, {
-				configurable: true,
-				get: () => (this as any)[key],
-				set: (value) => {
-					(this as any)[key] = value;
-				},
-			});
-		}
-		for (const key of [
-			"click",
-			"input",
-			"change",
-			"focus",
-			"querySelectorAll",
-			"querySelector",
-		])
-			fixture[key] = (this as any)[key].bind(this);
 	}
 	insertBefore(node: TestNode, before: TestNode | null) {
 		node.parentNode?.removeChild(node);
@@ -127,21 +97,19 @@ class TestNode {
 		this.parentNode?.removeChild(this);
 	}
 	replaceChildren(...nodes: TestNode[]) {
-		this.childNodes = [];
+		while (this.firstChild) this.removeChild(this.firstChild);
 		for (const node of nodes) this.appendChild(node);
 	}
 	setAttribute(name: string, value: unknown) {
-		if (name === "id") this.id = String(value);
-		else {
-			this.attributes.set(name, String(value));
-			if (name.startsWith("data-"))
-				this.dataset[
-					name
-						.slice(5)
-						.replace(/-([a-z])/g, (_match, letter: string) =>
-							letter.toUpperCase(),
-						)
-				] = String(value);
+		this.attributes.set(name, String(value));
+		if (name.startsWith("data-")) {
+			this.dataset[
+				name
+					.slice(5)
+					.replace(/-([a-z])/g, (_match, letter: string) =>
+						letter.toUpperCase(),
+					)
+			] = String(value);
 		}
 	}
 	setAttributeNS(_namespace: string, name: string, value: unknown) {
@@ -156,15 +124,14 @@ class TestNode {
 	getAttribute(name: string) {
 		return this.attributes.get(name) ?? null;
 	}
-	addEventListener(name: string, listener: (event: any) => unknown) {
+	addEventListener(name: string, listener: (event: TestEvent) => unknown) {
 		this.listeners.set(name, listener);
 	}
 	removeEventListener(name: string) {
 		this.listeners.delete(name);
 	}
-	private dispatch(type: string) {
-		let result: unknown;
-		const event = {
+	private async dispatch(type: string) {
+		const event: TestEvent = {
 			type,
 			target: this,
 			currentTarget: this,
@@ -172,18 +139,10 @@ class TestNode {
 			preventDefault() {},
 			stopPropagation() {},
 		};
-		const invoke = () => {
-			result = this.listeners.get(type)?.call(this, event);
-		};
-		const completion =
-			type === "click"
-				? act(async () => {
-						invoke();
-						await result;
-						await Promise.allSettled(this.context.pendingRequests);
-					})
-				: act(invoke);
-		return completion;
+		await act(async () => {
+			await this.listeners.get(type)?.call(this, event);
+			await flushRequests();
+		});
 	}
 	click() {
 		return this.dispatch("click");
@@ -199,14 +158,14 @@ class TestNode {
 	}
 	scrollIntoView() {}
 	querySelectorAll(selector: string): TestNode[] {
-		const matches = (node: TestNode) =>
-			selector.startsWith("#")
-				? node.id === selector.slice(1)
-				: selector === "input"
-					? node.localName === "input"
-					: false;
 		return this.childNodes.flatMap((node) => [
-			...(matches(node) ? [node] : []),
+			...((
+				selector.startsWith("#")
+					? node.id === selector.slice(1)
+					: node.localName === selector
+			)
+				? [node]
+				: []),
 			...node.querySelectorAll(selector),
 		]);
 	}
@@ -221,32 +180,54 @@ class TestNode {
 	}
 	set textContent(text: string) {
 		this.rawHtml = undefined;
-		this.childNodes = [];
-		const node = new TestNode("", this.context, true);
-		node.data = String(text);
-		this.appendChild(node);
+		this.replaceChildren(this.ownerDocument.createTextNode(String(text)));
 	}
 	get innerHTML(): string {
 		return this.rawHtml ?? this.childNodes.map(serialize).join("");
 	}
 	set innerHTML(html: string) {
 		this.rawHtml = html;
-		this.childNodes = [];
+		this.replaceChildren();
 	}
 }
 
-const escape = (text: string) => {
+class TestDocument {
+	root = new TestNode("div", this);
+	documentElement = new TestNode("html", this);
+	activeElement: TestNode | null = null;
+	createElement(name: string) {
+		return new TestNode(name, this);
+	}
+	createElementNS(_namespace: string, name: string) {
+		return this.createElement(name);
+	}
+	createTextNode(value: string) {
+		const node = new TestNode("", this, true);
+		node.data = value;
+		return node;
+	}
+	getElementById(id: string) {
+		return this.root.querySelector("#" + id);
+	}
+	querySelectorAll(selector: string) {
+		return this.root.querySelectorAll(selector);
+	}
+}
+
+function escape(text: string): string {
 	return text
 		.replaceAll("&", "&amp;")
 		.replaceAll("<", "&lt;")
 		.replaceAll(">", "&gt;")
 		.replaceAll('"', "&quot;");
-};
-const serialize = (node: TestNode): string => {
+}
+
+function serialize(node: TestNode): string {
 	if (node.nodeType === 3) return escape(node.data);
 	const attributes = new Map(node.attributes);
-	for (const key of ["value", "href"])
-		if ((node as any)[key]) attributes.set(key, String((node as any)[key]));
+	for (const key of ["value", "href"] as const) {
+		if (node[key]) attributes.set(key, node[key]);
+	}
 	const attrs = [...attributes]
 		.map(([key, value]) => ` ${key}="${escape(value)}"`)
 		.join("");
@@ -254,87 +235,77 @@ const serialize = (node: TestNode): string => {
 	return ["input", "img", "br", "hr", "link", "meta"].includes(node.localName)
 		? start
 		: start + node.innerHTML + `</${node.localName}>`;
-};
+}
 
-export const browserHtml = (context: any): string => {
-	return context.root.innerHTML;
-};
+/** Mount only the requested inventory and return the actual runtime and DOM nodes. */
+export async function renderSite(
+	fixture: ReturnType<typeof createRuntimeFixture>,
+	inventory?: readonly SiteModule[],
+) {
+	const document = new TestDocument();
+	const globals = {
+		document,
+		window: fixture.environment.window,
+		sessionStorage: fixture.environment.sessionStorage,
+		matchMedia: () => ({
+			matches: false,
+			addEventListener() {},
+			removeEventListener() {},
+		}),
+	};
+	const previous = new Map<string, PropertyDescriptor | undefined>();
+	for (const [key, value] of Object.entries(globals)) {
+		previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+		Object.defineProperty(globalThis, key, {
+			configurable: true,
+			writable: true,
+			value,
+		});
+	}
+	let disposed = false;
+	function cleanup() {
+		if (disposed) return;
+		disposed = true;
+		try {
+			act(() => render(null, document.root as unknown as HTMLElement));
+		} finally {
+			fixture.cleanup();
+			for (const [key, descriptor] of previous) {
+				if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+				else Reflect.deleteProperty(globalThis, key);
+			}
+		}
+	}
+	try {
+		await act(async () => {
+			render(
+				createElement(App, { runtime: fixture.runtime, inventory }),
+				document.root as unknown as HTMLElement,
+			);
+			await flushRequests();
+		});
+	} catch (error) {
+		cleanup();
+		throw error;
+	}
+	return {
+		runtime: fixture.runtime,
+		root: document.root,
+		cleanup,
+		element(id: string) {
+			const node = document.getElementById(id);
+			if (!node) throw new Error(`No rendered element has id ${id}.`);
+			return node;
+		},
+	};
+}
 
-export const initializeBrowser = (context: any): void => {
-	const fixtureElement = context.document.getElementById;
-	context.fixtureElement = fixtureElement;
-	context.nodes = new Map<string, TestNode>();
-	context.document.documentElement ??= { dataset: {} };
-	context.document.removeEventListener ??= () => {};
-	context.document.createElement = (name: string) =>
-		new TestNode(name, context);
-	context.document.createElementNS = (_namespace: string, name: string) =>
-		new TestNode(name, context);
-	context.document.createTextNode = (value: string) => {
-		const node = new TestNode("", context, true);
-		node.data = value;
-		return node;
-	};
-	context.document.getElementById = (id: string) =>
-		context.nodes.get(id) ?? fixtureElement(id);
-	context.window ??= {};
-	context.window.addEventListener ??= () => {};
-	context.window.removeEventListener ??= () => {};
-	context.matchMedia ??= () => ({
-		matches: false,
-		addEventListener() {},
-		removeEventListener() {},
+/** Flush a runtime change and the corresponding component updates. */
+export async function updateSite(
+	action: () => unknown | Promise<unknown>,
+): Promise<void> {
+	await act(async () => {
+		await action();
+		await flushRequests();
 	});
-	Object.assign(globalThis, {
-		document: context.document,
-		window: context.window,
-		sessionStorage: context.sessionStorage,
-		matchMedia: context.matchMedia,
-	});
-	const runtime = new SiteRuntime({
-		...context,
-		now: () => context.Date?.now() ?? Date.now(),
-		clearInterval: context.clearInterval ?? (() => {}),
-		clearTimeout: context.clearTimeout ?? (() => {}),
-	} as RuntimeEnvironment);
-	context.runtime = runtime;
-	context.pendingRequests = new Set<Promise<unknown>>();
-	const api = runtime.api;
-	runtime.api = ((...args: Parameters<typeof api>) => {
-		const request = api(...args);
-		context.pendingRequests.add(request);
-		void request.then(
-			() => context.pendingRequests.delete(request),
-			() => context.pendingRequests.delete(request),
-		);
-		return request;
-	}) as typeof api;
-	context.root = new TestNode("div", context);
-	context.refresh = () => act(() => runtime.refresh());
-	context.heartbeat = () => act(() => runtime.heartbeat());
-	context.render = (next: Parameters<SiteRuntime["accept"]>[0]) => {
-		void act(() => runtime.accept(next));
-	};
-	Object.defineProperties(context, {
-		state: { get: () => runtime.snapshot },
-		editing: {
-			get: () => runtime.editing,
-			set: (value) => {
-				runtime.editing = value;
-				if (value) runtime.configText = fixtureElement("config").value;
-			},
-		},
-		credentialEditing: {
-			get: () => runtime.credentialEditing,
-			set: (value) => {
-				runtime.credentialEditing = value;
-			},
-		},
-	});
-	void act(() =>
-		render(
-			createElement(App, { runtime }),
-			context.root as unknown as HTMLElement,
-		),
-	);
-};
+}

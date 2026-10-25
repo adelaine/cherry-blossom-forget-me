@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launchMounts, prepareConfiguration } from "../src/workspace/launch.ts";
-import { withConfigFixture } from "./step-config.fixture.ts";
+import {
+	launchMounts,
+	prepareConfiguration,
+} from "../../src/workspace/launch.ts";
+import { withConfigFixture } from "./config.fixture.ts";
 
 test("builds Windows certificate mounts", () => {
 	const config = {

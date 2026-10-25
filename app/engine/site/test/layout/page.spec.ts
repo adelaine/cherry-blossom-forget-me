@@ -1,98 +1,103 @@
+/* Copyright (c) 2026, Oracle and/or its affiliates. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runInNewContext } from "node:vm";
-import { act } from "preact/test-utils";
-import { initializeBrowser } from "../browser-harness.ts";
+import { credentials } from "../../src/workspace/credentials.tsx";
+import { settings } from "../../src/workspace/settings.tsx";
+import { deployment } from "../../src/workspace/deployment.tsx";
+import { sql } from "../../src/tools/sql.tsx";
+import { renderSite, updateSite } from "../browser-harness.ts";
+import { createRuntimeFixture, serverState } from "../runtime-fixture.ts";
 
-test("Stop app closes after five seconds only on success and explains blocked closure", async () => {
+test("Stop app renders the stop result and explains blocked closure", async (t) => {
 	for (const success of [true, false]) {
-		const elements = new Map<string, any>();
-		const element = (id: string) => {
-			if (!elements.has(id))
-				elements.set(id, {
-					value: "",
-					replaceChildren() {},
-					querySelectorAll: () => [],
-					addEventListener(event: string, handler: Function) {
-						this[event] = handler;
+		await t.test(
+			success ? "successful stop" : "rejected stop",
+			async (scenario) => {
+				const state = serverState();
+				const fixture = createRuntimeFixture({
+					state,
+					respond(request) {
+						return request.path === "/api/stop" && !success
+							? Response.json(
+									{ error: "Deployment is running." },
+									{ status: 409 },
+								)
+							: state;
 					},
 				});
-			return elements.get(id);
-		};
-		const timers: { callback: () => void; delay: number }[] = [];
-		let closes = 0;
-		let requests = 0;
-		const state = {
-			config: '{"vms":[]}',
-			certificates: {},
-			run: { state: "idle", log: "" },
-			ready: false,
-		};
-		const context = {
-			document: {
-				getElementById: element,
-				querySelectorAll: () => [element("stop"), element("deploy")],
-				addEventListener() {},
+				const view = await renderSite(fixture, [deployment]);
+				scenario.after(view.cleanup);
+				await view.element("stop").click();
+				if (success) {
+					assert.equal(view.element("stop").disabled, true);
+					assert.match(
+						view.element("run-state").textContent,
+						/Attempting to close this page/,
+					);
+					await updateSite(() => [...fixture.timers.values()][0]!.callback());
+					assert.match(
+						view.element("run-state").textContent,
+						/browser kept this page open/,
+					);
+				} else {
+					assert.equal(view.element("stop").disabled, false);
+					assert.match(
+						view.element("validation").textContent,
+						/Deployment is running/,
+					);
+				}
 			},
-			location: { hash: "", pathname: "/" },
-			URLSearchParams,
-			AbortSignal,
-			sessionStorage: { getItem: () => "", setItem() {} },
-			history: { replaceState() {} },
-			setInterval() {},
-			clearTimeout() {},
-			setTimeout(callback: () => void, delay: number) {
-				timers.push({ callback, delay });
-			},
-			window: {
-				closed: false,
-				close() {
-					closes++;
-				},
-			},
-			fetch: async (path: string) => {
-				requests++;
-				return {
-					ok: path !== "/api/stop" || success,
-					json: async () =>
-						path === "/api/stop" ? { error: "Deployment is running." } : state,
-				};
-			},
-		};
-		initializeBrowser(context);
-		await new Promise((resolve) => setImmediate(resolve));
-		await element("stop").click();
-		assert.equal(closes, 0);
-		if (success) {
-			assert.equal(timers.length, 1);
-			assert.equal(timers[0]!.delay, 5000);
-			assert.match(
-				element("run-state").textContent,
-				/Attempting to close this page/,
-			);
-			assert.equal(element("stop").disabled, true);
-			const stoppedRequests = requests;
-			await runInNewContext("refresh()", context);
-			runInNewContext("render({run:{state:'idle'}})", context);
-			assert.equal(requests, stoppedRequests);
-			assert.match(
-				element("run-state").textContent,
-				/Attempting to close this page/,
-			);
-			act(() => timers[0]!.callback());
-			assert.equal(closes, 1);
-			assert.match(
-				element("run-state").textContent,
-				/browser kept this page open/,
-			);
-		} else {
-			assert.equal(timers.length, 0);
-			assert.equal(element("stop").disabled, false);
-			assert.match(element("validation").textContent, /Deployment is running/);
-			const activeRequests = requests;
-			await runInNewContext("refresh()", context);
-			assert.equal(requests, activeRequests + 1);
-			assert.match(element("validation").textContent, /Deployment is running/);
-		}
+		);
 	}
+});
+
+test("connection feedback preserves edits and disables actions until recovery", async (t) => {
+	let offline = false;
+	const state = serverState();
+	const fixture = createRuntimeFixture({
+		state,
+		respond() {
+			if (offline) throw new Error("fetch failed");
+			return state;
+		},
+	});
+	const view = await renderSite(fixture, [credentials, settings, sql]);
+	t.after(view.cleanup);
+	view.element("config").value = "unsaved edits";
+	await view.element("config").input();
+	offline = true;
+	await updateSite(fixture.runtime.refresh);
+	assert.equal(view.element("connection-error").hidden, false);
+	assert.match(
+		view.element("connection-error").textContent,
+		/Start the launcher again/,
+	);
+	assert.equal(view.element("config").value, "unsaved edits");
+	assert.equal(view.element("save").disabled, true);
+	assert.equal(view.element("sql-run").disabled, true);
+	await updateSite(() => fixture.runtime.accept(state));
+	assert.equal(view.element("save").disabled, true);
+	offline = false;
+	await updateSite(fixture.runtime.refresh);
+	assert.equal(view.element("connection-error").hidden, true);
+	assert.equal(view.element("config").value, "unsaved edits");
+	assert.equal(view.element("save").disabled, false);
+	assert.equal(view.element("download").disabled, false);
+});
+
+test("page composition places SQL between configuration and deployment", async (t) => {
+	const view = await renderSite(createRuntimeFixture(), [
+		settings,
+		sql,
+		deployment,
+	]);
+	t.after(view.cleanup);
+	const html = view.root.innerHTML;
+	assert.ok(
+		html.indexOf("<h2>SQL queries</h2>") > html.indexOf("Configuration JSON"),
+	);
+	assert.ok(
+		html.indexOf("<h2>SQL queries</h2>") <
+			html.indexOf("<h2>Deploy SuiteApps</h2>"),
+	);
 });

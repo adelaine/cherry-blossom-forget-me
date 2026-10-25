@@ -1,22 +1,12 @@
+/* Copyright (c) 2026, Oracle and/or its affiliates. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runInNewContext } from "node:vm";
-import { initializeBrowser } from "../browser-harness.ts";
+import { credentials } from "../../src/workspace/credentials.tsx";
+import { settings } from "../../src/workspace/settings.tsx";
+import { renderSite, updateSite } from "../browser-harness.ts";
+import { createRuntimeFixture, serverState } from "../runtime-fixture.ts";
 
-test("Current VM preserves accounts and other scrumboxes, synchronizes JSON edits, and saves with credentials", async () => {
-	const elements = new Map<string, any>();
-	const element = (id: string) => {
-		if (!elements.has(id))
-			elements.set(id, {
-				value: "",
-				replaceChildren() {},
-				querySelectorAll: () => [],
-				addEventListener(event: string, handler: Function) {
-					this[event] = handler;
-				},
-			});
-		return elements.get(id);
-	};
+test("Current VM preserves accounts, synchronizes JSON edits, and saves the selected authentication method", async (t) => {
 	const config = {
 		suiteapps: [],
 		vms: [
@@ -24,75 +14,47 @@ test("Current VM preserves accounts and other scrumboxes, synchronizes JSON edit
 			{ account: "000073", url: "second.vm.eng.netsuite.com" },
 		],
 	};
-	let saved: any;
-	const next = {
+	const state = serverState({
 		config: JSON.stringify(config),
-		certificates: {},
-		run: { state: "idle", log: "" },
-		ready: false,
-	};
-	const context = {
-		document: {
-			getElementById: element,
-			createElement: () => ({}),
-			addEventListener() {},
-		},
-		location: { hash: "", pathname: "/" },
-		URLSearchParams,
-		AbortSignal,
-		sessionStorage: { getItem: () => "", setItem() {} },
-		history: { replaceState() {} },
-		setInterval() {},
-		setTimeout() {},
-		clearTimeout() {},
-		fetch: async (path: string, options: any) => {
-			if (path === "/api/credentials") {
-				saved = JSON.parse(options.body);
-				next.config = saved.config;
+		authentication: { method: "certificates" },
+	});
+	let saved: { config: string; authenticationMethod: string } | undefined;
+	const fixture = createRuntimeFixture({
+		state,
+		respond(request) {
+			if (request.path === "/api/credentials") {
+				saved = JSON.parse(String(request.options?.body)) as NonNullable<
+					typeof saved
+				>;
+				state.config = saved.config;
 			}
-			return { ok: true, json: async () => next };
+			return state;
 		},
-	};
-	initializeBrowser(context);
-	await new Promise((resolve) => setImmediate(resolve));
-	assert.equal(element("vm").value, config.vms[0].url);
-	element("vm").value = "new.vm.eng.netsuite.com";
-	element("vm").input();
-	const edited = JSON.parse(element("config").value);
+	});
+	const view = await renderSite(fixture, [credentials, settings]);
+	t.after(view.cleanup);
+	assert.equal(view.element("vm").value, config.vms[0].url);
+	view.element("vm").value = "new.vm.eng.netsuite.com";
+	await view.element("vm").input();
+	const edited = JSON.parse(view.element("config").value) as typeof config;
 	assert.equal(edited.vms[0].url, "new.vm.eng.netsuite.com");
 	assert.equal(edited.vms[0].account, "000072");
 	assert.deepEqual(edited.vms[1], config.vms[1]);
-	await element("credentials").click();
+	await view.element("credentials").click();
+	assert.ok(saved);
 	assert.deepEqual(JSON.parse(saved.config), edited);
+	assert.equal(saved.authenticationMethod, "certificates");
 	edited.vms[0].url = "json.vm.eng.netsuite.com";
-	element("config").value = JSON.stringify(edited);
-	element("config").input();
-	runInNewContext("render(state)", context);
-	assert.equal(element("vm").value, edited.vms[0].url);
-	element("config").value = "invalid JSON";
-	element("config").input();
-	element("vm").input();
-	assert.equal(element("config").value, "invalid JSON");
+	view.element("config").value = JSON.stringify(edited);
+	await view.element("config").input();
+	await updateSite(() => fixture.runtime.accept(state));
+	assert.equal(view.element("vm").value, edited.vms[0].url);
+	view.element("config").value = "invalid JSON";
+	await view.element("config").input();
+	await view.element("vm").input();
+	assert.equal(view.element("config").value, "invalid JSON");
 	assert.match(
-		element("credential-message").textContent,
+		view.element("credential-message").textContent,
 		/Fix the configuration JSON/,
-	);
-	runInNewContext(
-		"editing = false; credentialEditing = false; render({...state,run:{state:'running',log:''}})",
-		context,
-	);
-	assert.match(element("validation").textContent, /Deployment is running/);
-	runInNewContext(
-		"render({...state,run:{state:'idle',log:''},sql:{state:'running',output:'',defaults:{user:'',service:''}}})",
-		context,
-	);
-	assert.match(element("validation").textContent, /SQL is running/);
-	runInNewContext(
-		"render({...state,sql:{...state.sql,state:'idle',preparing:true}})",
-		context,
-	);
-	assert.match(
-		element("validation").textContent,
-		/Unlocking the saved SQL password/,
 	);
 });

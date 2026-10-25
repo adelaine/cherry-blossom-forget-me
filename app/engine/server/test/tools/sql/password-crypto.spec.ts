@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
 	encryptSqlPassword,
 	decryptSqlPassword,
-} from "../src/tools/sql/password-crypto.ts";
-import { SQL_PASSWORD_SALT } from "../src/tools/sql/settings.ts";
+} from "../../../src/tools/sql/password-crypto.ts";
+import { SQL_PASSWORD_SALT } from "../../../src/tools/sql/settings.ts";
 
 test("round-trips an encrypted SQL password", async () => {
 	const password = "test-only-SQL-password",

@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readConfig } from "../src/workspace/config.ts";
-import { suiteapp, vms, withConfigFixture } from "./step-config.fixture.ts";
+import { readConfig } from "../../src/workspace/config.ts";
+import { suiteapp, vms, withConfigFixture } from "./config.fixture.ts";
 
 test("loads configuration with separate credentials", () => {
 	withConfigFixture((directory) => {
@@ -14,6 +14,7 @@ test("loads configuration with separate credentials", () => {
 			authPath,
 			JSON.stringify({
 				"gitlab-token": "fixture-token",
+				"suitecloud-authentication": { method: "certificates" },
 				"suitecloud-certificates": {
 					public: "credentials/public.pem",
 					private: "credentials/private.pem",

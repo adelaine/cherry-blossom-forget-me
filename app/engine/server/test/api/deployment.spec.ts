@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fixture } from "../main.fixture.ts";
+import { createApplicationFixture } from "./application.fixture.ts";
 
 test("completes a deployment", async (t) => {
 	if (spawnSync("openssl", ["version"], { stdio: "ignore" }).status !== 0) {
@@ -23,15 +23,19 @@ test("completes a deployment", async (t) => {
 		],
 		vms: [{ account: "000071", url: "scrumbox.vm.eng.netsuite.com" }],
 	};
-	const app = await fixture(config, { workerScript });
+	const app = createApplicationFixture(config, { workerScript });
 	try {
-		await app.post("generate", { replace: true });
-		await app.post("credentials", {
+		assert.equal((await app.post("generate", { replace: true })).status, 200);
+		const credentials = await app.post("credentials", {
 			authenticationMethod: "certificates",
 			id: "certificate-id",
 			token: "fixture-token",
 		});
-		await app.post("deploy", { config: JSON.stringify(config) });
+		assert.equal(credentials.status, 200);
+		const deployment = await app.post("deploy", {
+			config: JSON.stringify(config),
+		});
+		assert.equal(deployment.status, 202);
 		assert.equal((await app.finish("run")).state, "succeeded");
 	} finally {
 		await app.close();
