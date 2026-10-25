@@ -16,7 +16,7 @@
 		"test": "npm run test:client && npm run test:server && npm run test:build",
 		"test:client": "tsx --tsconfig site/tsconfig.json --test \"site/test/**/*.{spec,test}.ts\"",
 		"test:server": "node --experimental-strip-types --test \"server/test/**/*.{spec,test}.ts\"",
-		"test:build": "node --experimental-strip-types --test \"server/build-test/**/*.test.ts\""
+		"test:build": "node --experimental-strip-types --test \"server/test-build/**/*.test.ts\""
 	},
 	"dependencies": {
 		"@hono/node-server": "^2.1.3",
