@@ -121,7 +121,7 @@ test("Current VM preserves accounts, synchronizes JSON edits, and saves the sele
 	await updateSite(() => fixture.runtime.accept(state));
 	assert.match(
 		view.element("connection-deployment-status").textContent,
-		/successfully deployed to Saved company/,
+		/Successful deployment access to Saved company/,
 	);
 	selector.value = "";
 	await selector.change();

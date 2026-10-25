@@ -418,13 +418,16 @@ export const Credentials = () => {
 					id="connection-deployment-status"
 					role="status"
 				>
-					A SuiteApp was successfully deployed to {deployedConnection.company} (
-					{deployedConnection.account}).
+					Successful deployment access to {deployedConnection.company} (
+					{deployedConnection.account})
 				</blockquote>
 			)}
 			<select
 				id="saved-connections"
 				aria-label="Saved Connections"
+				disabled={
+					next?.run.state === "running" || runtime.pending.has("deployment")
+				}
 				value={selectedConnection}
 				onChange={(event) => selectConnection(event.currentTarget.value)}
 			>
