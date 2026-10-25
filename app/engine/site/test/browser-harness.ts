@@ -10,6 +10,7 @@ interface TestEvent {
 	target: TestNode;
 	currentTarget: TestNode;
 	isTrusted: boolean;
+	defaultPrevented: boolean;
 	preventDefault(): void;
 	stopPropagation(): void;
 }
@@ -32,8 +33,8 @@ export class TestNode {
 	clientHeight = 0;
 	offsetHeight = 0;
 	media = "";
-	href = "";
 	download = "";
+	scrollOptions: ScrollIntoViewOptions | boolean | undefined;
 	dataset: Record<string, string> = {};
 	style: Record<string, unknown> = {
 		setProperty(name: string, value: unknown) {
@@ -75,6 +76,25 @@ export class TestNode {
 	}
 	set id(value: string) {
 		this.attributes.set("id", value);
+	}
+	get href() {
+		return this.attributes.get("href") ?? "";
+	}
+	set href(value: string) {
+		this.attributes.set("href", value);
+	}
+	get hash() {
+		const marker = this.href.indexOf("#");
+		return marker < 0 ? "" : this.href.slice(marker);
+	}
+	closest(selector: string): TestNode | null {
+		if (
+			selector.startsWith("#")
+				? this.id === selector.slice(1)
+				: this.localName === selector
+		)
+			return this;
+		return this.parentNode?.closest(selector) ?? null;
 	}
 	insertBefore(node: TestNode, before: TestNode | null) {
 		node.parentNode?.removeChild(node);
@@ -131,18 +151,36 @@ export class TestNode {
 		this.listeners.delete(name);
 	}
 	private async dispatch(type: string) {
+		let stopped = false;
+		const path: TestNode[] = [this];
+		for (
+			let ancestor = this.parentNode;
+			ancestor;
+			ancestor = ancestor.parentNode
+		)
+			path.push(ancestor);
 		const event: TestEvent = {
 			type,
 			target: this,
 			currentTarget: this,
 			isTrusted: false,
-			preventDefault() {},
-			stopPropagation() {},
+			defaultPrevented: false,
+			preventDefault() {
+				event.defaultPrevented = true;
+			},
+			stopPropagation() {
+				stopped = true;
+			},
 		};
 		await act(async () => {
-			await this.listeners.get(type)?.call(this, event);
+			for (const node of path) {
+				event.currentTarget = node;
+				await node.listeners.get(type)?.call(node, event);
+				if (stopped) break;
+			}
 			await flushRequests();
 		});
+		return event;
 	}
 	click() {
 		return this.dispatch("click");
@@ -156,7 +194,9 @@ export class TestNode {
 	focus() {
 		this.ownerDocument.activeElement = this;
 	}
-	scrollIntoView() {}
+	scrollIntoView(options?: ScrollIntoViewOptions | boolean) {
+		this.scrollOptions = options;
+	}
 	querySelectorAll(selector: string): TestNode[] {
 		return this.childNodes.flatMap((node) => [
 			...((
@@ -191,12 +231,16 @@ export class TestNode {
 	}
 }
 
+class TestDetailsNode extends TestNode {}
+
 class TestDocument {
 	root = new TestNode("div", this);
 	documentElement = new TestNode("html", this);
 	activeElement: TestNode | null = null;
 	createElement(name: string) {
-		return new TestNode(name, this);
+		return name === "details"
+			? new TestDetailsNode(name, this)
+			: new TestNode(name, this);
 	}
 	createElementNS(_namespace: string, name: string) {
 		return this.createElement(name);
@@ -245,6 +289,7 @@ export async function renderSite(
 	const document = new TestDocument();
 	const globals = {
 		document,
+		HTMLDetailsElement: TestDetailsNode,
 		window: fixture.environment.window,
 		sessionStorage: fixture.environment.sessionStorage,
 		matchMedia: () => ({
