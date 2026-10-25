@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage, parseConfiguration } from "../common/state.ts";
 
@@ -165,7 +166,9 @@ export const SuiteApps = () => {
 
 	return (
 		<>
-			<h2 id="suiteapps-heading">SuiteApps</h2>
+			<h2 id="suiteapps-heading">
+				<Icon name="package" /> SuiteApps
+			</h2>
 			<article class="suiteapps-card">
 				<div id="suiteapp-blocks">
 					{rows.map((row, index) => {
@@ -289,7 +292,11 @@ export const suiteapps: SiteModule = {
 	placement: "feature",
 	slot: "suiteapps",
 	Component: SuiteApps,
-	navigation: { target: "suiteapps-section", label: "SuiteApps" },
+	navigation: {
+		target: "suiteapps-section",
+		label: "SuiteApps",
+		icon: "package",
+	},
 	styleOrder: 3,
 	style: /* css */ `.suiteapp-block{padding:1.5rem;border-bottom:1px solid var(--pico-muted-border-color)}
 .suiteapps-footer{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}

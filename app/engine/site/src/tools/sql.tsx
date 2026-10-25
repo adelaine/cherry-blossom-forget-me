@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage, targetHost } from "../common/state.ts";
 
@@ -99,7 +100,9 @@ export const Sql = () => {
 		<article>
 			<details class="setup-section" id="sql-section" ref={details}>
 				<summary>
-					<h2>SQL queries</h2>
+					<h2>
+						<Icon name="wrench" /> SQL queries
+					</h2>
 				</summary>
 				<div class="grid">
 					<div>
@@ -211,5 +214,5 @@ export const sql: SiteModule = {
 	id: "sql",
 	placement: "tool",
 	Component: Sql,
-	navigation: { target: "sql-section", label: "SQL" },
+	navigation: { target: "sql-section", label: "SQL", icon: "wrench" },
 };

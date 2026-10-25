@@ -4,6 +4,7 @@ import type { SiteModule } from "../common/module.ts";
 import { SiteProvider, SiteRuntime, useSite } from "../common/runtime.ts";
 import { errorMessage, parseConfiguration } from "../common/state.ts";
 import { modules } from "../modules.ts";
+import { Icon } from "../common/icon.tsx";
 
 const Appearance = () => {
 	const runtime = useSite();
@@ -131,10 +132,32 @@ export const Page = ({
 			(module) =>
 				module.placement === "feature" && (module.slot ?? "setup") === name,
 		);
+	const pages = [
+		{ id: "setup", items: slot("setup") },
+		{ id: "suiteapps", items: slot("suiteapps") },
+		{
+			id: "deployment",
+			items: [...slot("deployment"), ...slot("settings")],
+		},
+		...inventory
+			.filter((module) => module.placement === "tool")
+			.map((module) => ({ id: module.id, items: [module] })),
+	].filter((page) => page.items.length);
+	const [selectedPage, setSelectedPage] = useState("setup");
+	const activePage = pages.some((page) => page.id === selectedPage)
+		? selectedPage
+		: pages[0]?.id;
+	useLayoutEffect(() => {
+		const tool = inventory.find(
+			(module) => module.placement === "tool" && module.id === activePage,
+		);
+		const target =
+			tool?.navigation && document.getElementById(tool.navigation.target);
+		if (target instanceof HTMLDetailsElement) target.open = true;
+	}, [activePage, inventory]);
 	return (
 		<main class="container">
-			<Appearance />
-			<header>
+			<header class="page-header">
 				<hgroup>
 					<h1>
 						<mark>SuiteContainer</mark>
@@ -144,34 +167,36 @@ export const Page = ({
 						your SuiteApps.
 					</p>
 				</hgroup>
+				<Appearance />
 			</header>
-			<nav
-				class="section-nav"
-				aria-label="Jump to a section"
-				onClick={(event) => {
-					const link = (event.target as HTMLElement).closest("a");
-					if (!link) return;
-					const target = document.getElementById(link.hash.slice(1));
-					if (!target) return;
-					event.preventDefault();
-					if (target instanceof HTMLDetailsElement) target.open = true;
-					if (target.id === "credentials-section") {
-						const vm = document.getElementById("vm-section");
-						if (vm instanceof HTMLDetailsElement) vm.open = true;
-					}
-					target.style.scrollMarginTop =
-						"calc(" + event.currentTarget.offsetHeight + "px + 1rem)";
-					target.scrollIntoView({ block: "start" });
-				}}
-			>
-				<span>Jump to</span>
-				{inventory
-					.filter((module) => module.navigation)
-					.map((module) => (
-						<a key={module.id} href={"#" + module.navigation!.target}>
-							{module.navigation!.label}
-						</a>
-					))}
+			<nav class="section-nav" aria-label="SuiteContainer">
+				{pages.map((page) => {
+					const navigation = page.items.find(
+						(module) => module.navigation,
+					)?.navigation;
+					return (
+						navigation && (
+							<a
+								key={page.id}
+								href={"#" + navigation.target}
+								aria-current={activePage === page.id ? "page" : undefined}
+								onClick={(event) => {
+									event.preventDefault();
+									setSelectedPage(page.id);
+									const target = document.getElementById(navigation.target);
+									if (target instanceof HTMLDetailsElement) target.open = true;
+								}}
+							>
+								{navigation.icon && <Icon name={navigation.icon} />}
+								{navigation.label}
+							</a>
+						)
+					);
+				})}
+				<button id="help" type="button" class="nav-help">
+					<Icon name="circle-help" />
+					Help
+				</button>
 				<button
 					id="stop"
 					disabled={
@@ -189,22 +214,37 @@ export const Page = ({
 			<p id="connection-error" role="alert" hidden={!runtime.connectionFailed}>
 				{runtime.connectionFailed ? runtime.connectionMessage : ""}
 			</p>
-			<div class="setup-sections">
-				<Contributions items={slot("setup")} />
-				<section id="suiteapps-section" aria-labelledby="suiteapps-heading">
-					<Contributions items={slot("suiteapps")} />
-					<Contributions items={slot("settings")} />
-				</section>
-				<section aria-labelledby="tools-heading">
-					<h2 id="tools-heading">Tools</h2>
-					<div class="tool-sections">
-						<Contributions
-							items={inventory.filter((module) => module.placement === "tool")}
-						/>
+			<p
+				id="page-message"
+				role="status"
+				hidden={
+					activePage === "deployment" ||
+					!(runtime.stopMessage || runtime.actionError)
+				}
+			>
+				{runtime.stopMessage || runtime.actionError}
+			</p>
+			<div class="subpages">
+				{pages.map((page) => (
+					<div
+						key={page.id}
+						id={page.id + "-page"}
+						class="subpage"
+						hidden={activePage !== page.id}
+					>
+						{page.id === "suiteapps" ? (
+							<section
+								id="suiteapps-section"
+								aria-labelledby="suiteapps-heading"
+							>
+								<Contributions items={page.items} />
+							</section>
+						) : (
+							<Contributions items={page.items} />
+						)}
 					</div>
-				</section>
+				))}
 			</div>
-			<Contributions items={slot("deployment")} />
 		</main>
 	);
 };

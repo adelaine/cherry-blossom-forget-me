@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage } from "../common/state.ts";
 import { AnsiLog } from "../common/log.tsx";
@@ -51,7 +52,7 @@ export const Deployment = () => {
 
 	const validation =
 		next?.authentication?.state === "running"
-			? "Complete SuiteCloud sign-in in the browser tab, or cancel sign-in under Setup."
+			? "Complete SuiteCloud sign-in in the browser tab, or cancel sign-in under NS Account."
 			: runtime.actionError ||
 				(runtime.busy
 					? next?.playwright?.state === "running" ||
@@ -82,7 +83,9 @@ export const Deployment = () => {
 
 	return (
 		<article id="deployment-section">
-			<h2>Deploy SuiteApps</h2>
+			<h2>
+				<Icon name="rocket" /> Deploy SuiteApps
+			</h2>
 			<p id="validation" role="status">
 				{validation}
 			</p>
@@ -114,5 +117,5 @@ export const deployment: SiteModule = {
 	placement: "feature",
 	slot: "deployment",
 	Component: Deployment,
-	navigation: { target: "deployment-section", label: "Deploy" },
+	navigation: { target: "deployment-section", label: "Deploy", icon: "rocket" },
 };

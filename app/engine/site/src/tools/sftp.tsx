@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage } from "../common/state.ts";
 
@@ -239,7 +240,9 @@ export const Sftp = () => {
 		<article>
 			<details class="setup-section" id="sftp-section" ref={details}>
 				<summary>
-					<h2>SFTP file sharing</h2>
+					<h2>
+						<Icon name="wrench" /> SFTP file sharing
+					</h2>
 				</summary>
 				<p id="sftp-description">
 					{remote
@@ -506,7 +509,7 @@ export const sftp: SiteModule = {
 	id: "sftp",
 	placement: "tool",
 	Component: Sftp,
-	navigation: { target: "sftp-section", label: "SFTP" },
+	navigation: { target: "sftp-section", label: "SFTP", icon: "wrench" },
 	styleOrder: 7,
 	style: /* css */ `.sftp-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sftp-connection-grid>div{min-width:0}

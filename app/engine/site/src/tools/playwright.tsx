@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage, parseConfiguration } from "../common/state.ts";
 import { AnsiLog } from "../common/log.tsx";
@@ -162,7 +163,9 @@ export const Playwright = () => {
 		<article>
 			<details class="setup-section" id="playwright-section" ref={details}>
 				<summary>
-					<h2>Playwright tests</h2>
+					<h2>
+						<Icon name="wrench" /> Playwright tests
+					</h2>
 				</summary>
 				<p>
 					Run your SuiteApp browser tests against Current VM. Configure test
@@ -277,5 +280,9 @@ export const playwright: SiteModule = {
 	id: "playwright",
 	placement: "tool",
 	Component: Playwright,
-	navigation: { target: "playwright-section", label: "Playwright" },
+	navigation: {
+		target: "playwright-section",
+		label: "Playwright",
+		icon: "wrench",
+	},
 };

@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import {
 	errorMessage,
@@ -303,11 +304,19 @@ export const Credentials = () => {
 
 	return (
 		<section id="credentials-section" aria-labelledby="setup-heading">
-			<h2 id="setup-heading">Setup</h2>
+			<h2 id="setup-heading">
+				<Icon name="building-2" /> NS Account
+			</h2>
 			<article class="credentials-card">
 				<ol class="credential-steps" role="list">
 					<li>
-						<details class="setup-section" id="vm-section" open ref={vmSection}>
+						<details
+							class="setup-section"
+							id="vm-section"
+							name="ns-account-steps"
+							open
+							ref={vmSection}
+						>
 							<summary>
 								<span>
 									VM<small>Choose your scrumbox</small>
@@ -352,8 +361,8 @@ export const Credentials = () => {
 						<details
 							class="setup-section"
 							id="suitecloud-authentication-section"
+							name="ns-account-steps"
 							ref={certificatesSection}
-							open
 						>
 							<summary>
 								<span>
@@ -537,6 +546,7 @@ export const Credentials = () => {
 						<details
 							class="setup-section"
 							id="admindocs-section"
+							name="ns-account-steps"
 							ref={adminSection}
 						>
 							<summary>
@@ -609,6 +619,7 @@ export const Credentials = () => {
 						<details
 							class="setup-section"
 							id="token-section"
+							name="ns-account-steps"
 							ref={tokenSection}
 						>
 							<summary>
@@ -672,7 +683,11 @@ export const credentials: SiteModule = {
 	placement: "feature",
 	slot: "setup",
 	Component: Credentials,
-	navigation: { target: "credentials-section", label: "Setup" },
+	navigation: {
+		target: "credentials-section",
+		label: "NS Account",
+		icon: "building-2",
+	},
 	styleOrder: 1,
 	style: /* css */ `.credential-steps{list-style:none;padding:0;counter-reset:credential-step}
 .credential-steps{margin:0}
