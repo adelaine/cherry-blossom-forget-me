@@ -411,7 +411,7 @@ export const Credentials = () => {
 			<h2 id="setup-heading">
 				<Icon name="building-2" /> NetSuite Account
 			</h2>
-			<h3>Saved Connections</h3>
+			<h3 hidden={connections.length === 0}>Saved Connections</h3>
 			{deployedConnection?.lastSuccessfulDeployment && (
 				<blockquote
 					class="status-message"
@@ -425,6 +425,7 @@ export const Credentials = () => {
 			<select
 				id="saved-connections"
 				aria-label="Saved Connections"
+				hidden={connections.length === 0}
 				disabled={
 					next?.run.state === "running" || runtime.pending.has("deployment")
 				}
