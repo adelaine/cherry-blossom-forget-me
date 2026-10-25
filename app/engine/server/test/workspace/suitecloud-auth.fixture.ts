@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import childProcess, {
 	type ChildProcess,
 	type SpawnOptions,
+	type SpawnSyncOptions,
 } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
@@ -50,9 +51,33 @@ writeFileSync(process.env.SUITECONTAINER_BROWSER_URL_FILE, process.env.TEST_LOGI
 `,
 	);
 	let invocation: Invocation | undefined;
+	let availableAuthIds: string[] | undefined;
 	const spawn = childProcess.spawn;
+	const spawnSync = childProcess.spawnSync;
 	const exists = fs.existsSync;
 	t.mock.method(os, "homedir", () => sdkHome);
+	t.mock.method(childProcess, "spawnSync", ((
+		command: string,
+		args: readonly string[],
+		options: SpawnSyncOptions,
+	) => {
+		if (command === "java" && args?.includes("manageauth")) {
+			const ids =
+				availableAuthIds ??
+				Object.values(
+					app.lifecycle.services.credentials.read()["suitecloud-authentication"]
+						?.accounts ?? {},
+				).map((account) => account.authId);
+			return {
+				status: 0,
+				stdout: JSON.stringify({
+					status: "SUCCESS",
+					data: Object.fromEntries(ids.map((id) => [id, {}])),
+				}),
+			};
+		}
+		return spawnSync(command, args, options);
+	}) as typeof childProcess.spawnSync);
 	t.mock.method(
 		fs,
 		"existsSync",
@@ -95,6 +120,9 @@ writeFileSync(process.env.SUITECONTAINER_BROWSER_URL_FILE, process.env.TEST_LOGI
 		sdk,
 		loginUrl,
 		started,
+		setAuthentications(ids: string[]) {
+			availableAuthIds = ids;
+		},
 		async complete(result: object) {
 			fs.writeFileSync(resultFile, JSON.stringify(result));
 			await started().closed;

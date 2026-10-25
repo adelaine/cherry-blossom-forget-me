@@ -90,6 +90,9 @@ export const Credentials = () => {
 		(certificateMode
 			? ""
 			: (connections.find(([, value]) => value === account)?.[0] ?? ""));
+	const deployedConnection = selectedConnection
+		? next?.authentication.accounts[selectedConnection]
+		: undefined;
 	const link = (path: string) => (host ? "https://" + host + path : undefined);
 
 	useEffect(
@@ -409,6 +412,16 @@ export const Credentials = () => {
 				<Icon name="building-2" /> NetSuite Account
 			</h2>
 			<h3>Saved Connections</h3>
+			{deployedConnection?.lastSuccessfulDeployment && (
+				<blockquote
+					class="status-message"
+					id="connection-deployment-status"
+					role="status"
+				>
+					A SuiteApp was successfully deployed to {deployedConnection.company} (
+					{deployedConnection.account}).
+				</blockquote>
+			)}
 			<select
 				id="saved-connections"
 				aria-label="Saved Connections"

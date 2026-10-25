@@ -8,7 +8,7 @@ import { sql } from "../../src/tools/sql.tsx";
 import { renderSite, updateSite } from "../browser-harness.ts";
 import { createRuntimeFixture, serverState } from "../runtime-fixture.ts";
 
-test("Stop app renders the stop result and explains blocked closure", async (t) => {
+test("Stop SuiteContainer renders the stop result and explains blocked closure", async (t) => {
 	for (const success of [true, false]) {
 		await t.test(
 			success ? "successful stop" : "rejected stop",

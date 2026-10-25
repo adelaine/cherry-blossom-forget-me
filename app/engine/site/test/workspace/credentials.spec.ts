@@ -103,8 +103,36 @@ test("Current VM preserves accounts, synchronizes JSON edits, and saves the sele
 	assert.equal(view.element("vm-account").value, accountDraft);
 	assert.equal(view.element("token").value, "unsaved-token");
 	assert.equal(fixture.runtime.credentialEditing, false);
+	assert.equal(
+		view.root
+			.querySelectorAll("blockquote")
+			.some(
+				(node) => node.getAttribute("id") === "connection-deployment-status",
+			),
+		false,
+	);
+	state.authentication.accounts.saved = {
+		...connection,
+		lastSuccessfulDeployment: {
+			suiteapp: "bank-feeds",
+			completedAt: "2026-10-26T00:00:00.000Z",
+		},
+	};
+	await updateSite(() => fixture.runtime.accept(state));
+	assert.match(
+		view.element("connection-deployment-status").textContent,
+		/successfully deployed to Saved company/,
+	);
 	selector.value = "";
 	await selector.change();
+	assert.equal(
+		view.root
+			.querySelectorAll("blockquote")
+			.some(
+				(node) => node.getAttribute("id") === "connection-deployment-status",
+			),
+		false,
+	);
 	assert.equal(setupForm.hidden, false);
 	assert.equal(view.element("vm"), vmInput);
 	assert.equal(vmInput.value, domainDraft);

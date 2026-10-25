@@ -176,7 +176,7 @@ The app sets `status.deploy-start-ok` to `1` when deployment is accepted, so the
 
 ## Stopping and restarting
 
-Use **Stop app** when no deployment or SQL operation is running. The app also stops after 15 minutes without user activity. Running deployment and SQL jobs, running local SFTP, and active target-side SFTP operations prevent automatic shutdown. A target-side SFTP container can remain running after the app stops.
+Use **Stop SuiteContainer** when no deployment or SQL operation is running. The app also stops after 15 minutes without user activity. Running deployment and SQL jobs, running local SFTP, and active target-side SFTP operations prevent automatic shutdown. A target-side SFTP container can remain running after the app stops.
 
 Settings, credentials, certificates, and repository files persist on the host. The stopped app container remains until the next launch replaces it. Temporary helper containers are removed automatically, while the built image and build cache remain available.
 

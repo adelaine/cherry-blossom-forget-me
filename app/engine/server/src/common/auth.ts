@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { posix, win32 } from "node:path";
 
 export interface Auth {
+	"suitecloud-deployments"?: Record<
+		string,
+		{ suiteapp: string; completedAt: string }
+	>;
 	"suitecloud-authentication"?: {
 		method: "browser" | "certificates";
 		accounts?: Record<

@@ -1,5 +1,5 @@
 /* Copyright (c) 2026, Oracle and/or its affiliates. */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
 	existsSync,
 	mkdtempSync,
@@ -30,6 +30,8 @@ export class SuiteCloudAuthenticationService {
 	private configuration: ConfigurationService;
 	private credentials: CredentialsService;
 	private suiteapps: SuiteAppsService;
+	private reconciled = false;
+	private reconciliationError = "";
 	constructor(
 		configuration: ConfigurationService,
 		credentials: CredentialsService,
@@ -40,13 +42,80 @@ export class SuiteCloudAuthenticationService {
 		this.suiteapps = suiteapps;
 	}
 
-	status() {
-		let auth: Auth["suitecloud-authentication"];
+	private reconcile(stored: Auth): void {
+		const accounts = stored["suitecloud-authentication"]?.accounts;
+		if (this.reconciled || !accounts || !Object.keys(accounts).length) return;
+		this.reconciled = true;
 		try {
-			auth = this.credentials.read()["suitecloud-authentication"];
+			const result = spawnSync(
+				"java",
+				[
+					"-DintegrationMode",
+					"--add-opens",
+					"java.base/java.io=ALL-UNNAMED",
+					"-jar",
+					suitecloudSdk(),
+					"manageauth",
+					"-list",
+				],
+				{
+					env: browserEnvironment(this.configuration.credentialsDirectory),
+					encoding: "utf8",
+					timeout: 5000,
+					windowsHide: true,
+					maxBuffer: 4 * 1024 * 1024,
+				},
+			);
+			if (result.error || result.status !== 0)
+				throw new Error("SDK authentication list unavailable.");
+			const list = JSON.parse(result.stdout) as {
+				status?: unknown;
+				data?: unknown;
+			};
+			if (
+				list.status !== "SUCCESS" ||
+				!list.data ||
+				typeof list.data !== "object" ||
+				Array.isArray(list.data)
+			)
+				throw new Error("SDK authentication list was invalid.");
+			const ids = new Set(Object.keys(list.data));
+			const retained = { ...accounts };
+			const deployments = { ...stored["suitecloud-deployments"] };
+			let changed = false;
+			for (const [id, account] of Object.entries(accounts)) {
+				if (ids.has(account.authId)) continue;
+				delete retained[id];
+				delete deployments[id];
+				changed = true;
+			}
+			if (changed) {
+				const updated: Auth = {
+					...stored,
+					"suitecloud-authentication": {
+						...stored["suitecloud-authentication"]!,
+						accounts: retained,
+					},
+					"suitecloud-deployments": deployments,
+				};
+				this.credentials.write(updated);
+				Object.assign(stored, updated);
+			}
+		} catch {
+			this.reconciliationError =
+				"Saved connections could not be verified with SuiteCloud. Existing entries were kept.";
+		}
+	}
+
+	status() {
+		let stored: Auth = {};
+		try {
+			stored = this.credentials.read();
+			this.reconcile(stored);
 		} catch {
 			/* State reports credential errors. */
 		}
+		const auth = stored["suitecloud-authentication"];
 		let version = "";
 		try {
 			version = basename(suitecloudSdk());
@@ -56,7 +125,13 @@ export class SuiteCloudAuthenticationService {
 		const accounts = Object.fromEntries(
 			Object.entries(auth?.accounts ?? {}).map(([id, account]) => [
 				id,
-				{ ...account, connected: account.sdkVersion === version },
+				{
+					...account,
+					connected: account.sdkVersion === version,
+					...(stored["suitecloud-deployments"]?.[id]
+						? { lastSuccessfulDeployment: stored["suitecloud-deployments"][id] }
+						: {}),
+				},
 			]),
 		);
 		const operation = this.operationId
@@ -67,7 +142,7 @@ export class SuiteCloudAuthenticationService {
 			accounts,
 			state: operation?.state ?? "idle",
 			operationId: this.operationId,
-			error: operation?.error?.error ?? "",
+			error: operation?.error?.error || this.reconciliationError,
 		};
 	}
 

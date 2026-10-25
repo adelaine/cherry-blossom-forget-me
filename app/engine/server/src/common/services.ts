@@ -69,6 +69,7 @@ export const createServices = (
 		shared.runnerToken,
 	);
 	const status = (text = configuration.text()) => {
+		const authenticationState = authentication.status();
 		let auth: Auth = {};
 		let credentialError = "";
 		try {
@@ -111,7 +112,7 @@ export const createServices = (
 			tokenPresent: !!auth["gitlab-token"]?.trim(),
 			deploymentStarted: savedStatus?.["deploy-start-ok"] === 1,
 			theme: savedStatus?.theme,
-			authentication: authentication.status(),
+			authentication: authenticationState,
 			certificates: {
 				public: /[\r\n]/.test(auth["suitecloud-certificates"]?.public ?? "")
 					? ""

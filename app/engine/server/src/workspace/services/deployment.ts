@@ -100,7 +100,7 @@ export class DeploymentService {
 					),
 				);
 			const worker = spawn(process.execPath, [script, "--deploy"], {
-				stdio: ["ignore", "pipe", "pipe"],
+				stdio: ["ignore", "pipe", "pipe", "ipc"],
 				detached: true,
 				windowsHide: true,
 				env: {
@@ -123,6 +123,28 @@ export class DeploymentService {
 			};
 			worker.stdout!.on("data", append);
 			worker.stderr!.on("data", append);
+			worker.on("message", (value: unknown) => {
+				if (!value || typeof value !== "object") return;
+				const deployed = value as Record<string, unknown>;
+				if (deployed.type !== "suiteapp-deployed") return;
+				const vm = ready.config!.vms.find(
+					(target) =>
+						target.account === deployed.account && target.url === deployed.url,
+				);
+				const repo = ready.config!.suiteapps.find(
+					(repo) => repo.directory === deployed.suiteapp,
+				);
+				if (!vm || !repo) return;
+				try {
+					this.credentials.recordDeployment(vm, repo.directory);
+				} catch {
+					append(
+						Buffer.from(
+							"The SuiteApp deployed successfully, but its success could not be saved.\n",
+						),
+					);
+				}
+			});
 			worker.on("error", (error) => append(Buffer.from(message(error) + "\n")));
 			this.completed = new Promise((resolve) =>
 				worker.once("close", (code) => {

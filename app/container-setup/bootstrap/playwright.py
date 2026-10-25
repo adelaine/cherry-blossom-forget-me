@@ -284,7 +284,7 @@ class PlaywrightRunner:
         script = "const response=await fetch('http://127.0.0.1:8787/state',{headers:{authorization:'Bearer '+process.env.SUITECONTAINER_PLAYWRIGHT_TOKEN},signal:AbortSignal.timeout(5000)});if(!response.ok)process.exit(2);const state=await response.json();if(typeof state.state!=='string')process.exit(2);console.log(state.state==='running'?'busy':'idle')"
         result = self.podman("exec", self.name, "node", "--input-type=module", "-e", script, capture=True, optional=True)
         if result.returncode or result.stdout.strip() != "idle":
-            raise RuntimeError("Playwright is running or its activity could not be checked. The containers were left untouched. Wait for tests to finish, or use Stop app before relaunching.")
+            raise RuntimeError("Playwright is running or its activity could not be checked. The containers were left untouched. Wait for tests to finish, or use Stop SuiteContainer before relaunching.")
 
     def prepare_resources(self):
         if not self.enabled:

@@ -14,6 +14,7 @@ test("deploys each SuiteApp in order for each VM", (t) => {
 	];
 	const targets = [...vms, { account: "67890", url: "second.netsuite.com" }];
 	const events: string[] = [];
+	const successes: { account: string; url: string; suiteapp: string }[] = [];
 	const domainsByAuthId = new Map<string, string>();
 	let activeDomain = "";
 	t.mock.method(console, "log", () => {});
@@ -56,7 +57,11 @@ test("deploys each SuiteApp in order for each VM", (t) => {
 				certificates: { public: "", private: "", id: "cert_1" },
 			},
 			"/private.pem",
-			{ workspaceRoot: root, spawn },
+			{
+				workspaceRoot: root,
+				spawn,
+				onDeployed: (result) => successes.push(result),
+			},
 		);
 		assert.deepEqual(
 			events,
@@ -68,6 +73,41 @@ test("deploys each SuiteApp in order for each VM", (t) => {
 				),
 			),
 		);
+		assert.equal(successes.length, suiteapps.length * targets.length);
+		successes.length = 0;
+		const failingSpawn = ((
+			command: string,
+			args: string[],
+			options: { cwd: string },
+		) => {
+			if (
+				args?.[0] === "project:deploy" &&
+				!args.includes("--dryrun") &&
+				basename(options.cwd!) === "second"
+			)
+				return { status: 1, stdout: "", stderr: "Later SuiteApp failed." };
+			return spawn(command, args, options);
+		}) as unknown as typeof spawn;
+		assert.throws(
+			() =>
+				deployRepos(
+					{
+						suiteapps,
+						vms: targets,
+						certificates: { public: "", private: "", id: "cert_1" },
+					},
+					"/private.pem",
+					{
+						workspaceRoot: root,
+						spawn: failingSpawn,
+						onDeployed: (result) => successes.push(result),
+					},
+				),
+			/SuiteCloud project:deploy failed/,
+		);
+		assert.equal(successes.length, 1);
+		assert.equal(successes[0]!.suiteapp, "first");
+		assert.equal(successes[0]!.account, targets[0]!.account);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

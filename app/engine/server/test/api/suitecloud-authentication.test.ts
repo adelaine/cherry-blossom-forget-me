@@ -132,6 +132,37 @@ test(
 				browserAccountKey({ account: "000099", url: selected.url })
 			];
 		assert.equal(savedConnection?.company, "Discovered company");
+		const discoveredVm = { account: "000099", url: selected.url };
+		services.credentials.recordDeployment(discoveredVm, "bank-feeds");
+		services.credentials.recordDeployment(config.vms[0]!, "retired-app");
+		const remembered =
+			services.credentials.read()["suitecloud-authentication"]!.accounts!;
+		fixture.setAuthentications(
+			Object.values(remembered)
+				.filter((account) => account.authId !== otherAccount.authId)
+				.map((account) => account.authId),
+		);
+		const reconciled = new SuiteCloudAuthenticationService(
+			services.configuration,
+			services.credentials,
+			services.suiteapps,
+		).status();
+		assert.equal(reconciled.accounts[otherKey], undefined);
+		assert.equal(
+			services.credentials.read()["suitecloud-authentication"]!.accounts![
+				otherKey
+			],
+			undefined,
+		);
+		assert.equal(
+			services.credentials.read()["suitecloud-deployments"]?.[otherKey],
+			undefined,
+		);
+		assert.equal(
+			reconciled.accounts[browserAccountKey(discoveredVm)]!
+				.lastSuccessfulDeployment?.suiteapp,
+			"bank-feeds",
+		);
 	},
 );
 

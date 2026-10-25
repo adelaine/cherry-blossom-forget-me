@@ -13,6 +13,11 @@ export interface Vm {
 	url: string;
 	database?: { user?: string; service?: string };
 }
+
+export interface SuiteAppDeployment extends Vm {
+	type: "suiteapp-deployed";
+	suiteapp: string;
+}
 export type Config = {
 	suiteapps: SuiteApp[];
 	certificates?: { public: string; private: string; id: string };

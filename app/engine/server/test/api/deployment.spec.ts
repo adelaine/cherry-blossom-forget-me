@@ -1,16 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApplicationFixture } from "./application.fixture.ts";
+import { browserAccountKey } from "../../src/workspace/suitecloud-auth.ts";
 
 test("completes a deployment", async (t) => {
-	if (spawnSync("openssl", ["version"], { stdio: "ignore" }).status !== 0) {
-		t.skip("OpenSSL is unavailable");
-		return;
-	}
 	const workers = mkdtempSync(join(tmpdir(), "suitecontainer-worker-"));
 	const workerScript = join(workers, "worker.cjs");
 	writeFileSync(workerScript, "console.log('All SuiteApps were deployed.');");
@@ -20,14 +16,25 @@ test("completes a deployment", async (t) => {
 				directory: "app",
 				url: "https://gitlab.eng.netsuite.com/team/app.git",
 			},
+			{
+				directory: "later-app",
+				url: "https://gitlab.eng.netsuite.com/team/later-app.git",
+			},
 		],
 		vms: [{ account: "000071", url: "scrumbox.vm.eng.netsuite.com" }],
 	};
 	const app = createApplicationFixture(config, { workerScript });
+	t.mock.method(app.lifecycle.services.credentials, "certificateState", () => ({
+		hasExisting: true,
+		error: "",
+		publicPath: join(app.credentials, "public.pem"),
+		privatePath: join(app.credentials, "private.pem"),
+	}));
 	try {
-		assert.equal((await app.post("generate", { replace: true })).status, 200);
 		const credentials = await app.post("credentials", {
 			authenticationMethod: "certificates",
+			public: "credentials/public.pem",
+			private: "credentials/private.pem",
 			id: "certificate-id",
 			token: "fixture-token",
 		});
@@ -37,6 +44,42 @@ test("completes a deployment", async (t) => {
 		});
 		assert.equal(deployment.status, 202);
 		assert.equal((await app.finish("run")).state, "succeeded");
+		assert.equal(
+			app.lifecycle.services.credentials.read()["suitecloud-deployments"],
+			undefined,
+		);
+		writeFileSync(
+			workerScript,
+			`process.send(${JSON.stringify({
+				type: "suiteapp-deployed",
+				...config.vms[0],
+				suiteapp: "app",
+			})}); process.exitCode = 1;`,
+		);
+		assert.equal(
+			(await app.post("deploy", { config: JSON.stringify(config) })).status,
+			202,
+		);
+		assert.equal((await app.finish("run")).state, "failed");
+		const key = browserAccountKey(config.vms[0]!);
+		const success =
+			app.lifecycle.services.credentials.read()["suitecloud-deployments"]?.[
+				key
+			];
+		assert.equal(success?.suiteapp, "app");
+		assert.ok(success?.completedAt);
+		writeFileSync(workerScript, "process.exitCode = 1;");
+		assert.equal(
+			(await app.post("deploy", { config: JSON.stringify(config) })).status,
+			202,
+		);
+		assert.equal((await app.finish("run")).state, "failed");
+		assert.deepEqual(
+			app.lifecycle.services.credentials.read()["suitecloud-deployments"]?.[
+				key
+			],
+			success,
+		);
 	} finally {
 		await app.close();
 		rmSync(workers, { recursive: true, force: true });

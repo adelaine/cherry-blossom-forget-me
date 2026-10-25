@@ -208,7 +208,7 @@ export const Page = ({
 					}
 					onClick={() => void runtime.stop()}
 				>
-					Stop app
+					Stop SuiteContainer
 				</button>
 			</nav>
 			<p id="connection-error" role="alert" hidden={!runtime.connectionFailed}>

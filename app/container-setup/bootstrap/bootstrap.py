@@ -621,7 +621,7 @@ else if(typeof state.busy!=='boolean'||runnerStopped){
 console.log(state.busy?'busy':'idle');"""
     result = podman("exec", name, "node", "--input-type=module", "-e", script, capture=True, optional=True)
     if result.returncode or result.stdout.strip() != "idle":
-        raise RuntimeError("The app is busy or its activity could not be checked. The containers were left untouched. Wait for running jobs to finish, or use Stop app before relaunching.")
+        raise RuntimeError("The app is busy or its activity could not be checked. The containers were left untouched. Wait for running jobs to finish, or use Stop SuiteContainer before relaunching.")
 
 
 def playwright_runner(name, machine, info):
@@ -766,7 +766,7 @@ def open_page(name, connection=None):
         hostname = command("hostname", "-f", capture=True).stdout.strip()
         print(f"From your computer, forward the ports: ssh -N -L {port}:127.0.0.1:{port} -L 52300:127.0.0.1:52300 {getpass.getuser()}@{hostname}")
         print(f"Open the private browser address stored in {browser_file} after forwarding the port.")
-    print("The application is ready. Use Stop app to stop it, or run the launcher to reopen it.")
+    print("The application is ready. Use Stop SuiteContainer to stop it, or run the launcher to reopen it.")
 
 
 def launch():

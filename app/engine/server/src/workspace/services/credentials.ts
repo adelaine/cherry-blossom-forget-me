@@ -6,6 +6,7 @@ import { credentialPath } from "../../common/mounts.ts";
 import type { ConfigurationService } from "./configuration.ts";
 import { message } from "../../common/errors.ts";
 import type { Vm } from "../../common/config.ts";
+import { browserAccountKey } from "../suitecloud-auth.ts";
 
 import type {
 	CredentialState,
@@ -126,6 +127,14 @@ export class CredentialsService {
 		}
 		auth["suitecloud-certificates"] = cert;
 		if (input.config !== undefined) this.config.save(input.config);
+		this.write(auth);
+	}
+	recordDeployment(vm: Vm, suiteapp: string): void {
+		const auth = this.read();
+		(auth["suitecloud-deployments"] ??= {})[browserAccountKey(vm)] = {
+			suiteapp,
+			completedAt: new Date().toISOString(),
+		};
 		this.write(auth);
 	}
 	write(auth: Auth): void {
