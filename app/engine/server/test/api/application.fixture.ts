@@ -14,6 +14,14 @@ interface ApiResponse<T> {
 	body: T;
 }
 
+export interface ApiError {
+	error: string;
+	code: string;
+	retryable: boolean;
+	details: Record<string, unknown>;
+}
+
+type Authentication = "browser" | "bearer" | "none";
 type ServerState = ReturnType<ServerLifecycle["services"]["status"]>;
 
 /** Exercise the real API and services without opening a network listener. */
@@ -30,15 +38,20 @@ export function createApplicationFixture(
 	const origin = "http://127.0.0.1:8080";
 	const headers = {
 		Host: "127.0.0.1:8080",
-		"X-Session-Token": lifecycle.session,
 		"Content-Type": "application/json",
-		Origin: origin,
 	};
 	async function request<T>(
 		path: string,
 		init: RequestInit = {},
+		authentication: Authentication = "browser",
 	): Promise<ApiResponse<T>> {
 		const requestHeaders = new Headers(headers);
+		if (authentication === "browser") {
+			requestHeaders.set("X-Session-Token", lifecycle.session);
+			requestHeaders.set("Origin", origin);
+		} else if (authentication === "bearer") {
+			requestHeaders.set("Authorization", "Bearer " + lifecycle.token);
+		}
 		new Headers(init.headers).forEach((value, name) => {
 			requestHeaders.set(name, value);
 		});
@@ -57,11 +70,16 @@ export function createApplicationFixture(
 		...workspace,
 		lifecycle,
 		request,
-		post<T = unknown>(path: string, input: object) {
-			return request<T>("/api/" + path, {
-				method: "POST",
-				body: JSON.stringify(input),
-			});
+		post<T = unknown>(
+			path: string,
+			input: object,
+			authentication: Authentication = "browser",
+		) {
+			return request<T>(
+				"/api/" + path,
+				{ method: "POST", body: JSON.stringify(input) },
+				authentication,
+			);
 		},
 		async finish<K extends "run" | "sql">(kind: K) {
 			for (let attempt = 0; attempt < 100; attempt++) {
