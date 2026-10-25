@@ -102,6 +102,36 @@ test(
 		assert.equal(restored.status().accounts[selectedKey]!.connected, true);
 		assert.equal(existsSync(temporary), false);
 		assert.equal(app.lifecycle.operations.busy(), false);
+		const discovery = await app.post<{ operationId: string; url: string }>(
+			"suitecloud/login",
+			{ url: selected.url },
+		);
+		assert.equal(discovery.status, 200);
+		await fixture.complete({
+			status: "SUCCESS",
+			data: {
+				accountInfo: {
+					companyId: "000099",
+					companyName: "Discovered company",
+					roleName: "Administrator",
+				},
+			},
+		});
+		assert.equal(
+			app.lifecycle.operations.get(discovery.body.operationId).state,
+			"succeeded",
+		);
+		const discovered = app.lifecycle.services.configuration.read();
+		assert.deepEqual((discovered.vms as typeof config.vms)[0], {
+			account: "000099",
+			url: selected.url,
+		});
+		assert.deepEqual((discovered.vms as typeof config.vms)[1], config.vms[1]);
+		const savedConnection =
+			app.lifecycle.services.authentication.status().accounts[
+				browserAccountKey({ account: "000099", url: selected.url })
+			];
+		assert.equal(savedConnection?.company, "Discovered company");
 	},
 );
 

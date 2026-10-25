@@ -93,7 +93,7 @@ test("browser sign-in opens synchronously, saves the current VM, and shows the c
 			if (request.path === "/api/suitecloud/login") {
 				calls.push("login");
 				assert.deepEqual(JSON.parse(String(request.options?.body)), {
-					targetId: "selected-target",
+					url: "edited.vm.eng.netsuite.com",
 				});
 				state = serverState({
 					config: saved!.config,
@@ -127,7 +127,7 @@ test("browser sign-in opens synchronously, saves the current VM, and shows the c
 	assert.deepEqual(submitted.vms[1], config.vms[1]);
 	finishSaving(serverState({ config: saved.config }));
 	await signingIn;
-	assert.deepEqual(calls, ["open", "save", "targets", "login"]);
+	assert.deepEqual(calls, ["open", "save", "login"]);
 	assert.deepEqual(popup.redirects, [
 		"https://edited.vm.eng.netsuite.com/login?session=fixture",
 	]);
@@ -164,6 +164,12 @@ test("browser sign-in opens synchronously, saves the current VM, and shows the c
 		"Signed in to Fixture company as Developer.",
 	);
 	assert.equal(view.element("suitecloud-sign-in").disabled, false);
+	assert.equal(view.element("vm-account").value, config.vms[0]!.account);
+	assert.equal(view.element("vm-account").disabled, true);
+	assert.match(
+		view.element("saved-connections").textContent,
+		/Fixture company.*Developer/,
+	);
 });
 
 test("cancelling sign-in targets its current operation and restores the sign-in controls", async (t) => {

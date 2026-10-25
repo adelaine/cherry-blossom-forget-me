@@ -22,6 +22,8 @@ export const Credentials = () => {
 	const runtime = useSite();
 	const next = runtime.snapshot;
 	const [draft, setDraft] = useState<CredentialDraft>();
+	const [connectionChoice, setConnectionChoice] = useState<string>();
+	const credentialDefaults = useRef<CredentialDraft | undefined>(undefined);
 	const [changingToken, setChangingToken] = useState(false);
 	const [message, setMessage] = useState("");
 	const [pending, setPending] = useState("");
@@ -42,7 +44,7 @@ export const Credentials = () => {
 	>(undefined);
 	const vmDisplay = useRef<VmDraft>({ url: "", account: "" });
 	const vmSource = useRef<string | undefined>(undefined);
-	const values: CredentialDraft = draft || {
+	const defaults: CredentialDraft = {
 		authenticationMethod:
 			next?.authentication?.method === "certificates"
 				? "certificates"
@@ -52,8 +54,11 @@ export const Credentials = () => {
 		id: next?.certificates.id || "",
 		token: "",
 	};
+	if (next && connectionChoice === undefined && !draft)
+		credentialDefaults.current = defaults;
+	const values = draft || credentialDefaults.current || defaults;
 	const disabled = runtime.disabled || !!pending;
-	if (vmSource.current !== runtime.configText) {
+	if (!connectionChoice && vmSource.current !== runtime.configText) {
 		try {
 			const vm = (
 				parseConfiguration(runtime.configText).vms as
@@ -68,13 +73,23 @@ export const Credentials = () => {
 			/* Keep the last VM fields while JSON is unfinished. */
 		}
 	}
-	const host = targetHost(runtime.configText);
+	const host = targetHost(
+		JSON.stringify({
+			vms: [{ ...vmDisplay.current, url: vmDisplay.current.url.trim() }],
+		}),
+	);
 	const certificateMode = values.authenticationMethod === "certificates";
 	const loginRunning = next?.authentication?.state === "running";
 	const account = Object.values(next?.authentication?.accounts ?? {}).find(
 		(value) =>
 			value.url === host && value.account === vmDisplay.current.account,
 	);
+	const connections = Object.entries(next?.authentication?.accounts ?? {});
+	const selectedConnection =
+		connectionChoice ??
+		(certificateMode
+			? ""
+			: (connections.find(([, value]) => value === account)?.[0] ?? ""));
 	const link = (path: string) => (host ? "https://" + host + path : undefined);
 
 	useEffect(
@@ -110,7 +125,7 @@ export const Credentials = () => {
 				if (config.vms !== undefined && !Array.isArray(config.vms))
 					throw new Error("Invalid VM settings.");
 				const vms = (config.vms ??= []) as unknown[];
-				vms[0] ??= { account: "000071", url: "" };
+				vms[0] ??= { account: "", url: "" };
 				if (!vms[0] || typeof vms[0] !== "object" || Array.isArray(vms[0]))
 					throw new Error("Invalid first VM.");
 				(vms[0] as Record<string, unknown>)[field] = value.trim();
@@ -160,9 +175,23 @@ export const Credentials = () => {
 		}
 	};
 
+	const applySetupVm = () => {
+		runtime.updateConfig((config) => {
+			if (config.vms !== undefined && !Array.isArray(config.vms))
+				throw new Error("Fix the VM list before saving this account.");
+			const vms = (config.vms ??= []) as VmDraft[];
+			vms[0] = {
+				...vms[0],
+				url: vmDisplay.current.url.trim(),
+				account: vmDisplay.current.account.trim(),
+			};
+		});
+	};
+
 	const save = () => {
-		const text = runtime.configText;
 		return perform("save", async (signal) => {
+			applySetupVm();
+			const text = runtime.configText;
 			const result = await runtime.api(
 				"credentials",
 				{ ...values, config: text },
@@ -170,6 +199,7 @@ export const Credentials = () => {
 				signal,
 			);
 			if (signal.aborted) return;
+			credentialDefaults.current = { ...values, token: "" };
 			setDraft(undefined);
 			runtime.setCredentialEditing(false);
 			setChangingToken(false);
@@ -177,6 +207,66 @@ export const Credentials = () => {
 			setMessage("Credentials and settings saved.");
 		});
 	};
+
+	const selectConnection = (id: string) => {
+		if (disabled) return;
+		const connection = next?.authentication?.accounts[id];
+		if (id && !connection) return;
+		if (!connection) {
+			vmSource.current = runtime.configText;
+			setConnectionChoice("");
+			runtime.setCredentialEditing(!!draft);
+			return;
+		}
+		return perform("connection", async (signal) => {
+			const saved = await runtime.api(
+				"credentials",
+				{ connectionId: id },
+				undefined,
+				signal,
+			);
+			if (signal.aborted) return;
+			setConnectionChoice(id);
+			runtime.saved(saved);
+			runtime.setCredentialEditing(false);
+		});
+	};
+
+	const reset = () =>
+		perform("reset", async (signal) => {
+			const saved = await runtime.api("state", undefined, undefined, signal);
+			if (signal.aborted) return;
+			const savedConfig = parseConfiguration(saved.config);
+			const vm = (savedConfig.vms as VmDraft[] | undefined)?.[0];
+			const formVm = { url: vm?.url ?? "", account: vm?.account ?? "" };
+			runtime.updateConfig((config) => {
+				if (config.vms !== undefined && !Array.isArray(config.vms))
+					throw new Error("Fix the VM list before resetting this account.");
+				const vms = (config.vms ??= []) as VmDraft[];
+				if (vm) vms[0] = { ...vm };
+				else vms.splice(0, 1);
+			});
+			const text = runtime.configText;
+			if (
+				JSON.stringify(parseConfiguration(text)) === JSON.stringify(savedConfig)
+			)
+				runtime.saved(saved, text);
+			else runtime.accept(saved);
+			vmDisplay.current = formVm;
+			vmSource.current = runtime.configText;
+			credentialDefaults.current = {
+				authenticationMethod: saved.authentication.method,
+				public: saved.certificates.public,
+				private: saved.certificates.private,
+				id: saved.certificates.id,
+				token: "",
+			};
+			setConnectionChoice("");
+			setDraft(undefined);
+			setChangingToken(false);
+			runtime.setCredentialEditing(false);
+			setMessage("Unsaved credential and account changes discarded.");
+		});
 
 	const generate = () => {
 		if (
@@ -195,6 +285,11 @@ export const Credentials = () => {
 			);
 			if (signal.aborted) return;
 			const editing = !!values.token.trim();
+			credentialDefaults.current = {
+				...values,
+				...result.certificates,
+				token: "",
+			};
 			setDraft(
 				editing
 					? {
@@ -253,6 +348,7 @@ export const Credentials = () => {
 		popup.opener = null;
 		return perform("login", async (signal) => {
 			try {
+				applySetupVm();
 				const text = runtime.configText;
 				const saved = await runtime.api(
 					"credentials",
@@ -261,20 +357,25 @@ export const Credentials = () => {
 					signal,
 				);
 				runtime.saved(saved, text);
+				credentialDefaults.current = { ...values, token: "" };
 				setDraft(undefined);
 				runtime.setCredentialEditing(false);
-				const { targets } = await runtime.api<{
-					targets: { id: string; account: string; url: string }[];
-				}>("targets", undefined, undefined, signal);
-				const target = targets.find(
-					(value) =>
-						value.url === host && value.account === vmDisplay.current.account,
-				);
-				if (!target)
-					throw new Error("Save a VM domain and account before signing in.");
+				let login: { targetId: string } | { url: string } = { url: host };
+				if (account) {
+					const { targets } = await runtime.api<{
+						targets: { id: string; account: string; url: string }[];
+					}>("targets", undefined, undefined, signal);
+					const target = targets.find(
+						(value) =>
+							value.url === host && value.account === vmDisplay.current.account,
+					);
+					if (!target)
+						throw new Error("Save a VM domain and account before signing in.");
+					login = { targetId: target.id };
+				}
 				const result = await runtime.api<{ url: string }>(
 					"suitecloud/login",
-					{ targetId: target.id },
+					login,
 					undefined,
 					signal,
 				);
@@ -307,7 +408,23 @@ export const Credentials = () => {
 			<h2 id="setup-heading">
 				<Icon name="building-2" /> NetSuite Account
 			</h2>
-			<article class="credentials-card">
+			<h3>Saved Connections</h3>
+			<select
+				id="saved-connections"
+				aria-label="Saved Connections"
+				value={selectedConnection}
+				onChange={(event) => selectConnection(event.currentTarget.value)}
+			>
+				<option value="">Set up a new account</option>
+				{connections.map(([id, connection]) => (
+					<option key={id} value={id}>
+						{`${connection.company} (${connection.account}) — ${connection.role} — ${connection.url}`}
+						{connection.connected ? "" : " — Sign in again"}
+					</option>
+				))}
+			</select>
+			<h3 hidden={!!selectedConnection}>Set Up New Account</h3>
+			<article class="credentials-card" hidden={!!selectedConnection}>
 				<ol class="credential-steps" role="list">
 					<li>
 						<details
@@ -364,8 +481,17 @@ export const Credentials = () => {
 									<input
 										id="vm-account"
 										spellcheck={false}
-										disabled={disabled}
-										value={vmDisplay.current.account}
+										disabled={disabled || !certificateMode}
+										placeholder={
+											certificateMode
+												? "Enter your account ID"
+												: "Filled automatically after sign-in"
+										}
+										value={
+											certificateMode || account
+												? vmDisplay.current.account
+												: ""
+										}
 										onInput={(event) =>
 											editVm("account", event.currentTarget.value)
 										}
@@ -705,6 +831,14 @@ export const Credentials = () => {
 					<fieldset>
 						<button id="credentials" disabled={disabled} onClick={save}>
 							Save credentials
+						</button>
+						<button
+							id="reset-credentials"
+							class="secondary outline"
+							disabled={disabled}
+							onClick={reset}
+						>
+							Reset
 						</button>
 					</fieldset>
 					<p id="credential-message" role="status">

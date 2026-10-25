@@ -7,6 +7,7 @@ export const credentialContracts: ApiContract[] = [
 		path: "/api/credentials",
 		schema: {
 			fields: {
+				connectionId: { type: "string" },
 				config: { type: "config" },
 				token: { type: "string" },
 				public: { type: "string" },
@@ -38,8 +39,9 @@ export const credentialContracts: ApiContract[] = [
 		method: "POST",
 		path: "/api/suitecloud/login",
 		schema: {
-			required: ["targetId"],
-			fields: { targetId: { type: "string" } },
+			description:
+				"Provide targetId for an existing target, or url to discover an account through browser sign-in.",
+			fields: { targetId: { type: "string" }, url: { type: "string" } },
 		},
 		responseFields: ["operationId", "url"],
 		cancelSupported: true,
@@ -65,6 +67,6 @@ export const credentialsApi = (
 		);
 	});
 	register(app, lifecycle, credentialContracts[3], (input) =>
-		lifecycle.services.authentication.start(input.targetId),
+		lifecycle.services.authentication.start(input.targetId, input.url),
 	);
 };
