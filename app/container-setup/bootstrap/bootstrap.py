@@ -386,6 +386,31 @@ def select_base_image(machine):
     return BASE_IMAGE
 
 
+def npm_ca_bundle(directory):
+    """Forward host certificate authorities for npm in Linux containers."""
+    ca = []
+    if WINDOWS:
+        certificates = {data for data, encoding, _ in ssl.enum_certificates("ROOT") if encoding == "x509_asn"}
+        ca.extend(ssl.DER_cert_to_PEM_cert(data) for data in sorted(certificates))
+    elif MACOS:
+        # The default search list includes login and system keychains; Apple's
+        # built-in roots are stored separately from that list.
+        for keychains in ((), ("/System/Library/Keychains/SystemRootCertificates.keychain",)):
+            result = command("security", "find-certificate", "-a", "-p", *keychains, capture=True)
+            ca.append(result.stdout)
+    extra = os.environ.get("NODE_EXTRA_CA_CERTS")
+    if extra:
+        try:
+            ca.append(Path(extra).expanduser().read_text(encoding="ascii"))
+        except (OSError, UnicodeError):
+            raise RuntimeError("Cannot read NODE_EXTRA_CA_CERTS. Check the certificate file and relaunch.") from None
+    if not any(ca):
+        return None
+    path = directory / "npm-ca.pem"
+    path.write_text("\n".join(ca), encoding="ascii")
+    return path
+
+
 def build_image(machine):
     base_image = select_base_image(machine)
     with tempfile.TemporaryDirectory(prefix="suitecontainer-build-") as directory:
@@ -406,6 +431,8 @@ def build_image(machine):
                       "npm-rootrc": PROJECT / ".npmrc", "npm-projectrc": engine_directory() / ".npmrc"}
         files = {}
         npm_environment = {key: value for key, value in environment.items() if key.lower().startswith("npm_config_")}
+        if environment.get("SUITECONTAINER_NPM_PUBLIC_FALLBACK") == "1":
+            npm_environment["SUITECONTAINER_NPM_PUBLIC_FALLBACK"] = "1"
         for identifier, candidate in candidates.items():
             if candidate and Path(candidate).is_file():
                 path = Path(candidate).resolve()
@@ -421,10 +448,8 @@ def build_image(machine):
             env_file = directory / "npm-env"
             env_file.write_bytes(b"".join(key.encode() + b"\0" + value.encode() + b"\0" for key, value in npm_environment.items()))
             files["npm-env"] = env_file
-        if WINDOWS:
-            certificates = {data for store in ("ROOT",) for data, encoding, _ in ssl.enum_certificates(store) if encoding == "x509_asn"}
-            ca_file = directory / "npm-ca.pem"
-            ca_file.write_text("".join(ssl.DER_cert_to_PEM_cert(data) for data in sorted(certificates)), encoding="ascii")
+        ca_file = npm_ca_bundle(directory)
+        if ca_file:
             files["npm-ca"] = ca_file
         secrets = []
         wsl = machine and machine.get("VMType") == "wsl"
@@ -533,6 +558,8 @@ def development_npm_inputs():
             "npm-rootrc": PROJECT / ".npmrc", "npm-projectrc": engine_directory() / ".npmrc",
         }
         variables = {key: value for key, value in environment.items() if key.lower().startswith("npm_config_")}
+        if environment.get("SUITECONTAINER_NPM_PUBLIC_FALLBACK") == "1":
+            variables["SUITECONTAINER_NPM_PUBLIC_FALLBACK"] = "1"
         files = {}
         for identifier, candidate in candidates.items():
             if not candidate or not Path(candidate).is_file():
@@ -548,11 +575,9 @@ def development_npm_inputs():
             secure_path(path)
             files["npm-env"] = path
         arguments = []
-        if WINDOWS:
-            certificates = {data for store in ("ROOT",) for data, encoding, _ in ssl.enum_certificates(store) if encoding == "x509_asn"}
-            path = directory / "npm-ca.pem"
-            path.write_text("".join(ssl.DER_cert_to_PEM_cert(data) for data in sorted(certificates)), encoding="ascii")
-            files["npm-ca"] = path
+        ca_file = npm_ca_bundle(directory)
+        if ca_file:
+            files["npm-ca"] = ca_file
             arguments += ["--env", "NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca"]
         for identifier, path in files.items():
             arguments += ["--mount", f"type=bind,src={path},dst=/run/secrets/{identifier},ro=true"]
