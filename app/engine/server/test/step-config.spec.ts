@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readConfig } from "../src/step-config.ts";
+import { readConfig } from "../src/workspace/config.ts";
 import { suiteapp, vms, withConfigFixture } from "./step-config.fixture.ts";
 
 test("loads configuration with separate credentials", () => {

@@ -13,7 +13,7 @@ type ServiceDefinitions = Awaited<
 const serverDirectory = dirname(fileURLToPath(import.meta.url));
 const appDirectory = resolve(serverDirectory, "..");
 const entry = resolve(serverDirectory, "src/main.ts");
-const serviceEntry = resolve(serverDirectory, "src/services/system.ts");
+const serviceEntry = resolve(serverDirectory, "src/common/services.ts");
 const ignored = [
 	"**/node_modules/**",
 	"**/dist/**",
@@ -54,7 +54,7 @@ export default defineConfig(() => {
 		return (
 			path.startsWith(source) &&
 			!path.includes("/api/") &&
-			!/\/(?:main|install|step-deploy|step-token)\.ts$|\/services\/operations\.ts$/.test(
+			!/\/(?:main|install|deploy|gitlab-token)\.ts$|\/common\/operations\.ts$/.test(
 				path,
 			)
 		);
@@ -264,7 +264,7 @@ export default defineConfig(() => {
 				handleHotUpdate({ file, server }) {
 					if (!lifecycle) return [];
 					const path = file.replaceAll("\\", "/");
-					if (file === entry || path.endsWith("/services/operations.ts")) {
+					if (file === entry || path.endsWith("/common/operations.ts")) {
 						pendingLaunch = true;
 						lifecycle.setRestartPending(
 							"Backend lifecycle or operation coordinator code changed. Run the launcher again while idle to restart this instance.",

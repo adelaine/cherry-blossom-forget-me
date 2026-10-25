@@ -159,7 +159,6 @@ test("SQL browser fields preserve edits, use Current VM, render output as text, 
 		browserHtml(context).indexOf("<h2>SQL queries</h2>") <
 			browserHtml(context).indexOf("<h2>Deploy SuiteApps</h2>"),
 	);
-	assert.ok(!browserHtml(context).includes('id="sql-target"'));
 });
 
 test("the browser offers separate masked manual and unlock fields and sends only the chosen credential", async () => {

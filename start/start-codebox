@@ -2,4 +2,4 @@
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-bash "$script_dir/../app/setup/bootstrap/start-suitecloud-codebox.sh" "$@"
+bash "$script_dir/../app/container-setup/bootstrap/start-suitecloud-codebox.sh" "$@"

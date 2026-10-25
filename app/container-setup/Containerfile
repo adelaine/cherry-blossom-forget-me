@@ -1,0 +1,83 @@
+# Oracle Linux 9 provides Instant Client packages for both x86_64 and aarch64.
+ARG SUITECONTAINER_BASE_IMAGE=container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24
+FROM ${SUITECONTAINER_BASE_IMAGE} AS tools
+
+ENV NODE_OPTIONS="--use-system-ca"
+
+USER root
+# Configure the repository directly because the release RPM is not available
+# for every architecture. Let the package manager select native client RPMs.
+RUN printf '%s\n' \
+      '[ol9_oracle_instantclient23]' \
+      'name=Oracle Instant Client for Oracle Linux 9 ($basearch)' \
+      'baseurl=https://yum.oracle.com/repo/OracleLinux/OL9/oracle/instantclient23/$basearch/' \
+      'gpgcheck=1' \
+      'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-oracle' \
+      'enabled=1' > /etc/yum.repos.d/oracle-instantclient.repo \
+    && if command -v dnf >/dev/null 2>&1; then \
+      dnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel \
+      && dnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus && dnf clean all; \
+    else \
+      microdnf install -y git openssl openssh-server openssh-clients shadow-utils ca-certificates java-21-openjdk-devel \
+      && microdnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus && microdnf clean all; \
+    fi
+RUN sqlplus -V
+
+# Accept the Oracle Free Use Terms and Conditions for unattended builds.
+ARG SUITECLOUD_CLI_ACCEPT_LICENSE=true
+# Supplied by the CodeBox launcher for the SDK download.
+ARG SUITECLOUD_PROXY=""
+COPY app/container-setup/node/run-npm.mjs /opt/suitecontainer/run-npm.mjs
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=type=secret,id=npm-rootrc --mount=type=secret,id=npm-projectrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
+    if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
+    && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
+    && test "$SUITECLOUD_CLI_ACCEPT_LICENSE" = true \
+    && SUITECLOUD_CLI_ACCEPT_LICENSE=true node /opt/suitecontainer/run-npm.mjs install -g --userconfig=/run/secrets/npmrc --allow-scripts=@oracle/suitecloud-cli @oracle/suitecloud-cli \
+    && test -n "$(find "$HOME/.suitecloud-sdk/cli" -maxdepth 1 -name '*.jar' -print -quit)" \
+    && node --version \
+    && java -version \
+    && javac -version \
+    && suitecloud --version
+
+COPY app/container-setup/suitecloud/BrowserHandoff.java /tmp/suitecloud-handoff/BrowserHandoff.java
+RUN cd /tmp/suitecloud-handoff \
+    && javac --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED BrowserHandoff.java \
+    && printf 'Premain-Class: BrowserHandoff\n' > manifest.mf \
+    && jar cfm /opt/suitecontainer/browser-handoff.jar manifest.mf BrowserHandoff*.class
+
+COPY app/container-setup/gitlab-askpass.sh /usr/local/bin/
+COPY app/container-setup/sftp/start.sh /usr/local/bin/start-sftp
+RUN chmod 755 /usr/local/bin/gitlab-askpass.sh \
+    && chmod 755 /usr/local/bin/start-sftp \
+    && useradd --uid 1000 --no-create-home --home-dir /files --shell /bin/sh files \
+    && mkdir -p /workspace /config /srv/sftp/files /run/sshd /run/sftp \
+    && chmod 755 /srv /srv/sftp
+
+WORKDIR /workspace
+ENTRYPOINT ["node", "/opt/suitecontainer/install.js"]
+
+# Development runs the mounted checkout. Dependencies and the Vite cache live
+# in the project-specific Linux volume mounted by the host launcher.
+FROM tools AS development
+WORKDIR /app
+ENTRYPOINT ["npm"]
+CMD ["run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]
+
+FROM tools AS build
+WORKDIR /app
+COPY app/engine/package.json app/engine/package-lock.json ./
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-globalrc --mount=type=secret,id=npm-rootrc --mount=type=secret,id=npm-projectrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-token --mount=type=secret,id=npm-ca \
+    if [ -f /run/secrets/npm-token ]; then export NSX_NPM_TOKEN="$(cat /run/secrets/npm-token)"; fi \
+    && if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
+    && node /opt/suitecontainer/run-npm.mjs ci --userconfig=/run/secrets/npmrc --ignore-scripts --no-audit --no-fund
+COPY app/engine/tsconfig.build.json ./tsconfig.build.json
+COPY app/engine/server/src ./server/src
+COPY app/engine/site/src ./site/src
+COPY app/engine/site/public ./site/public
+COPY app/engine/site/vite.config.ts app/engine/site/tsconfig.json ./site/
+COPY app/engine/tsconfig.json ./tsconfig.json
+COPY app/container-setup/node/copy-runtime.mjs /container-setup/node/copy-runtime.mjs
+RUN npm run build
+
+FROM tools AS production
+COPY --from=build /app/dist/ /opt/suitecontainer/

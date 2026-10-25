@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SQL_PASSWORD_SALT } from "../../src/sql-settings.ts";
-import { encryptSqlPassword } from "../../src/sql-password-crypto.ts";
+import { SQL_PASSWORD_SALT } from "../../src/tools/sql/settings.ts";
+import { encryptSqlPassword } from "../../src/tools/sql/password-crypto.ts";
 import { fixture } from "../main.fixture.ts";
 
 test("runs SQL using the saved password", async () => {

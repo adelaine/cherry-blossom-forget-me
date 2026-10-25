@@ -22,7 +22,7 @@ test(
 		);
 		execFileSync(
 			process.execPath,
-			[join(appDirectory, "../setup/node/copy-runtime.mjs"), appDirectory],
+			[join(appDirectory, "../container-setup/node/copy-runtime.mjs"), appDirectory],
 			{
 				cwd: appDirectory,
 				encoding: "utf8",

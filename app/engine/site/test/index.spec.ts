@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { runInNewContext } from "node:vm";
 import { readFileSync } from "node:fs";
-import { ACTIVITY_GRACE_MS } from "../../server/src/web-inactivity.ts";
+import { ACTIVITY_GRACE_MS } from "../../server/src/common/inactivity.ts";
 import { ansiToHtml, ansiStyles } from "../src/common/ansi.ts";
 import { deploymentPage } from "../src/web-page.ts";
 import { initializeBrowser } from "./browser-harness.ts";

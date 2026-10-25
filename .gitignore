@@ -13,7 +13,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-/app/setup/python/*.tar.gz
+/app/container-setup/python/*.tar.gz
 
 # Private SuiteContainer data
 /home/

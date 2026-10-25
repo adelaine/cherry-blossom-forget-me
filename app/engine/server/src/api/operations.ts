@@ -1,7 +1,7 @@
 import type { Context, Hono } from "hono";
 import type { ServerLifecycle } from "../main.ts";
-import { configObject } from "../services/configuration.ts";
-import { ServiceError } from "../services/errors.ts";
+import { configObject } from "../common/configuration.ts";
+import { ServiceError } from "../common/errors.ts";
 
 export interface RequestSchema {
 	required?: string[];

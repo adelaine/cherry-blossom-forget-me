@@ -108,3 +108,26 @@ export const systemApi = (app: ApiApp, lifecycle: ServerLifecycle): void => {
 		return { stopped: true };
 	});
 };
+
+/** Expose the existing unauthenticated instance health probe. */
+export function healthApi(app: ApiApp, lifecycle: ServerLifecycle): void {
+	app.get("/health", (c) =>
+		c.json(
+			c.req.query("activity") === "1"
+				? {
+						ready: true,
+						instanceId: lifecycle.instanceId,
+						busy: lifecycle.busy(),
+						localBusy:
+							lifecycle.operations
+								.list()
+								.some(
+									(op) =>
+										["preparing", "running"].includes(op.state) &&
+										op.kind !== "playwright",
+								) || lifecycle.services.playwright.starting,
+					}
+				: { ready: true },
+		),
+	);
+}

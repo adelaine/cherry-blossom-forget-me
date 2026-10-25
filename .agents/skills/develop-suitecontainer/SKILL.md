@@ -14,18 +14,20 @@ Do not turn a task in a hosted SuiteApp repository into a SuiteContainer source 
 
 | Location | Responsibility |
 | --- | --- |
-| `app/engine/site/src/features/` | Credentials, SuiteApps, settings, and deployment UI modules. |
+| `app/engine/site/src/workspace/` | Credentials, SuiteApps, settings, and deployment UI modules. |
 | `app/engine/site/src/tools/` | SQL, SFTP, and Playwright UI modules. |
 | `app/engine/site/src/layout/` | Shared page composition and appearance controls. |
 | `app/engine/site/src/common/` | Shared runtime, state, API, log, and module contracts. |
 | `app/engine/site/src/modules.ts` | Frontend module composition and shared style aggregation. |
 | `app/engine/server/src/api/` | Request contracts, schema parsing, and HTTP handlers. |
-| `app/engine/server/src/services/` | Domain behavior, shared state, operation coordination, and errors. |
-| `app/engine/server/src/main.ts` | Server lifecycle, authentication, middleware, and route registration. |
-| `app/engine/server/src/step-*.ts` | Existing configuration, authentication, cloning, and deployment steps. |
-| `app/setup/bootstrap/` and `start/` | Host bootstrap and platform entrypoints. |
-| `app/setup/Containerfile` | Container toolchain and development/production images. |
-| `app/setup/node/` and `app/setup/playwright/` | npm/runtime helpers and managed Playwright runner. |
+| `app/engine/server/src/workspace/services/` | Workspace configuration, credentials, repositories, and deployment services. |
+| `app/engine/server/src/tools/` | Self-contained SQL, SFTP, and Playwright implementations and public interfaces. |
+| `app/engine/server/src/common/` | Cross-area contracts, composition, operation tracking, and errors. |
+| `app/engine/server/src/main.ts` | Server lifecycle and application composition. |
+| `app/engine/server/src/workspace/` | Configuration, credentials, certificates, repositories, deployment, and offline launch workflows. |
+| `app/container-setup/bootstrap/` and `start/` | Host bootstrap and platform entrypoints. |
+| `app/container-setup/Containerfile` | Container toolchain and development/production images. |
+| `app/container-setup/node/` and `app/container-setup/playwright/` | npm/runtime helpers and managed Playwright runner. |
 | `app/engine/site/test/` and `app/engine/server/test/` | Existing targeted frontend and backend tests. |
 | `app/docs/` | User-facing documentation. |
 | `home/` | Private configuration, credentials, workspaces, and runtime state. |

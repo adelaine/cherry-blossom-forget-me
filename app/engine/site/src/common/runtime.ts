@@ -5,7 +5,7 @@ import { errorMessage, parseConfiguration, type ServerState } from "./state.ts";
 import {
 	ACTIVITY_GRACE_MS,
 	HEARTBEAT_INTERVAL_MS,
-} from "../../../server/src/web-inactivity.ts";
+} from "../../../server/src/common/inactivity.ts";
 
 export interface RuntimeEnvironment extends ApiEnvironment {
 	document: Pick<Document, "addEventListener" | "removeEventListener">;

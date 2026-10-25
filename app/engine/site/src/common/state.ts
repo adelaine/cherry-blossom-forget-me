@@ -1,4 +1,4 @@
-import type { Services } from "../../../server/src/services/system.ts";
+import type { Services } from "../../../server/src/common/services.ts";
 
 export type ServerState = ReturnType<Services["status"]>;
 export type Configuration = Record<string, unknown>;

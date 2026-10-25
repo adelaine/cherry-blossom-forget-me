@@ -27,6 +27,7 @@ test("completes a deployment", async (t) => {
 	try {
 		await app.post("generate", { replace: true });
 		await app.post("credentials", {
+			authenticationMethod: "certificates",
 			id: "certificate-id",
 			token: "fixture-token",
 		});
