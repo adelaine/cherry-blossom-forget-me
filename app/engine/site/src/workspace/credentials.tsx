@@ -441,7 +441,10 @@ export const Credentials = () => {
 				))}
 			</select>
 			<h3 hidden={!!selectedConnection}>Set Up New Account</h3>
-			<article class="credentials-card" hidden={!!selectedConnection}>
+			<article
+				class="credentials-card"
+				hidden={!!deployedConnection?.lastSuccessfulDeployment}
+			>
 				<ol class="credential-steps" role="list">
 					<li>
 						<details

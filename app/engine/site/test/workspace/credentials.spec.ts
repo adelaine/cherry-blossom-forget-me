@@ -97,7 +97,7 @@ test("Current VM preserves accounts, synchronizes JSON edits, and saves the sele
 	const selected = JSON.parse(state.config) as typeof config;
 	assert.deepEqual(selected.vms[0], config.vms[1]);
 	assert.equal(selected.vms.length, 2);
-	assert.equal(setupForm.hidden, true);
+	assert.equal(setupForm.hidden, false);
 	assert.equal(view.element("vm"), vmInput);
 	assert.equal(vmInput.value, domainDraft);
 	assert.equal(view.element("vm-account").value, accountDraft);
