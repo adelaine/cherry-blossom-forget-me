@@ -27,7 +27,7 @@ bash start/start-codebox --json --prepare-playwright
 ```
 
 This builds the workspace image from source, then a local runner image containing
-pinned Playwright, agent-browser, Chromium, full FFmpeg/ffprobe, browser runtime
+pinned Playwright, agent-browser, Chromium, full FFmpeg/ffprobe, Kokoro with Isabella’s voice, browser runtime
 libraries, fonts, and package managers. No manual container installations are required. Chromium is the prepared container browser; projects selecting
 the branded `chrome` channel need a separately prepared Chrome installation or
 the local Chrome mode described below. It reuses cached build layers and does
@@ -58,6 +58,38 @@ for recordings, then verify the final page and decode the full video with
 `ffmpeg -v error -xerror -i <video.webm> -f null -`.
 The CLI tools run inside the browser runner; no host browser installation is needed
 for container browser mode.
+
+## Offline voiceover
+
+The prepared runner includes Kokoro.js 1.2.1 with the Kokoro-82M v1.0 CPU model
+and Isabella (`bf_isabella`, British English) as the default voice.
+The quantized model, tokenizer, and Isabella voice are pinned to a model repository
+revision and checksum-verified during preparation.
+Preparation needs the configured npm registry and Hugging Face download access.
+Speech synthesis then runs locally with remote model loading disabled.
+Re-run explicit preparation to update an older image.
+
+Inside the runner, `kokoro` is on PATH, `KOKORO_MODEL` identifies the bundled model
+directory, and `KOKORO_VOICE` defaults to `bf_isabella`.
+Write a UTF-8 narration file, then generate a 24 kHz WAV:
+
+```shell
+kokoro --output_file /tmp/narration.wav < /tmp/narration.txt
+ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 /tmp/narration.wav
+```
+
+Use `--speed 1` for normal speaking speed or supply another positive multiplier.
+Use `--voice bf_isabella` to choose Isabella explicitly.
+Narration is processed sentence by sentence; a sentence exceeding the model’s context
+limit is rejected instead of silently truncating the script.
+
+Match recording scenes to the measured narration durations before using the full
+FFmpeg to combine the video and voiceover. Preserve the complete actions and narration
+when padding or trimming. Verify the final file contains both video and audio and decode
+it completely before sharing. Kokoro does not add audio to recordings automatically.
+The existing run endpoint continues to execute project tests.
+The runtime license and model download provenance are stored under
+`/usr/local/share/licenses/suitecontainer-kokoro/` in the image.
 
 ## Request the prepared runner
 

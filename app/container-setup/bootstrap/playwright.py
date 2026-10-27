@@ -213,7 +213,7 @@ class PlaywrightRunner:
                     if (directory / filename).is_file():
                         arguments += ["--secret", f"id={name},src={convert(directory / filename)}"]
                 arguments += ["-t", IMAGE, convert(self.project)]
-                print("Preparing Playwright, agent-browser, browsers, and full FFmpeg in the runner image...", flush=True)
+                print("Preparing Playwright, agent-browser, browsers, full FFmpeg, and Kokoro voice synthesis in the runner image...", flush=True)
                 if wsl:
                     self.podman("machine", "ssh", self.machine["Name"], "--", shlex.join(["podman", *arguments]))
                 else:

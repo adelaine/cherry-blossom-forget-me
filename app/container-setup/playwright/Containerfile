@@ -12,9 +12,9 @@ ENV NODE_OPTIONS="--use-system-ca" \
 
 # Playwright's dependency installer targets Debian; this runner uses Oracle Linux.
 RUN if command -v dnf >/dev/null 2>&1; then \
-      dnf install -y tar xz alsa-lib atk at-spi2-atk at-spi2-core cups-libs libXcomposite libXdamage libXfixes libXrandr libdrm libxkbcommon mesa-libgbm nss nss-tools pango dejavu-sans-fonts && dnf clean all; \
+      dnf install -y tar gzip xz alsa-lib atk at-spi2-atk at-spi2-core cups-libs libXcomposite libXdamage libXfixes libXrandr libdrm libxkbcommon mesa-libgbm nss nss-tools pango dejavu-sans-fonts && dnf clean all; \
     else \
-      microdnf install -y tar xz alsa-lib atk at-spi2-atk at-spi2-core cups-libs libXcomposite libXdamage libXfixes libXrandr libdrm libxkbcommon mesa-libgbm nss nss-tools pango dejavu-sans-fonts && microdnf clean all; \
+      microdnf install -y tar gzip xz alsa-lib atk at-spi2-atk at-spi2-core cups-libs libXcomposite libXdamage libXfixes libXrandr libdrm libxkbcommon mesa-libgbm nss nss-tools pango dejavu-sans-fonts && microdnf clean all; \
     fi
 
 COPY app/container-setup/node/run-npm.mjs /opt/suitecontainer-playwright/run-npm.mjs
@@ -36,6 +36,21 @@ RUN --mount=type=secret,id=npm-ca \
     && NODE_USE_ENV_PROXY=1 node install-tools.mjs \
     && agent-browser --version \
     && ffmpeg -version && ffprobe -version
+
+# Keep the CPU model and Isabella voice local for offline narration.
+ENV KOKORO_MODEL="/opt/suitecontainer-playwright/kokoro-model" \
+    KOKORO_VOICE="bf_isabella"
+COPY app/container-setup/playwright/install-kokoro.mjs /opt/suitecontainer-playwright/install-kokoro.mjs
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-ca \
+    if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
+    && node run-npm.mjs install --save-exact kokoro-js@1.2.1 @huggingface/transformers@3.5.1 \
+         --ignore-scripts --no-audit --no-fund \
+    && NODE_USE_ENV_PROXY=1 node install-kokoro.mjs
+
+COPY app/container-setup/playwright/kokoro.mjs /opt/suitecontainer-playwright/kokoro.mjs
+RUN chmod 755 /opt/suitecontainer-playwright/kokoro.mjs \
+    && ln -s /opt/suitecontainer-playwright/kokoro.mjs /usr/local/bin/kokoro \
+    && kokoro --help
 
 COPY app/container-setup/playwright/start.sh /opt/suitecontainer-playwright/start.sh
 COPY app/container-setup/playwright/server.mjs /opt/suitecontainer-playwright/server.mjs
