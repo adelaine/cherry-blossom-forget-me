@@ -31,7 +31,8 @@ IMAGE = "suitecontainer-workspace"
 DEVELOPER_IMAGE = "container-registry.eng.netsuite.com/oracle/oraclelinux9-nodejs:24"
 BASE_IMAGE = "ghcr.io/oracle/oraclelinux9-nodejs:24"
 OWNER = "suitecontainer.project"
-OPTIONS = argparse.Namespace(dev=False, no_browser=False, non_interactive=False, json=False, project=None)
+OPTIONS = argparse.Namespace(dev=False, no_browser=False, non_interactive=False, json=False, project=None,
+                             playwright=False, playwright_browser=None, prepare_playwright=False)
 TOOLS_LABEL = "suitecontainer.tools"
 DEPENDENCIES_LABEL = "suitecontainer.dependencies"
 
@@ -610,7 +611,7 @@ console.log(state.busy?'busy':'idle');"""
 def playwright_runner(name, machine, info):
     config = json.loads((home_directory() / "config/suitecontainer.json").read_text(encoding="utf-8-sig"))
     previous = (info or {}).get("Config", {}).get("Env", [])
-    requested = OPTIONS.playwright or OPTIONS.playwright_browser is not None
+    requested = OPTIONS.prepare_playwright or OPTIONS.playwright or OPTIONS.playwright_browser is not None
     if not requested and not any(item.startswith("SUITECONTAINER_PLAYWRIGHT_URL=") for item in previous):
         return None
     spec = importlib.util.spec_from_file_location("suitecontainer_playwright", Path(__file__).with_name("playwright.py"))
@@ -619,7 +620,7 @@ def playwright_runner(name, machine, info):
     return module.PlaywrightRunner(project=PROJECT, app_name=name, machine=machine, config=config, app_info=info,
                                    podman=podman, command=command, windows=WINDOWS, macos=MACOS,
                                    machine_path=machine_path, inspect_container=inspect, confirm_owner=confirm_owner, owner=OWNER,
-                                   browser=OPTIONS.playwright_browser)
+                                   browser=OPTIONS.playwright_browser, workspace_image=IMAGE)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -759,6 +760,10 @@ def launch():
     info = inspect(name)
     if info:
         confirm_owner(info)
+    if OPTIONS.prepare_playwright:
+        runner = playwright_runner(name, machine, info)
+        image_id = runner.prepare_image(pm_mode())
+        return {"prepared": True, "image": "suitecontainer-playwright", "imageId": image_id, "started": False}
     source_available = (engine_directory() / "package.json").is_file() and (container_setup_directory() / "Containerfile").is_file()
     if OPTIONS.dev and not source_available:
         raise RuntimeError("Development mode requires the application source checkout.")
@@ -811,7 +816,7 @@ def launch():
             raise RuntimeError("Could not compare the running app with the updated image. The running app was left untouched.")
         replace_app = replace_app or current_image != running_image
     if runner:
-        runner.plan(shared_image_mode)
+        runner.plan()
         replace_app = replace_app or runner.app_changed
     if running and (replace_app or (runner and runner.runner_changed)):
         runner_stopped = bool(runner and (not runner.info or not runner.info.get("State", {}).get("Running")))
@@ -853,6 +858,8 @@ def main(args=()):
     global PROJECT, OPTIONS, IMAGE
     parser = argparse.ArgumentParser(description="Start the SuiteContainer environment and discover its shared API.")
     parser.add_argument("--dev", action="store_true")
+    parser.add_argument("--prepare-playwright", action="store_true",
+                        help="Prepare or load the Playwright runner image once, without starting the app or runner.")
     parser.add_argument("--playwright", action="store_true", help="Start the Playwright runner without saved project settings.")
     parser.add_argument("--playwright-browser", choices=("container", "local-chrome"),
                         help="Start Playwright using this browser mode; local-chrome also starts its SSH forward service.")

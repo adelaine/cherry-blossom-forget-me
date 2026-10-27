@@ -18,7 +18,29 @@ with the runner container taking the place of Codebox.
 
 Chrome opens in a separate test profile. Your regular Chrome window is not used.
 
-## 1. Request the runner from the launcher
+## 1. Prepare once, then request the runner
+
+After preparing the normal SuiteContainer workspace image, prepare the runner once:
+
+```shell
+bash start/start-codebox --json --prepare-playwright
+```
+
+This builds a local runner image containing pinned Playwright, Chromium, and the
+package managers. Chromium is the prepared container browser; projects selecting
+the branded `chrome` channel need a separately prepared Chrome installation or
+the local Chrome mode described below. It reuses the cached SuiteContainer workspace image; it does
+not download the Microsoft Playwright base image. Preparation can download tools
+and browsers. It does not start, stop, or replace a running app or runner.
+For an image-only distribution, this explicit step loads
+`home/container-image/suitecontainer-playwright.tar` instead.
+
+Ordinary runner startup uses only the prepared local image, with image pulling
+disabled. If it is missing, startup explains how to prepare it and leaves existing
+containers alone. Re-run preparation explicitly to update the runner image.
+SuiteContainer's main application startup behavior is unchanged.
+
+## Request the prepared runner
 
 Playwright no longer uses saved project settings. Start the runner explicitly:
 

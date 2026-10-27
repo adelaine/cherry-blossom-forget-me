@@ -9,6 +9,7 @@ import secrets
 import shlex
 import shutil
 import ssl
+import tempfile
 
 
 IMAGE = "suitecontainer-playwright"
@@ -53,7 +54,7 @@ def discover_package_directories(checkouts):
 
 class PlaywrightRunner:
     def __init__(self, *, project, app_name, machine, config, app_info, podman, command,
-                 windows, macos, machine_path, inspect_container, confirm_owner, owner, browser=None):
+                 windows, macos, machine_path, inspect_container, confirm_owner, owner, browser=None, workspace_image="suitecontainer-workspace"):
         self.project, self.app_name, self.machine = project, app_name, machine
         self.home = project / "home"
         self.config, self.app_info = config, app_info
@@ -61,6 +62,7 @@ class PlaywrightRunner:
         self.windows, self.macos, self.machine_path = windows, macos, machine_path
         self.inspect_container, self.confirm_owner, self.owner = inspect_container, confirm_owner, owner
         self.requested_browser = browser
+        self.workspace_image = workspace_image
         self.name = app_name + "-playwright"
         self.network = app_name + "-network"
         self.info = None
@@ -186,41 +188,63 @@ class PlaywrightRunner:
                 raise RuntimeError(f"The environment setting {key} cannot be passed to Playwright.")
         return "".join(f"{key}={value}\n" for key, value in values.items())
 
-    def ensure_image(self, shared_image_mode, ca_path):
+    def prepare_image(self, shared_image_mode):
+        """Explicit one-time preparation; ordinary runner startup never calls this."""
         source = self.project / "app/container-setup/playwright/Containerfile"
         if source.is_file() and not shared_image_mode:
-            wsl = self.machine and self.machine.get("VMType") == "wsl"
-            convert = self.machine_path if wsl else str
-            arguments = ["build", "-f", convert(source), "--ignorefile", convert(self.project / "app/container-setup/.containerignore")]
-            if ca_path:
-                arguments += ["--secret", f"id=npm-ca,src={convert(ca_path)}"]
-            arguments += ["-t", IMAGE, convert(self.project)]
-            print("Preparing the Playwright container...", flush=True)
-            if wsl:
-                self.podman("machine", "ssh", self.machine["Name"], "--", shlex.join(["podman", *arguments]))
-            else:
-                self.podman(*arguments)
+            base = self.podman("image", "exists", self.workspace_image, optional=True)
+            if base.returncode == 1:
+                raise RuntimeError("Prepare the SuiteContainer workspace image first, then run --prepare-playwright again.")
+            if base.returncode:
+                raise RuntimeError("Could not inspect the cached SuiteContainer workspace image.")
+            npmrc, ca, forwarded = self.npm_configuration()
+            with tempfile.TemporaryDirectory(prefix="suitecontainer-playwright-build-") as temporary:
+                directory = Path(temporary)
+                self.write_private(directory / "npmrc", npmrc.replace(f"cafile={RUNTIME}/ca.pem", "cafile=/run/secrets/npm-ca"))
+                self.write_private(directory / "npm-env", "".join(f"{key}\0{value}\0" for key, value in forwarded.items()))
+                if ca:
+                    self.write_private(directory / "ca.pem", ca)
+                wsl = self.machine and self.machine.get("VMType") == "wsl"
+                convert = self.machine_path if wsl else str
+                arguments = ["build", "--pull=never", "-f", convert(source),
+                             "--ignorefile", convert(self.project / "app/container-setup/.containerignore"),
+                             "--build-arg", f"SUITECONTAINER_BASE_IMAGE={self.workspace_image}"]
+                for name, filename in (("npmrc", "npmrc"), ("npm-env", "npm-env"), ("npm-ca", "ca.pem")):
+                    if (directory / filename).is_file():
+                        arguments += ["--secret", f"id={name},src={convert(directory / filename)}"]
+                arguments += ["-t", IMAGE, convert(self.project)]
+                print("Preparing Playwright and browsers once in the runner image...", flush=True)
+                if wsl:
+                    self.podman("machine", "ssh", self.machine["Name"], "--", shlex.join(["podman", *arguments]))
+                else:
+                    self.podman(*arguments)
         else:
-            image = self.podman("image", "exists", IMAGE, optional=True)
             archive = self.home / "container-image/suitecontainer-playwright.tar"
-            if image.returncode == 1 and archive.is_file():
-                print(f"Loading the shared Playwright image from {archive}...", flush=True)
+            if archive.is_file():
+                print(f"Loading the prepared Playwright image from {archive}...", flush=True)
                 self.podman("load", "-i", archive)
-                image = self.podman("image", "exists", IMAGE, optional=True)
-            if image.returncode == 1:
-                raise RuntimeError(f"Copy the shared {IMAGE} image archive to {archive}, then relaunch.")
-            if image.returncode:
-                raise RuntimeError("Could not check the local Playwright image. Check the Podman connection and relaunch.")
+            elif self.podman("image", "exists", IMAGE, optional=True).returncode == 1:
+                raise RuntimeError(f"Copy the prepared {IMAGE} image archive to {archive}, then run --prepare-playwright.")
+        return self.ensure_image()
+
+    def ensure_image(self):
+        """Use a prepared local image without building, loading, or pulling one."""
+        image = self.podman("image", "exists", IMAGE, optional=True)
+        if image.returncode == 1:
+            raise RuntimeError("Playwright is not prepared. Run the launcher with --prepare-playwright once, then start with --playwright.")
+        if image.returncode:
+            raise RuntimeError("Could not check the prepared Playwright image. Check the Podman connection.")
         image_id = self.podman("image", "inspect", IMAGE, "--format", "{{.Id}}", capture=True).stdout.strip().removeprefix("sha256:")
         if not image_id:
-            raise RuntimeError("Could not read the Playwright image ID. The existing containers were left untouched.")
+            raise RuntimeError("Could not read the prepared Playwright image ID. Existing containers were left untouched.")
         return image_id
 
-    def plan(self, shared_image_mode):
+    def plan(self):
         previous = environment(self.app_info)
         self.info = self.inspect_container(self.name)
         if self.info:
             self.confirm_owner(self.info)
+        image_id = self.ensure_image()
         self.browser = self.requested_browser or environment(self.info).get("SUITECONTAINER_PLAYWRIGHT_BROWSER", "container")
         local_paths = self.workspace_mounts()
         self.package_directories = discover_package_directories(self.checkouts)
@@ -253,7 +277,6 @@ class PlaywrightRunner:
             self.write_private(self.directory / "ca.pem", ca)
         self.write_private(self.directory / "runner.env", self.env_contents(runner_environment))
         self.write_private(self.directory / "app.env", self.env_contents(app_environment))
-        image_id = self.ensure_image(shared_image_mode, self.directory / "ca.pem" if ca else None)
         self.fingerprint = digest
         self.runner_changed = not self.info or not self.info.get("State", {}).get("Running") or (self.info["Config"].get("Labels") or {}).get(CONFIG_LABEL) != digest or str(self.info.get("Image") or "").removeprefix("sha256:") != image_id
         self.app_changed = any(previous.get(key) != value for key, value in app_environment.items())
@@ -294,7 +317,7 @@ class PlaywrightRunner:
                 self.podman("stop", self.name, capture=True)
             self.podman("rm", self.name, capture=True)
         print("Starting the Playwright container...", flush=True)
-        self.podman("run", "-d", "--name", self.name, "--network", self.network,
+        self.podman("run", "--pull=never", "-d", "--name", self.name, "--network", self.network,
                     "--label", f"{self.owner}={self.project}", "--label", f"{CONFIG_LABEL}={self.fingerprint}",
                     "--cgroups=disabled", "--init", "--shm-size=1g", "--env-file", self.directory / "runner.env", *mounts, IMAGE, capture=True)
         if self.browser == "local-chrome":

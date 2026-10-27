@@ -1,69 +1,24 @@
-FROM mcr.microsoft.com/playwright:v1.64.0-noble
+# Reuse the prepared SuiteContainer toolchain and browser libraries.
+# This image is built only by the explicit --prepare-playwright operation.
+ARG SUITECONTAINER_BASE_IMAGE=localhost/suitecontainer-workspace:latest
+FROM ${SUITECONTAINER_BASE_IMAGE}
 
 USER root
-ARG NODE_VERSION=24.20.0
 ENV NODE_OPTIONS="--use-system-ca" \
-    COREPACK_NPM_REGISTRY="https://repository.eng.netsuite.com/repository/npm-public-stable" \
-    COREPACK_ENABLE_DOWNLOAD_PROMPT="0" \
-    npm_config_store_dir="/pnpm/store" \
-    PATH="/opt/node/bin:${PATH}"
+    PLAYWRIGHT_BROWSERS_PATH="/opt/suitecontainer-playwright/browsers" \
+    npm_config_store_dir="/pnpm/store"
 
-# Keep the package managers aligned with the internal pnpm workstation guide.
-# The CA bundle contains public certificates; apt's sandbox user must read it.
-RUN --mount=type=secret,id=npm-ca,mode=0444 \
-    if [ -f /run/secrets/npm-ca ]; then \
-      export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; \
-      export CURL_CA_BUNDLE=/run/secrets/npm-ca; \
-      printf 'Acquire::https::CaInfo "/run/secrets/npm-ca";\n' > /tmp/suitecontainer-apt.conf; \
-      export APT_CONFIG=/tmp/suitecontainer-apt.conf; \
-    fi \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git xz-utils \
-    && rm -rf /var/lib/apt/lists/* \
-    && case "$(dpkg --print-architecture)" in \
-         amd64) node_arch=x64 ;; \
-         arm64) node_arch=arm64 ;; \
-         *) echo "Unsupported Node architecture" >&2; exit 1 ;; \
-       esac \
-    && curl --fail --show-error --location \
-         "https://repository.eng.netsuite.com/content/repositories/nodejs/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" \
-         --output /tmp/node.tar.xz \
-    && mkdir -p /opt/node \
-    && tar -xJf /tmp/node.tar.xz --strip-components=1 -C /opt/node \
-    && rm /tmp/node.tar.xz \
-    && npm install --global corepack@0.36.0 --registry="$COREPACK_NPM_REGISTRY" \
-    && corepack enable npm pnpm \
-    && corepack install --global npm@10.9.4 pnpm@10.28.1 \
-    && mkdir -p /workspace /pnpm/store /run/playwright \
-    && rm -f /tmp/suitecontainer-apt.conf
+COPY app/container-setup/node/run-npm.mjs /opt/suitecontainer-playwright/run-npm.mjs
+WORKDIR /opt/suitecontainer-playwright
 
-# SuiteApp CI configurations select the branded Chrome channel on Linux x64.
-RUN --mount=type=secret,id=npm-ca,mode=0444 \
-    set -eu; \
-    set --; \
-    if [ "$(dpkg --print-architecture)" = amd64 ]; then \
-      if [ -f /run/secrets/npm-ca ]; then \
-        export CURL_CA_BUNDLE=/run/secrets/npm-ca; \
-        set -- -o Acquire::https::CaInfo=/run/secrets/npm-ca; \
-      fi; \
-      apt-get "$@" update \
-      && curl --fail --show-error --location \
-           https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-           --output /tmp/google-chrome.deb \
-      && apt-get "$@" install -y --no-install-recommends /tmp/google-chrome.deb \
-      && rm -f /tmp/google-chrome.deb \
-      && rm -rf /var/lib/apt/lists/*; \
-    fi
-
-RUN --mount=type=secret,id=npm-ca,mode=0444 \
-    set -eu; \
-    set --; \
-    if [ -f /run/secrets/npm-ca ]; then \
-      set -- -o Acquire::https::CaInfo=/run/secrets/npm-ca; \
-    fi; \
-    apt-get "$@" update \
-    && apt-get "$@" install -y --no-install-recommends openssh-server \
-    && rm -rf /var/lib/apt/lists/*
+# Credentials exist only as build secrets. Pin the runner's tools and browsers.
+RUN --mount=type=secret,id=npmrc --mount=type=secret,id=npm-env --mount=type=secret,id=npm-ca \
+    if [ -f /run/secrets/npm-ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm-ca; fi \
+    && node run-npm.mjs install --global npm@10.9.4 pnpm@10.28.1 \
+         --ignore-scripts --no-audit --no-fund --allow-remote=all \
+    && node run-npm.mjs install --save-exact playwright@1.64.0 --ignore-scripts --no-audit --no-fund \
+    && node node_modules/playwright/cli.js install chromium \
+    && mkdir -p /workspace /pnpm/store /run/playwright
 
 COPY app/container-setup/playwright/start.sh /opt/suitecontainer-playwright/start.sh
 COPY app/container-setup/playwright/server.mjs /opt/suitecontainer-playwright/server.mjs
