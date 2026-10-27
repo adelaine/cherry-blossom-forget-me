@@ -26,14 +26,10 @@ export const hasLocalCheckout = (directory: string): boolean => {
 	);
 };
 
-export const cloneRepos = (repos: SuiteApp[], pmMode = false): void => {
+export const cloneRepos = (repos: SuiteApp[]): void => {
 	for (const repo of repos) {
-		if (repo.localPath || pmMode) {
+		if (repo.localPath) {
 			if (!hasLocalCheckout(repo.directory)) {
-				if (!repo.localPath)
-					throw new Error(
-						`Place a local checkout in repos/${repo.directory} or set its localPath before continuing.`,
-					);
 				throw new Error(
 					`SuiteApp ${repo.directory} localPath is not a Git checkout: ${repo.localPath}`,
 				);

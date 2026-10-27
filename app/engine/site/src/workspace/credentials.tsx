@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import {
 	errorMessage,
@@ -21,6 +22,8 @@ export const Credentials = () => {
 	const runtime = useSite();
 	const next = runtime.snapshot;
 	const [draft, setDraft] = useState<CredentialDraft>();
+	const [connectionChoice, setConnectionChoice] = useState<string>();
+	const credentialDefaults = useRef<CredentialDraft | undefined>(undefined);
 	const [changingToken, setChangingToken] = useState(false);
 	const [message, setMessage] = useState("");
 	const [pending, setPending] = useState("");
@@ -41,7 +44,7 @@ export const Credentials = () => {
 	>(undefined);
 	const vmDisplay = useRef<VmDraft>({ url: "", account: "" });
 	const vmSource = useRef<string | undefined>(undefined);
-	const values: CredentialDraft = draft || {
+	const defaults: CredentialDraft = {
 		authenticationMethod:
 			next?.authentication?.method === "certificates"
 				? "certificates"
@@ -51,8 +54,11 @@ export const Credentials = () => {
 		id: next?.certificates.id || "",
 		token: "",
 	};
+	if (next && connectionChoice === undefined && !draft)
+		credentialDefaults.current = defaults;
+	const values = draft || credentialDefaults.current || defaults;
 	const disabled = runtime.disabled || !!pending;
-	if (vmSource.current !== runtime.configText) {
+	if (!connectionChoice && vmSource.current !== runtime.configText) {
 		try {
 			const vm = (
 				parseConfiguration(runtime.configText).vms as
@@ -67,13 +73,26 @@ export const Credentials = () => {
 			/* Keep the last VM fields while JSON is unfinished. */
 		}
 	}
-	const host = targetHost(runtime.configText);
+	const host = targetHost(
+		JSON.stringify({
+			vms: [{ ...vmDisplay.current, url: vmDisplay.current.url.trim() }],
+		}),
+	);
 	const certificateMode = values.authenticationMethod === "certificates";
 	const loginRunning = next?.authentication?.state === "running";
 	const account = Object.values(next?.authentication?.accounts ?? {}).find(
 		(value) =>
 			value.url === host && value.account === vmDisplay.current.account,
 	);
+	const connections = Object.entries(next?.authentication?.accounts ?? {});
+	const selectedConnection =
+		connectionChoice ??
+		(certificateMode
+			? ""
+			: (connections.find(([, value]) => value === account)?.[0] ?? ""));
+	const deployedConnection = selectedConnection
+		? next?.authentication.accounts[selectedConnection]
+		: undefined;
 	const link = (path: string) => (host ? "https://" + host + path : undefined);
 
 	useEffect(
@@ -109,7 +128,7 @@ export const Credentials = () => {
 				if (config.vms !== undefined && !Array.isArray(config.vms))
 					throw new Error("Invalid VM settings.");
 				const vms = (config.vms ??= []) as unknown[];
-				vms[0] ??= { account: "000071", url: "" };
+				vms[0] ??= { account: "", url: "" };
 				if (!vms[0] || typeof vms[0] !== "object" || Array.isArray(vms[0]))
 					throw new Error("Invalid first VM.");
 				(vms[0] as Record<string, unknown>)[field] = value.trim();
@@ -159,9 +178,23 @@ export const Credentials = () => {
 		}
 	};
 
+	const applySetupVm = () => {
+		runtime.updateConfig((config) => {
+			if (config.vms !== undefined && !Array.isArray(config.vms))
+				throw new Error("Fix the VM list before saving this account.");
+			const vms = (config.vms ??= []) as VmDraft[];
+			vms[0] = {
+				...vms[0],
+				url: vmDisplay.current.url.trim(),
+				account: vmDisplay.current.account.trim(),
+			};
+		});
+	};
+
 	const save = () => {
-		const text = runtime.configText;
 		return perform("save", async (signal) => {
+			applySetupVm();
+			const text = runtime.configText;
 			const result = await runtime.api(
 				"credentials",
 				{ ...values, config: text },
@@ -169,6 +202,7 @@ export const Credentials = () => {
 				signal,
 			);
 			if (signal.aborted) return;
+			credentialDefaults.current = { ...values, token: "" };
 			setDraft(undefined);
 			runtime.setCredentialEditing(false);
 			setChangingToken(false);
@@ -176,6 +210,66 @@ export const Credentials = () => {
 			setMessage("Credentials and settings saved.");
 		});
 	};
+
+	const selectConnection = (id: string) => {
+		if (disabled) return;
+		const connection = next?.authentication?.accounts[id];
+		if (id && !connection) return;
+		if (!connection) {
+			vmSource.current = runtime.configText;
+			setConnectionChoice("");
+			runtime.setCredentialEditing(!!draft);
+			return;
+		}
+		return perform("connection", async (signal) => {
+			const saved = await runtime.api(
+				"credentials",
+				{ connectionId: id },
+				undefined,
+				signal,
+			);
+			if (signal.aborted) return;
+			setConnectionChoice(id);
+			runtime.saved(saved);
+			runtime.setCredentialEditing(false);
+		});
+	};
+
+	const reset = () =>
+		perform("reset", async (signal) => {
+			const saved = await runtime.api("state", undefined, undefined, signal);
+			if (signal.aborted) return;
+			const savedConfig = parseConfiguration(saved.config);
+			const vm = (savedConfig.vms as VmDraft[] | undefined)?.[0];
+			const formVm = { url: vm?.url ?? "", account: vm?.account ?? "" };
+			runtime.updateConfig((config) => {
+				if (config.vms !== undefined && !Array.isArray(config.vms))
+					throw new Error("Fix the VM list before resetting this account.");
+				const vms = (config.vms ??= []) as VmDraft[];
+				if (vm) vms[0] = { ...vm };
+				else vms.splice(0, 1);
+			});
+			const text = runtime.configText;
+			if (
+				JSON.stringify(parseConfiguration(text)) === JSON.stringify(savedConfig)
+			)
+				runtime.saved(saved, text);
+			else runtime.accept(saved);
+			vmDisplay.current = formVm;
+			vmSource.current = runtime.configText;
+			credentialDefaults.current = {
+				authenticationMethod: saved.authentication.method,
+				public: saved.certificates.public,
+				private: saved.certificates.private,
+				id: saved.certificates.id,
+				token: "",
+			};
+			setConnectionChoice("");
+			setDraft(undefined);
+			setChangingToken(false);
+			runtime.setCredentialEditing(false);
+			setMessage("Unsaved credential and account changes discarded.");
+		});
 
 	const generate = () => {
 		if (
@@ -194,6 +288,11 @@ export const Credentials = () => {
 			);
 			if (signal.aborted) return;
 			const editing = !!values.token.trim();
+			credentialDefaults.current = {
+				...values,
+				...result.certificates,
+				token: "",
+			};
 			setDraft(
 				editing
 					? {
@@ -252,6 +351,7 @@ export const Credentials = () => {
 		popup.opener = null;
 		return perform("login", async (signal) => {
 			try {
+				applySetupVm();
 				const text = runtime.configText;
 				const saved = await runtime.api(
 					"credentials",
@@ -260,20 +360,25 @@ export const Credentials = () => {
 					signal,
 				);
 				runtime.saved(saved, text);
+				credentialDefaults.current = { ...values, token: "" };
 				setDraft(undefined);
 				runtime.setCredentialEditing(false);
-				const { targets } = await runtime.api<{
-					targets: { id: string; account: string; url: string }[];
-				}>("targets", undefined, undefined, signal);
-				const target = targets.find(
-					(value) =>
-						value.url === host && value.account === vmDisplay.current.account,
-				);
-				if (!target)
-					throw new Error("Save a VM domain and account before signing in.");
+				let login: { targetId: string } | { url: string } = { url: host };
+				if (account) {
+					const { targets } = await runtime.api<{
+						targets: { id: string; account: string; url: string }[];
+					}>("targets", undefined, undefined, signal);
+					const target = targets.find(
+						(value) =>
+							value.url === host && value.account === vmDisplay.current.account,
+					);
+					if (!target)
+						throw new Error("Save a VM domain and account before signing in.");
+					login = { targetId: target.id };
+				}
 				const result = await runtime.api<{ url: string }>(
 					"suitecloud/login",
-					{ targetId: target.id },
+					login,
 					undefined,
 					signal,
 				);
@@ -303,22 +408,86 @@ export const Credentials = () => {
 
 	return (
 		<section id="credentials-section" aria-labelledby="setup-heading">
-			<h2 id="setup-heading">Setup</h2>
-			<article class="credentials-card">
+			<h2 id="setup-heading">
+				<Icon name="building-2" /> NetSuite Account
+			</h2>
+			<h3 hidden={connections.length === 0}>Saved Connections</h3>
+			{deployedConnection?.lastSuccessfulDeployment && (
+				<blockquote
+					class="status-message"
+					id="connection-deployment-status"
+					role="status"
+				>
+					Successful deployment access to {deployedConnection.company} (
+					{deployedConnection.account})
+				</blockquote>
+			)}
+			<select
+				id="saved-connections"
+				aria-label="Saved Connections"
+				hidden={connections.length === 0}
+				disabled={
+					next?.run.state === "running" || runtime.pending.has("deployment")
+				}
+				value={selectedConnection}
+				onChange={(event) => selectConnection(event.currentTarget.value)}
+			>
+				<option value="">Set up a new account</option>
+				{connections.map(([id, connection]) => (
+					<option key={id} value={id}>
+						{`${connection.company} (${connection.account}) — ${connection.role} — ${connection.url}`}
+						{connection.connected ? "" : " — Sign in again"}
+					</option>
+				))}
+			</select>
+			<h3 hidden={!!selectedConnection}>Set Up New Account</h3>
+			<article
+				class="credentials-card"
+				hidden={!!deployedConnection?.lastSuccessfulDeployment}
+			>
 				<ol class="credential-steps" role="list">
 					<li>
-						<details class="setup-section" id="vm-section" open ref={vmSection}>
+						<details
+							class="setup-section"
+							id="vm-section"
+							name="ns-account-steps"
+							open
+							ref={vmSection}
+						>
 							<summary>
-								<span>
-									VM<small>Choose your scrumbox</small>
-								</span>
+								<span>NetSuite Account</span>
 							</summary>
+							<div
+								class="credential-sub-type"
+								role="radiogroup"
+								aria-label="Account type"
+							>
+								<span>Account type</span>
+								<label>
+									<input
+										type="radio"
+										name="account-type"
+										value="scrumbox"
+										checked
+										disabled
+									/>
+									Scrumbox VM
+								</label>
+								<label>
+									<input
+										type="radio"
+										name="account-type"
+										value="production"
+										disabled
+									/>
+									Production account
+								</label>
+							</div>
 							<div class="grid">
 								<div>
 									<label for="vm">Current VM (scrumbox domain)</label>
 									<input
 										id="vm"
-										aria-describedby="vm-help"
 										placeholder="your-scrumbox.vm.eng.netsuite.com"
 										disabled={disabled}
 										value={vmDisplay.current.url}
@@ -332,46 +501,82 @@ export const Credentials = () => {
 									<input
 										id="vm-account"
 										spellcheck={false}
-										disabled={disabled}
-										value={vmDisplay.current.account}
+										disabled={disabled || !certificateMode}
+										placeholder={
+											certificateMode
+												? "Enter your account ID"
+												: "Filled automatically after sign-in"
+										}
+										value={
+											certificateMode || account
+												? vmDisplay.current.account
+												: ""
+										}
 										onInput={(event) =>
 											editVm("account", event.currentTarget.value)
 										}
 									/>
 								</div>
 							</div>
-							<p id="vm-help">
-								<small>
-									Enter only the domain, without <code>https://</code>. SQL and
-									SFTP use the first configured VM.
-								</small>
-							</p>
 						</details>
 					</li>
 					<li>
 						<details
 							class="setup-section"
 							id="suitecloud-authentication-section"
+							name="ns-account-steps"
 							ref={certificatesSection}
-							open
 						>
 							<summary>
-								<span>
-									SuiteCloud Authentication
-									<small>Sign in with your browser or use certificates</small>
-								</span>
+								<span>SuiteCloud Authentication</span>
 							</summary>
+							<div
+								class="credential-sub-type"
+								role="radiogroup"
+								aria-label="Authentication method"
+							>
+								<label>
+									<input
+										type="radio"
+										name="authentication-method"
+										value="browser"
+										checked={!certificateMode}
+										disabled={disabled}
+										onChange={() =>
+											editCredential("authenticationMethod", "browser")
+										}
+									/>
+									Browser-based
+								</label>
+								<label>
+									<input
+										type="radio"
+										name="authentication-method"
+										value="certificates"
+										checked={certificateMode}
+										disabled={disabled}
+										onChange={() =>
+											editCredential("authenticationMethod", "certificates")
+										}
+									/>
+									Certificates
+								</label>
+							</div>
 							<div hidden={certificateMode}>
 								<p hidden={account?.connected}>
 									Sign in to NetSuite using this browser. Your account and role
 									will be saved for future deployments.
 								</p>
-								<p id="suitecloud-authentication-status" role="status">
+								<blockquote
+									class="status-message"
+									id="suitecloud-authentication-status"
+									role="status"
+								>
 									{account?.connected
 										? `Signed in to ${account.company} as ${account.role}.`
 										: next?.authentication?.error ||
 											"Sign in to connect this VM. Sign in again after a SuiteCloud SDK update."}
-								</p>
+								</blockquote>
 								<button
 									id="suitecloud-sign-in"
 									disabled={disabled || !host}
@@ -387,23 +592,7 @@ export const Credentials = () => {
 									Cancel sign-in
 								</button>
 							</div>
-							<label for="use-certificates">
-								<input
-									id="use-certificates"
-									type="checkbox"
-									checked={certificateMode}
-									disabled={disabled}
-									onChange={(event) =>
-										editCredential(
-											"authenticationMethod",
-											event.currentTarget.checked ? "certificates" : "browser",
-										)
-									}
-								/>
-								Use certificates instead
-							</label>
-							<details id="certificates-section" hidden={!certificateMode}>
-								<summary>Certificates</summary>
+							<div id="certificates-section" hidden={!certificateMode}>
 								<details id="cert-details" ref={certificateDetails}>
 									<summary>View certificate paths</summary>
 									<p>
@@ -530,20 +719,18 @@ export const Credentials = () => {
 										certificate.
 									</small>
 								</p>
-							</details>
+							</div>
 						</details>
 					</li>
 					<li>
 						<details
 							class="setup-section"
 							id="admindocs-section"
+							name="ns-account-steps"
 							ref={adminSection}
 						>
 							<summary>
-								<span>
-									AdminDocs
-									<small>Configure Features and Preferences</small>
-								</span>
+								<span>Additional Features and Preferences</span>
 							</summary>
 							<aside
 								class="setup-hint"
@@ -554,8 +741,14 @@ export const Credentials = () => {
 								</h3>
 								<ol>
 									<li>
-										In <strong>Canary</strong>, enable{" "}
-										<code>SUITE_SCRIPT_SFTP_ALLOW_INTERNAL_IPS</code>.
+										For <strong>ABSI</strong> (if using Next OneWorld account),
+										go to{" "}
+										<strong>Setup &gt; Company &gt; Enable Features</strong> and
+										enable <strong>Custom Records</strong>.
+									</li>
+									<li>
+										For <strong>ABSI</strong>, in <strong>Canary</strong>,
+										enable <code>SUITE_SCRIPT_SFTP_ALLOW_INTERNAL_IPS</code>.
 									</li>
 									<li>
 										In <strong>AdminDocs &gt; Enable Features</strong>, set{" "}
@@ -564,6 +757,10 @@ export const Credentials = () => {
 											Connectivity imports of the same Format Profile:
 										</q>{" "}
 										to <code>0</code>.
+									</li>
+									<li>
+										For <strong>Bank Feeds</strong>, use the SQL tool to insert
+										NSN Bank Feeds API Secrets (confluence).
 									</li>
 								</ol>
 							</aside>
@@ -609,13 +806,11 @@ export const Credentials = () => {
 						<details
 							class="setup-section"
 							id="token-section"
+							name="ns-account-steps"
 							ref={tokenSection}
 						>
 							<summary>
-								<span>
-									GitLab token
-									<small>Used to clone SuiteApps from GitLab</small>
-								</span>
+								<span>(Optional) GitLab token</span>
 							</summary>
 							<blockquote class="status-message" id="token-state">
 								{next?.tokenPresent
@@ -657,6 +852,14 @@ export const Credentials = () => {
 						<button id="credentials" disabled={disabled} onClick={save}>
 							Save credentials
 						</button>
+						<button
+							id="reset-credentials"
+							class="secondary outline"
+							disabled={disabled}
+							onClick={reset}
+						>
+							Reset
+						</button>
 					</fieldset>
 					<p id="credential-message" role="status">
 						{message}
@@ -672,9 +875,16 @@ export const credentials: SiteModule = {
 	placement: "feature",
 	slot: "setup",
 	Component: Credentials,
-	navigation: { target: "credentials-section", label: "Setup" },
+	navigation: {
+		target: "credentials-section",
+		label: "NS Account",
+		icon: "building-2",
+	},
 	styleOrder: 1,
 	style: /* css */ `.credential-steps{list-style:none;padding:0;counter-reset:credential-step}
+.credential-sub-type{margin-bottom:1rem;border:0;background:transparent;color:var(--pico-muted-color);font-size:0.9rem}
+.credential-sub-type>span{display:block;margin-bottom:0.5rem}
+.credential-sub-type>label{display:inline-block;margin-inline-end:1.5rem;color:inherit;font-size:inherit}
 .credential-steps{margin:0}
 .credential-steps>li{position:relative;counter-increment:credential-step;padding:1.25rem 1.5rem 1.25rem 4.5rem;margin:0;border-bottom:1px solid var(--pico-muted-border-color)}
 .credential-steps>li::before{content:counter(credential-step);position:absolute;inset-inline-start:1.25rem;inset-block-start:1.1rem;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;background:var(--pico-secondary-background);color:var(--pico-secondary-inverse);font-weight:500}

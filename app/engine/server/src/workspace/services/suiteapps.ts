@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { validateConfig } from "../config.ts";
 import { type Config, type Vm } from "../../common/config.ts";
-import { hasLocalCheckout } from "../clone.ts";
 import {
 	credentialPath,
 	hostPath,
@@ -63,7 +62,7 @@ export class SuiteAppsService {
 		this.credentials = credentials;
 	}
 	validate(value: unknown): Config {
-		return validateConfig(configObject(value), false, this.credentials.read());
+		return validateConfig(configObject(value));
 	}
 	targets(value: unknown = this.configuration.read()): Target[] {
 		const config = configObject(value);
@@ -124,16 +123,6 @@ export class SuiteAppsService {
 					"suiteapps_missing",
 					"Add at least one SuiteApp before deploying.",
 				);
-			if (config.PM_MODE) {
-				const missing = config.suiteapps.find(
-					(repo) => !repo.localPath && !hasLocalCheckout(repo.directory),
-				);
-				if (missing)
-					throw new ServiceError(
-						"checkout_missing",
-						`Place a local checkout in repos/${missing.directory} or set its localPath in Settings before deploying.`,
-					);
-			}
 			if (
 				mountChanges(
 					config,
@@ -170,7 +159,6 @@ export class SuiteAppsService {
 			config.certificates = auth["suitecloud-certificates"];
 			validateConfig(config, true);
 			if (
-				!config.PM_MODE &&
 				config.suiteapps.some((repo) => !repo.localPath) &&
 				!auth["gitlab-token"]?.trim()
 			)

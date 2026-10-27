@@ -40,12 +40,49 @@ export function downloadFailureMessage(output) {
 	return "";
 }
 
-export function runNpm(args) {
+function publicRegistryArguments() {
+	const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+	if (!lock.packages)
+		throw new Error(
+			"Public fallback requires a lockfile with package entries.",
+		);
+	const scopes = new Set();
+	for (const [name, entry] of Object.entries(lock.packages ?? {})) {
+		if (!name) continue;
+		if (
+			!entry.integrity ||
+			!entry.resolved ||
+			new URL(entry.resolved).origin !== "https://registry.npmjs.org"
+		) {
+			throw new Error(
+				"Public fallback requires npmjs.org URLs and integrity hashes for every locked dependency.",
+			);
+		}
+		const scopedName = name.match(/(?:^|node_modules\/)(@[^/]+)\//);
+		if (scopedName) scopes.add(scopedName[1]);
+	}
+	return [
+		"--registry=https://registry.npmjs.org/",
+		"--replace-registry-host=npmjs",
+		"--strict-ssl=true",
+		...[...scopes].map(
+			(scope) => `--${scope}:registry=https://registry.npmjs.org/`,
+		),
+	];
+}
+
+export function runNpm(args, publicRetry = false) {
 	const installing = args[0] === "install" || args[0] === "ci";
 	const environment = { ...process.env };
+	if (publicRetry) {
+		for (const name of Object.keys(environment)) {
+			if (/^npm_config_/i.test(name) || name === "NSX_NPM_TOKEN")
+				delete environment[name];
+		}
+	}
 	const variables = new Map();
 	const environmentFile = "/run/secrets/npm-env";
-	if (installing && existsSync(environmentFile)) {
+	if (installing && !publicRetry && existsSync(environmentFile)) {
 		const pairs = readFileSync(environmentFile, "utf8").split("\0");
 		for (let index = 0; index + 1 < pairs.length; index += 2) {
 			const name = pairs[index];
@@ -53,7 +90,8 @@ export function runNpm(args) {
 			variables.set(name, pairs[index + 1]);
 			// These paths belong to the host. Keep the container's cache and installation location.
 			if (
-				/^npm_config_/i.test(name) &&
+				(name === "SUITECONTAINER_NPM_PUBLIC_FALLBACK" ||
+					/^npm_config_/i.test(name)) &&
 				!/^npm_config_(?:cache|prefix|local_prefix|userconfig|globalconfig)$/i.test(
 					name,
 				)
@@ -63,17 +101,32 @@ export function runNpm(args) {
 		}
 	}
 	let configurationDirectory;
+	let internalRegistry = false;
 	if (installing) {
+		if (publicRetry) {
+			configurationDirectory = mkdtempSync(
+				join(tmpdir(), "suitecontainer-npm-public-"),
+			);
+			for (const name of ["user", "global"]) {
+				const file = join(configurationDirectory, `${name}.npmrc`);
+				writeFileSync(file, "", { mode: 0o600 });
+				args.push(`--${name}config=${file}`);
+			}
+		}
 		const userConfig =
 			args
 				.find((argument) => argument.startsWith("--userconfig="))
 				?.slice("--userconfig=".length) ?? "/run/secrets/npmrc";
-		const sources = [
-			"/run/secrets/npm-globalrc",
-			userConfig,
-			"/run/secrets/npm-rootrc",
-			"/run/secrets/npm-projectrc",
-		].filter((file) => existsSync(file));
+		const sources = (
+			publicRetry
+				? []
+				: [
+						"/run/secrets/npm-globalrc",
+						userConfig,
+						"/run/secrets/npm-rootrc",
+						"/run/secrets/npm-projectrc",
+					]
+		).filter((file) => existsSync(file));
 		if (sources.length) {
 			let variableIndex = 0;
 			const configuration = sources
@@ -98,7 +151,7 @@ export function runNpm(args) {
 				);
 		}
 		const configurationArgs = args.filter((argument) =>
-			argument.startsWith("--userconfig="),
+			/^--(?:userconfig|globalconfig|registry)=/.test(argument),
 		);
 		const registry = spawnSync(
 			"npm",
@@ -108,6 +161,7 @@ export function runNpm(args) {
 		if (registry.status === 0) {
 			try {
 				const url = new URL(registry.stdout.trim());
+				internalRegistry = url.hostname !== "registry.npmjs.org";
 				url.username = "";
 				url.password = "";
 				url.search = "";
@@ -182,6 +236,33 @@ export function runNpm(args) {
 					recentOutput.endsWith("\n") ? recentOutput : `${recentOutput}\n`,
 				);
 			if (failureMessage) console.error(failureMessage);
+		}
+		if (
+			args[0] === "ci" &&
+			!publicRetry &&
+			!launchFailed &&
+			code !== 0 &&
+			internalRegistry &&
+			environment.SUITECONTAINER_NPM_PUBLIC_FALLBACK === "1" &&
+			!/\b(?:E401|E403|E429|EINTEGRITY)\b|429[^\n]*Too many authentication attempts/i.test(
+				recentOutput,
+			) &&
+			(failureMessage || /\b(?:E404|E5\d\d)\b/.test(recentOutput))
+		) {
+			try {
+				const retryArgs = args.filter(
+					(argument) =>
+						!/^--(?:userconfig|globalconfig|registry)=/.test(argument),
+				);
+				retryArgs.push(...publicRegistryArguments());
+				console.error(
+					"Public npm fallback enabled: retrying locked dependencies once against https://registry.npmjs.org/.",
+				);
+				runNpm(retryArgs, true);
+				return;
+			} catch (error) {
+				console.error(`Cannot use public npm fallback: ${error.message}`);
+			}
 		}
 		process.exitCode = failureMessage || launchFailed ? 1 : (code ?? 1);
 	});

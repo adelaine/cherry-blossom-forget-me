@@ -8,7 +8,23 @@ The computer or **codebox** runs the container. A **deployment scrumbox**, liste
 
 Run the launcher for your platform from `start/`: [Windows](../../start/start-windows.cmd), [macOS](../../start/start-macos.command), or [codebox](../../start/start-codebox). The launcher first tries the internal base image and falls back to Oracle’s public `ghcr.io/oracle/oraclelinux9-nodejs:24` image if the internal image cannot be pulled. Package downloads use your existing npm configuration and may still require internal registry access. Copying SuiteApps from GitLab needs GitLab access. Deployment needs access to your scrumboxes.
 
-In PM Mode (`"PM_MODE": true`), copy the shared image archive to `home/container-image/suitecontainer-workspace.tar` before launching. The launcher loads it into Podman automatically. The archive is not included in Git or the team ZIP. Use an image built for the recipient's computer architecture. Local SuiteApp checkouts can be used without GitLab access.
+When application source files are unavailable, copy the shared image archive to `home/container-image/suitecontainer-workspace.tar` before launching. The launcher loads it into Podman automatically if the image is missing. The archive is not included in Git or the team ZIP. Use an image built for the recipient's computer architecture. SuiteApps with an explicit `localPath` can be used without GitLab access.
+
+### npm registry fallback
+
+The lockfile uses npmjs.org URLs so npm can substitute your configured registry. To prefer the internal registry, set `registry=https://repository.eng.netsuite.com/3/repository/npm-stable/` in your npm user configuration. The launcher uses that registry first.
+
+Public fallback is off by default. Set `SUITECONTAINER_NPM_PUBLIC_FALLBACK=1` before launching to allow one retry of locked application dependencies against npmjs.org after a connection, certificate, invalid archive, missing package, or server error. The launcher reports when it switches registries. Authentication, permission, rate limit, and integrity errors stop the installation. Versions and integrity hashes remain fixed, and every locked dependency must have an npmjs.org URL and an integrity hash for fallback to proceed. Public retries use empty user and global npm configuration files, omit forwarded npm settings and the internal token, and override scoped registries for locked packages.
+
+For example, on macOS, run this from the installation folder after configuring the internal registry:
+
+```sh
+SUITECONTAINER_NPM_PUBLIC_FALLBACK=1 ./start/start-macos.command
+```
+
+The setting applies to container builds and development dependency refreshes. Global SuiteCloud CLI installation continues to use the configured registry without public fallback. Leave the setting unset when testing internal registry access so a public retry cannot hide a failure.
+
+### Launcher behavior
 
 On first launch, the launcher downloads a private Python runtime for Windows x64, Apple Silicon macOS, or Linux x64. You do not need to install Python or Node on the host. Intel Macs and Windows ARM computers are not supported by these launchers.
 
@@ -160,7 +176,7 @@ The app sets `status.deploy-start-ok` to `1` when deployment is accepted, so the
 
 ## Stopping and restarting
 
-Use **Stop app** when no deployment or SQL operation is running. The app also stops after 15 minutes without user activity. Running deployment and SQL jobs, running local SFTP, and active target-side SFTP operations prevent automatic shutdown. A target-side SFTP container can remain running after the app stops.
+Use **Stop SuiteContainer** when no deployment or SQL operation is running. The app also stops after 15 minutes without user activity. Running deployment and SQL jobs, running local SFTP, and active target-side SFTP operations prevent automatic shutdown. A target-side SFTP container can remain running after the app stops.
 
 Settings, credentials, certificates, and repository files persist on the host. The stopped app container remains until the next launch replaces it. Temporary helper containers are removed automatically, while the built image and build cache remain available.
 

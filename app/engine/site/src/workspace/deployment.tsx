@@ -1,13 +1,18 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
-import { errorMessage } from "../common/state.ts";
+import { errorMessage, isSuiteAppValidationError } from "../common/state.ts";
 import { AnsiLog } from "../common/log.tsx";
 
 export const Deployment = () => {
 	const runtime = useSite();
 	const next = runtime.snapshot;
+	const deploymentMessage = (message: string | undefined) =>
+		isSuiteAppValidationError(message)
+			? "Resolve the configuration message in SuiteApps before deploying."
+			: message;
 	const request = useRef<AbortController | undefined>(undefined);
 	const submitting = useRef(false);
 	useEffect(
@@ -51,8 +56,8 @@ export const Deployment = () => {
 
 	const validation =
 		next?.authentication?.state === "running"
-			? "Complete SuiteCloud sign-in in the browser tab, or cancel sign-in under Setup."
-			: runtime.actionError ||
+			? "Complete SuiteCloud sign-in in the browser tab, or cancel sign-in under NS Account."
+			: deploymentMessage(runtime.actionError) ||
 				(runtime.busy
 					? next?.playwright?.state === "running" ||
 						runtime.pending.has("playwright")
@@ -64,7 +69,7 @@ export const Deployment = () => {
 								: "Deployment is running. Wait for it to finish before changing settings or credentials."
 					: next?.relaunch
 						? "Relaunch required. Save your changes, stop this app, and start the launcher again."
-						: next?.error ||
+						: deploymentMessage(next?.error) ||
 							(runtime.credentialEditing
 								? "Save your credential changes before deploying."
 								: runtime.editing
@@ -82,7 +87,9 @@ export const Deployment = () => {
 
 	return (
 		<article id="deployment-section">
-			<h2>Deploy SuiteApps</h2>
+			<h2>
+				<Icon name="rocket" /> Deploy SuiteApps
+			</h2>
 			<p id="validation" role="status">
 				{validation}
 			</p>
@@ -114,5 +121,5 @@ export const deployment: SiteModule = {
 	placement: "feature",
 	slot: "deployment",
 	Component: Deployment,
-	navigation: { target: "deployment-section", label: "Deploy" },
+	navigation: { target: "deployment-section", label: "Deploy", icon: "rocket" },
 };

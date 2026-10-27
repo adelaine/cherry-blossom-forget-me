@@ -1,5 +1,5 @@
 /* Copyright (c) 2026, Oracle and/or its affiliates. */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
 	existsSync,
 	mkdtempSync,
@@ -30,6 +30,8 @@ export class SuiteCloudAuthenticationService {
 	private configuration: ConfigurationService;
 	private credentials: CredentialsService;
 	private suiteapps: SuiteAppsService;
+	private reconciled = false;
+	private reconciliationError = "";
 	constructor(
 		configuration: ConfigurationService,
 		credentials: CredentialsService,
@@ -40,13 +42,80 @@ export class SuiteCloudAuthenticationService {
 		this.suiteapps = suiteapps;
 	}
 
-	status() {
-		let auth: Auth["suitecloud-authentication"];
+	private reconcile(stored: Auth): void {
+		const accounts = stored["suitecloud-authentication"]?.accounts;
+		if (this.reconciled || !accounts || !Object.keys(accounts).length) return;
+		this.reconciled = true;
 		try {
-			auth = this.credentials.read()["suitecloud-authentication"];
+			const result = spawnSync(
+				"java",
+				[
+					"-DintegrationMode",
+					"--add-opens",
+					"java.base/java.io=ALL-UNNAMED",
+					"-jar",
+					suitecloudSdk(),
+					"manageauth",
+					"-list",
+				],
+				{
+					env: browserEnvironment(this.configuration.credentialsDirectory),
+					encoding: "utf8",
+					timeout: 5000,
+					windowsHide: true,
+					maxBuffer: 4 * 1024 * 1024,
+				},
+			);
+			if (result.error || result.status !== 0)
+				throw new Error("SDK authentication list unavailable.");
+			const list = JSON.parse(result.stdout) as {
+				status?: unknown;
+				data?: unknown;
+			};
+			if (
+				list.status !== "SUCCESS" ||
+				!list.data ||
+				typeof list.data !== "object" ||
+				Array.isArray(list.data)
+			)
+				throw new Error("SDK authentication list was invalid.");
+			const ids = new Set(Object.keys(list.data));
+			const retained = { ...accounts };
+			const deployments = { ...stored["suitecloud-deployments"] };
+			let changed = false;
+			for (const [id, account] of Object.entries(accounts)) {
+				if (ids.has(account.authId)) continue;
+				delete retained[id];
+				delete deployments[id];
+				changed = true;
+			}
+			if (changed) {
+				const updated: Auth = {
+					...stored,
+					"suitecloud-authentication": {
+						...stored["suitecloud-authentication"]!,
+						accounts: retained,
+					},
+					"suitecloud-deployments": deployments,
+				};
+				this.credentials.write(updated);
+				Object.assign(stored, updated);
+			}
+		} catch {
+			this.reconciliationError =
+				"Saved connections could not be verified with SuiteCloud. Existing entries were kept.";
+		}
+	}
+
+	status() {
+		let stored: Auth = {};
+		try {
+			stored = this.credentials.read();
+			this.reconcile(stored);
 		} catch {
 			/* State reports credential errors. */
 		}
+		const auth = stored["suitecloud-authentication"];
 		let version = "";
 		try {
 			version = basename(suitecloudSdk());
@@ -56,7 +125,13 @@ export class SuiteCloudAuthenticationService {
 		const accounts = Object.fromEntries(
 			Object.entries(auth?.accounts ?? {}).map(([id, account]) => [
 				id,
-				{ ...account, connected: account.sdkVersion === version },
+				{
+					...account,
+					connected: account.sdkVersion === version,
+					...(stored["suitecloud-deployments"]?.[id]
+						? { lastSuccessfulDeployment: stored["suitecloud-deployments"][id] }
+						: {}),
+				},
 			]),
 		);
 		const operation = this.operationId
@@ -67,14 +142,50 @@ export class SuiteCloudAuthenticationService {
 			accounts,
 			state: operation?.state ?? "idle",
 			operationId: this.operationId,
-			error: operation?.error?.error ?? "",
+			error: operation?.error?.error || this.reconciliationError,
 		};
 	}
 
-	async start(targetId: unknown) {
+	async start(targetId: unknown, requestedUrl?: unknown) {
 		const operations = this.configuration.operations;
 		operations.assertIdle();
-		const vm = this.suiteapps.select(targetId).vms[0];
+		const discovering = requestedUrl !== undefined;
+		const domain =
+			typeof requestedUrl === "string" ? requestedUrl.trim().toLowerCase() : "";
+		if (
+			discovering &&
+			(targetId !== undefined ||
+				!/^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(domain) ||
+				!domain.endsWith(".netsuite.com"))
+		)
+			throw new ServiceError(
+				"invalid_target",
+				"Enter a valid NetSuite domain for browser sign-in.",
+			);
+		const original = this.configuration.read();
+		if (
+			discovering &&
+			original.vms !== undefined &&
+			!Array.isArray(original.vms)
+		)
+			throw new ServiceError(
+				"invalid_configuration",
+				"Fix the VM list before signing in.",
+			);
+		const originalVms = (original.vms ?? []) as unknown[];
+		const firstVm = originalVms[0];
+		if (
+			discovering &&
+			firstVm !== undefined &&
+			(!firstVm || typeof firstVm !== "object" || Array.isArray(firstVm))
+		)
+			throw new ServiceError(
+				"invalid_configuration",
+				"Fix the first VM before signing in.",
+			);
+		const vm = discovering
+			? { url: domain, account: "" }
+			: this.suiteapps.select(targetId).vms[0];
 		const sdk = suitecloudSdk();
 		const agent = "/opt/suitecontainer/browser-handoff.jar";
 		if (!existsSync(agent))
@@ -93,7 +204,7 @@ export class SuiteCloudAuthenticationService {
 		let cancelled = false;
 		const operation = operations.reserve(
 			"suitecloud-authentication",
-			[String(targetId)],
+			[discovering ? vm.url : String(targetId)],
 			async () => {
 				cancelled = true;
 				this.worker?.kill();
@@ -197,10 +308,29 @@ export class SuiteCloudAuthenticationService {
 								result.errorMessages?.join("\n") ||
 									"Sign-in failed. Try again.",
 							);
-						const info = result.data!.accountInfo;
-						if (info.companyId !== vm.account)
+						const info = result.data?.accountInfo;
+						if (
+							!info ||
+							typeof info.companyId !== "string" ||
+							!/^[A-Za-z0-9_-]+$/.test(info.companyId) ||
+							typeof info.companyName !== "string" ||
+							typeof info.roleName !== "string"
+						)
+							throw new Error(
+								"SuiteCloud did not return valid account details. Try signing in again.",
+							);
+						if (!discovering && info.companyId !== vm.account)
 							throw new Error(
 								"The signed-in account differs from the selected VM account.",
+							);
+						const verifiedVm = { ...vm, account: info.companyId };
+						const current = this.configuration.read();
+						if (
+							discovering &&
+							JSON.stringify(current.vms) !== JSON.stringify(original.vms)
+						)
+							throw new Error(
+								"Account settings changed during sign-in. Sign in again for the selected domain.",
 							);
 						const auth = this.credentials.read();
 						const account = {
@@ -208,17 +338,28 @@ export class SuiteCloudAuthenticationService {
 							sdkVersion: basename(sdk),
 							company: info.companyName,
 							role: info.roleName,
-							account: vm.account,
+							account: verifiedVm.account,
 							url: vm.url,
 						};
 						auth["suitecloud-authentication"] = {
 							method: "browser",
 							accounts: {
 								...auth["suitecloud-authentication"]?.accounts,
-								[browserAccountKey(vm)]: account,
+								[browserAccountKey(verifiedVm)]: account,
 							},
 						};
 						this.credentials.write(auth);
+						if (discovering)
+							this.configuration.write({
+								...current,
+								vms: [
+									{
+										...(firstVm && typeof firstVm === "object" ? firstVm : {}),
+										...verifiedVm,
+									},
+									...originalVms.slice(1),
+								],
+							});
 						operations.finish(operation.id, {
 							company: info.companyName,
 							role: info.roleName,

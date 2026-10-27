@@ -19,14 +19,26 @@ test("Current VM preserves accounts, synchronizes JSON edits, and saves the sele
 		authentication: { method: "certificates" },
 	});
 	let saved: { config: string; authenticationMethod: string } | undefined;
+	let connectionRequest: { connectionId: string } | undefined;
 	const fixture = createRuntimeFixture({
 		state,
 		respond(request) {
 			if (request.path === "/api/credentials") {
+				const input = JSON.parse(String(request.options?.body));
+				if (input.connectionId) {
+					connectionRequest = input;
+					const persisted = JSON.parse(state.config) as typeof config;
+					persisted.vms.unshift(persisted.vms.splice(1, 1)[0]!);
+					state.config = JSON.stringify(persisted);
+					state.authentication.method = "browser";
+					return state;
+				}
 				saved = JSON.parse(String(request.options?.body)) as NonNullable<
 					typeof saved
 				>;
 				state.config = saved.config;
+				state.authentication.method = saved.authenticationMethod as
+					"browser" | "certificates";
 			}
 			return state;
 		},
@@ -57,4 +69,82 @@ test("Current VM preserves accounts, synchronizes JSON edits, and saves the sele
 		view.element("credential-message").textContent,
 		/Fix the configuration JSON/,
 	);
+	const connection = {
+		authId: "saved-connection",
+		sdkVersion: "fixture-sdk.jar",
+		company: "Saved company",
+		role: "Administrator",
+		account: config.vms[1].account,
+		url: config.vms[1].url,
+		connected: true,
+	};
+	state.authentication.accounts = { saved: connection };
+	await updateSite(() => {
+		fixture.runtime.saved(state, fixture.runtime.configText);
+	});
+	const selector = view.element("saved-connections");
+	const vmInput = view.element("vm");
+	const domainDraft = vmInput.value;
+	const accountDraft = view.element("vm-account").value;
+	view.element("token").value = "unsaved-token";
+	await view.element("token").input();
+	const setupForm = view.root
+		.querySelectorAll("article")
+		.find((node) => node.getAttribute("class") === "credentials-card")!;
+	selector.value = "saved";
+	await selector.change();
+	assert.deepEqual(connectionRequest, { connectionId: "saved" });
+	const selected = JSON.parse(state.config) as typeof config;
+	assert.deepEqual(selected.vms[0], config.vms[1]);
+	assert.equal(selected.vms.length, 2);
+	assert.equal(setupForm.hidden, false);
+	assert.equal(view.element("vm"), vmInput);
+	assert.equal(vmInput.value, domainDraft);
+	assert.equal(view.element("vm-account").value, accountDraft);
+	assert.equal(view.element("token").value, "unsaved-token");
+	assert.equal(fixture.runtime.credentialEditing, false);
+	assert.equal(
+		view.root
+			.querySelectorAll("blockquote")
+			.some(
+				(node) => node.getAttribute("id") === "connection-deployment-status",
+			),
+		false,
+	);
+	state.authentication.accounts.saved = {
+		...connection,
+		lastSuccessfulDeployment: {
+			suiteapp: "bank-feeds",
+			completedAt: "2026-10-26T00:00:00.000Z",
+		},
+	};
+	await updateSite(() => fixture.runtime.accept(state));
+	assert.match(
+		view.element("connection-deployment-status").textContent,
+		/Successful deployment access to Saved company/,
+	);
+	selector.value = "";
+	await selector.change();
+	assert.equal(
+		view.root
+			.querySelectorAll("blockquote")
+			.some(
+				(node) => node.getAttribute("id") === "connection-deployment-status",
+			),
+		false,
+	);
+	assert.equal(setupForm.hidden, false);
+	assert.equal(view.element("vm"), vmInput);
+	assert.equal(vmInput.value, domainDraft);
+	assert.equal(view.element("vm-account").value, accountDraft);
+	assert.equal(view.element("token").value, "unsaved-token");
+	assert.equal(view.element("vm-account").disabled, false);
+	assert.equal(fixture.runtime.credentialEditing, true);
+	await view.element("reset-credentials").click();
+	assert.equal(view.element("vm").value, connection.url);
+	assert.equal(view.element("vm-account").value, connection.account);
+	assert.equal(view.element("token").value, "");
+	assert.equal(setupForm.hidden, false);
+	assert.equal(fixture.runtime.credentialEditing, false);
+	assert.equal(fixture.requests.at(-1)!.path, "/api/state");
 });

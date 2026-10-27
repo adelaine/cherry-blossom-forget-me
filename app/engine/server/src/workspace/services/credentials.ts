@@ -5,6 +5,8 @@ import { replaceCertificates, verifyCertificates } from "../certificates.ts";
 import { credentialPath } from "../../common/mounts.ts";
 import type { ConfigurationService } from "./configuration.ts";
 import { message } from "../../common/errors.ts";
+import type { Vm } from "../../common/config.ts";
+import { browserAccountKey } from "../suitecloud-auth.ts";
 
 import type {
 	CredentialState,
@@ -71,6 +73,29 @@ export class CredentialsService {
 	save(input: Record<string, unknown>): void {
 		this.config.operations.assertIdle();
 		const auth = this.read();
+		if (input.connectionId !== undefined) {
+			const connection =
+				typeof input.connectionId === "string"
+					? auth["suitecloud-authentication"]?.accounts?.[input.connectionId]
+					: undefined;
+			if (!connection) throw new Error("Choose a saved connection.");
+			const config = this.config.read();
+			if (config.vms !== undefined && !Array.isArray(config.vms))
+				throw new Error("Fix the VM list before selecting a connection.");
+			const vms = (config.vms ?? []) as Vm[];
+			const existing = vms.findIndex(
+				(vm) => vm?.url === connection.url && vm.account === connection.account,
+			);
+			if (existing >= 0) vms.unshift(vms.splice(existing, 1)[0]!);
+			else vms[0] = { url: connection.url, account: connection.account };
+			this.config.save({ ...config, vms });
+			auth["suitecloud-authentication"] = {
+				...auth["suitecloud-authentication"],
+				method: "browser",
+			};
+			this.write(auth);
+			return;
+		}
 		if (input.authenticationMethod !== undefined) {
 			if (
 				!["browser", "certificates"].includes(
@@ -102,6 +127,14 @@ export class CredentialsService {
 		}
 		auth["suitecloud-certificates"] = cert;
 		if (input.config !== undefined) this.config.save(input.config);
+		this.write(auth);
+	}
+	recordDeployment(vm: Vm, suiteapp: string): void {
+		const auth = this.read();
+		(auth["suitecloud-deployments"] ??= {})[browserAccountKey(vm)] = {
+			suiteapp,
+			completedAt: new Date().toISOString(),
+		};
 		this.write(auth);
 	}
 	write(auth: Auth): void {

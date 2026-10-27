@@ -1,4 +1,5 @@
 import type { ComponentType } from "preact";
+import type { IconName } from "./icon.tsx";
 
 export interface SiteModule {
 	id: string;
@@ -7,7 +8,7 @@ export interface SiteModule {
 	Component: ComponentType;
 	style?: string;
 	styleOrder?: number;
-	navigation?: { target: string; label: string };
+	navigation?: { target: string; label: string; icon?: IconName };
 }
 
 export const siteModules = (

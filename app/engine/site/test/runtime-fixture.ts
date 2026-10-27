@@ -38,7 +38,6 @@ export function serverState(overrides: StateOverrides = {}): ServerState {
 		error: "",
 		credentialError: "",
 		tokenPresent: false,
-		PM_MODE: true,
 		deploymentStarted: false,
 		theme: undefined,
 		relaunch: false,

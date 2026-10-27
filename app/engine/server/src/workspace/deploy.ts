@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { Config } from "../common/config.ts";
+import type { Config, SuiteAppDeployment } from "../common/config.ts";
 import { authenticationError } from "./suitecloud-errors.ts";
 import { browserAccountKey, browserEnvironment } from "./suitecloud-auth.ts";
 
@@ -61,7 +61,11 @@ const runSuitecloud = (
 export const deployRepos = (
 	config: Config,
 	privateKeyPath: string,
-	options: { workspaceRoot?: string; spawn?: typeof spawnSync } = {},
+	options: {
+		workspaceRoot?: string;
+		spawn?: typeof spawnSync;
+		onDeployed?: (deployment: SuiteAppDeployment) => void;
+	} = {},
 ): void => {
 	const certificates = config.certificates!;
 	const browser = config.authentication?.method === "browser";
@@ -168,6 +172,14 @@ export const deployRepos = (
 			runCommand(["project:deploy", "--dryrun"], destination, true);
 			console.log(`Deploying ${repo.directory} to ${vm.url}...`);
 			runCommand(["project:deploy"], destination, true);
+			const deployment: SuiteAppDeployment = {
+				type: "suiteapp-deployed",
+				account: vm.account,
+				url: vm.url,
+				suiteapp: repo.directory,
+			};
+			if (options.onDeployed) options.onDeployed(deployment);
+			else if (process.send && process.connected) process.send(deployment);
 		}
 	}
 	console.log("All SuiteApps were deployed.");

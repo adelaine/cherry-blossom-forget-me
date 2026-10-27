@@ -8,7 +8,7 @@ import { sql } from "../../src/tools/sql.tsx";
 import { renderSite, updateSite } from "../browser-harness.ts";
 import { createRuntimeFixture, serverState } from "../runtime-fixture.ts";
 
-test("Stop app renders the stop result and explains blocked closure", async (t) => {
+test("Stop SuiteContainer renders the stop result and explains blocked closure", async (t) => {
 	for (const success of [true, false]) {
 		await t.test(
 			success ? "successful stop" : "rejected stop",
@@ -25,24 +25,25 @@ test("Stop app renders the stop result and explains blocked closure", async (t) 
 							: state;
 					},
 				});
-				const view = await renderSite(fixture, [deployment]);
+				const view = await renderSite(fixture, [credentials, deployment]);
 				scenario.after(view.cleanup);
 				await view.element("stop").click();
 				if (success) {
 					assert.equal(view.element("stop").disabled, true);
+					assert.equal(view.element("app-message").hidden, false);
 					assert.match(
-						view.element("run-state").textContent,
+						view.element("app-message").textContent,
 						/Attempting to close this page/,
 					);
 					await updateSite(() => [...fixture.timers.values()][0]!.callback());
 					assert.match(
-						view.element("run-state").textContent,
+						view.element("app-message").textContent,
 						/browser kept this page open/,
 					);
 				} else {
 					assert.equal(view.element("stop").disabled, false);
 					assert.match(
-						view.element("validation").textContent,
+						view.element("app-message").textContent,
 						/Deployment is running/,
 					);
 				}
@@ -85,19 +86,19 @@ test("connection feedback preserves edits and disables actions until recovery", 
 	assert.equal(view.element("download").disabled, false);
 });
 
-test("page composition places SQL between configuration and deployment", async (t) => {
+test("page composition places configuration after deployment on the Deploy panel", async (t) => {
 	const view = await renderSite(createRuntimeFixture(), [
 		settings,
 		sql,
 		deployment,
 	]);
 	t.after(view.cleanup);
-	const html = view.root.innerHTML;
+	const deployPanel = view.element("deployment-panel");
+	const html = deployPanel.innerHTML;
 	assert.ok(
-		html.indexOf("<h2>SQL queries</h2>") > html.indexOf("Configuration JSON"),
+		html.indexOf("Configuration JSON") > html.indexOf("Deploy SuiteApps"),
 	);
-	assert.ok(
-		html.indexOf("<h2>SQL queries</h2>") <
-			html.indexOf("<h2>Deploy SuiteApps</h2>"),
-	);
+	assert.equal(deployPanel.hidden, false);
+	assert.equal(view.element("sql-panel").hidden, true);
+	assert.ok(!html.includes("SQL queries"));
 });

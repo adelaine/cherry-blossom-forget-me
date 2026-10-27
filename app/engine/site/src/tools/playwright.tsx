@@ -2,6 +2,7 @@
 /* Copyright (c) 2026, Oracle and/or its affiliates. */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage } from "../common/state.ts";
 import { AnsiLog } from "../common/log.tsx";
@@ -69,7 +70,9 @@ export const Playwright = () => {
 		<article>
 			<details class="setup-section" id="playwright-section" ref={details}>
 				<summary>
-					<h2>Playwright runner</h2>
+					<h2>
+						<Icon name="wrench" /> Playwright runner
+					</h2>
 				</summary>
 				<p>
 					Start the runner with the launcher’s <code>--playwright</code> option.
@@ -106,5 +109,9 @@ export const playwright: SiteModule = {
 	id: "playwright",
 	placement: "tool",
 	Component: Playwright,
-	navigation: { target: "playwright-section", label: "Playwright" },
+	navigation: {
+		target: "playwright-section",
+		label: "Playwright",
+		icon: "wrench",
+	},
 };

@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { SiteModule } from "../common/module.ts";
+import { Icon } from "../common/icon.tsx";
 import { useSite } from "../common/runtime.ts";
 import { errorMessage } from "../common/state.ts";
 
@@ -122,7 +123,7 @@ export const Sftp = () => {
 		probedTarget.current = probeTarget;
 		if (remote.probe !== "idle") return;
 		const controller = new AbortController();
-		// The mounted page owns this probe, while the backend owns its SSH work.
+		// The mounted panel owns this probe, while the backend owns its SSH work.
 		const timer = setTimeout(() => {
 			void runtime
 				.api("sftp", { action: "probe" }, undefined, controller.signal)
@@ -239,7 +240,9 @@ export const Sftp = () => {
 		<article>
 			<details class="setup-section" id="sftp-section" ref={details}>
 				<summary>
-					<h2>SFTP file sharing</h2>
+					<h2>
+						<Icon name="wrench" /> SFTP file sharing
+					</h2>
 				</summary>
 				<p id="sftp-description">
 					{remote
@@ -506,7 +509,7 @@ export const sftp: SiteModule = {
 	id: "sftp",
 	placement: "tool",
 	Component: Sftp,
-	navigation: { target: "sftp-section", label: "SFTP" },
+	navigation: { target: "sftp-section", label: "SFTP", icon: "wrench" },
 	styleOrder: 7,
 	style: /* css */ `.sftp-connection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sftp-connection-grid>div{min-width:0}

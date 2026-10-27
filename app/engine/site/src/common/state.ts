@@ -29,3 +29,9 @@ export const targetHost = (text: string): string => {
 export const errorMessage = (error: unknown): string => {
 	return error instanceof Error ? error.message : String(error);
 };
+
+export function isSuiteAppValidationError(
+	message: string | undefined,
+): boolean {
+	return /^SuiteApp \d+ /.test(message || "");
+}
