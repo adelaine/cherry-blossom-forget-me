@@ -188,10 +188,10 @@ class PlaywrightRunner:
                 raise RuntimeError(f"The environment setting {key} cannot be passed to Playwright.")
         return "".join(f"{key}={value}\n" for key, value in values.items())
 
-    def prepare_image(self, shared_image_mode):
+    def prepare_image(self, image_only):
         """Explicit one-time preparation; ordinary runner startup never calls this."""
         source = self.project / "app/container-setup/playwright/Containerfile"
-        if source.is_file() and not shared_image_mode:
+        if source.is_file() and not image_only:
             base = self.podman("image", "exists", self.workspace_image, optional=True)
             if base.returncode == 1:
                 raise RuntimeError("Prepare the SuiteContainer workspace image first, then run --prepare-playwright again.")
@@ -213,7 +213,7 @@ class PlaywrightRunner:
                     if (directory / filename).is_file():
                         arguments += ["--secret", f"id={name},src={convert(directory / filename)}"]
                 arguments += ["-t", IMAGE, convert(self.project)]
-                print("Preparing Playwright and browsers once in the runner image...", flush=True)
+                print("Preparing Playwright, agent-browser, browsers, and full FFmpeg in the runner image...", flush=True)
                 if wsl:
                     self.podman("machine", "ssh", self.machine["Name"], "--", shlex.join(["podman", *arguments]))
                 else:

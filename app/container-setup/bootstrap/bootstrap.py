@@ -777,13 +777,15 @@ def launch():
     info = inspect(name)
     if info:
         confirm_owner(info)
-    if OPTIONS.prepare_playwright:
-        runner = playwright_runner(name, machine, info)
-        image_id = runner.prepare_image(pm_mode())
-        return {"prepared": True, "image": "suitecontainer-playwright", "imageId": image_id, "started": False}
     source_available = (engine_directory() / "package.json").is_file() and (container_setup_directory() / "Containerfile").is_file()
     if OPTIONS.dev and not source_available:
         raise RuntimeError("Development mode requires the application source checkout.")
+    if OPTIONS.prepare_playwright:
+        if source_available:
+            build_image(machine)
+        runner = playwright_runner(name, machine, info)
+        image_id = runner.prepare_image(not source_available)
+        return {"prepared": True, "image": "suitecontainer-playwright", "imageId": image_id, "started": False}
     build_from_source = source_available
     running = bool(info and info.get("State", {}).get("Running"))
     dependencies = dependency_fingerprint() if OPTIONS.dev else None

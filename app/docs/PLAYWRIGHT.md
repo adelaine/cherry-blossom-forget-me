@@ -20,16 +20,17 @@ Chrome opens in a separate test profile. Your regular Chrome window is not used.
 
 ## 1. Prepare once, then request the runner
 
-After preparing the normal SuiteContainer workspace image, prepare the runner once:
+From a source checkout, prepare the workspace and browser runner together:
 
 ```shell
 bash start/start-codebox --json --prepare-playwright
 ```
 
-This builds a local runner image containing pinned Playwright, Chromium, and the
-package managers. Chromium is the prepared container browser; projects selecting
+This builds the workspace image from source, then a local runner image containing
+pinned Playwright, agent-browser, Chromium, full FFmpeg/ffprobe, browser runtime
+libraries, fonts, and package managers. No manual container installations are required. Chromium is the prepared container browser; projects selecting
 the branded `chrome` channel need a separately prepared Chrome installation or
-the local Chrome mode described below. It reuses the cached SuiteContainer workspace image; it does
+the local Chrome mode described below. It reuses cached build layers and does
 not download the Microsoft Playwright base image. Preparation can download tools
 and browsers. It does not start, stop, or replace a running app or runner.
 For an image-only distribution, this explicit step loads
@@ -39,6 +40,24 @@ Ordinary runner startup uses only the prepared local image, with image pulling
 disabled. If it is missing, startup explains how to prepare it and leaves existing
 containers alone. Re-run preparation explicitly to update the runner image.
 SuiteContainer's main application startup behavior is unchanged.
+
+## Browser capture tools
+
+The prepared runner includes agent-browser 0.39.4 from the internal npm registry
+and checksum-verified FFmpeg/ffprobe 9.0.2 builds for Linux x64 and ARM64.
+Preparation needs access to the configured npm registry, Oracle Linux package
+repositories, Chromium downloads, and GitHub FFmpeg release downloads.
+The same source workflow applies to codeboxes, Windows, and Apple Silicon Macs.
+The pinned monthly FFmpeg release is retained upstream for two years; update the
+release, version, and checksums together when maintaining the installer.
+
+agent-browser automatically uses the runner's prepared Chromium and full FFmpeg.
+Use a distinct session for each task. Read its installed usage guidance with
+`agent-browser skills get core`. Use `record start <video.webm>` and `record stop`
+for recordings, then verify the final page and decode the full video with
+`ffmpeg -v error -xerror -i <video.webm> -f null -`.
+The CLI tools run inside the browser runner; no host browser installation is needed
+for container browser mode.
 
 ## Request the prepared runner
 
