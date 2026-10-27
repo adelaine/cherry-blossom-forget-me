@@ -1,12 +1,9 @@
-import type {
-	WorkspaceContext,
-	CredentialAccess,
-	TargetAccess,
-} from "../../common/context.ts";
+/* Copyright (c) 2026, Oracle and/or its affiliates. */
+import type { CredentialAccess, TargetAccess } from "../../common/context.ts";
 import { PlaywrightClient } from "./PlaywrightClient.ts";
-import { hostPath } from "../../common/mounts.ts";
-import type { Config } from "../../common/config.ts";
+import type { PlaywrightRun } from "./types.ts";
 import type { OperationsService } from "../../common/operations.ts";
+import { ServiceError } from "../../common/errors.ts";
 
 export class PlaywrightService {
 	readonly client: PlaywrightClient;
@@ -14,19 +11,16 @@ export class PlaywrightService {
 	private operationId?: string;
 	private timer?: ReturnType<typeof setInterval>;
 	private cancelled = false;
-	private configuration: WorkspaceContext;
 	private credentials: CredentialAccess;
 	private suiteapps: TargetAccess;
 	private operations: OperationsService;
 	constructor(
-		configuration: WorkspaceContext,
 		credentials: CredentialAccess,
 		suiteapps: TargetAccess,
 		operations: OperationsService,
 		url?: string,
 		token?: string,
 	) {
-		this.configuration = configuration;
 		this.credentials = credentials;
 		this.suiteapps = suiteapps;
 		this.operations = operations;
@@ -37,50 +31,71 @@ export class PlaywrightService {
 	}
 	async start(input: Record<string, unknown>): Promise<string> {
 		this.operations.assertIdle();
-		const config = this.suiteapps.validate(
-			input.targetId !== undefined
-				? this.suiteapps.select(input.targetId)
-				: input.config,
-		);
-		if (!config.playwright?.enabled || !config.playwright.project)
-			throw new Error(
-				"Enable Playwright and choose its project directory before running tests.",
+		if (typeof input.project !== "string" || !input.project.trim())
+			throw new ServiceError(
+				"missing_input",
+				"Provide the project for this test run.",
 			);
-		const settings = config.playwright;
-		const vm = config.vms[0];
-		if (!vm) throw new Error("Choose a target VM before running tests.");
-		const record = this.configuration.mounts;
-		const local = Object.fromEntries(
-			config.suiteapps
-				.filter((repo) => repo.localPath)
-				.map((repo) => [repo.directory, hostPath(record, repo.localPath!)]),
-		);
+		const workers = input.workers ?? 1;
 		if (
-			[...new Set([...Object.keys(local), ...Object.keys(record.local)])].some(
-				(name) => local[name] !== record.local[name],
-			)
+			typeof workers !== "number" ||
+			!Number.isInteger(workers) ||
+			workers < 1 ||
+			workers > 16
 		)
-			throw new Error(
-				"Save settings and relaunch SuiteContainer to mount the selected local checkouts.",
+			throw new ServiceError(
+				"invalid_input",
+				"Workers must be an integer from 1 to 16.",
 			);
-		if (this.client.status(settings).relaunch)
-			throw new Error(
-				"Save settings and relaunch SuiteContainer to use the selected Playwright project and browser.",
+		if (input.testFile !== undefined && typeof input.testFile !== "string")
+			throw new ServiceError(
+				"invalid_input",
+				"Test file must be a relative path.",
 			);
-		const operation = this.operations.reserve(
-			"playwright",
-			this.suiteapps
-				.targets(config)
-				.slice(0, 1)
-				.map((target) => target.id),
-			() => this.cancel(),
+		let host = input.host;
+		let account = input.account;
+		const targets: string[] = [];
+		if (input.targetId !== undefined) {
+			if (host !== undefined || account !== undefined)
+				throw new ServiceError(
+					"invalid_input",
+					"Provide targetId or host and account, not both.",
+				);
+			const config = this.suiteapps.select(input.targetId);
+			host = config.vms[0]!.url;
+			account = config.vms[0]!.account;
+			targets.push(String(input.targetId));
+		}
+		if (
+			typeof host !== "string" ||
+			!host ||
+			host.length > 253 ||
+			/[\s/@\\?#\0]/.test(host)
+		)
+			throw new ServiceError(
+				"invalid_input",
+				"Provide a target hostname without a URL scheme or path.",
+			);
+		if (typeof account !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(account))
+			throw new ServiceError(
+				"invalid_input",
+				"Provide the account for this test run.",
+			);
+		const run: PlaywrightRun = {
+			project: input.project,
+			host,
+			account,
+			workers,
+			testFile: input.testFile as string | undefined,
+		};
+		const operation = this.operations.reserve("playwright", targets, () =>
+			this.cancel(),
 		);
 		this.operationId = operation.id;
 		this.cancelled = false;
 		this.starting = true;
 		try {
-			if (input.targetId === undefined) this.configuration.write(input.config);
-			await this.client.start(settings, vm.url, vm.account);
+			await this.client.start(run);
 			this.operations.running(operation.id);
 			this.timer = setInterval(() => this.update(), 500);
 			this.timer.unref();
@@ -120,20 +135,16 @@ export class PlaywrightService {
 		this.cancelled = true;
 		this.update();
 	}
-	status(config?: Config, configError = "") {
-		const state = this.client.status(config?.playwright);
+	status() {
+		const state = this.client.status();
 		return {
 			...state,
 			log: this.credentials.redact(state.log, state.state === "running"),
 			operationId: this.operationId,
 			state: this.starting ? "running" : state.state,
-			error: configError || state.error,
+			error: state.error,
 			canRun:
-				!configError &&
-				state.enabled &&
-				!!state.settings.project &&
 				state.available &&
-				!state.relaunch &&
 				!this.operations.busy() &&
 				!this.operations.restartPending,
 		};

@@ -609,18 +609,17 @@ console.log(state.busy?'busy':'idle');"""
 
 def playwright_runner(name, machine, info):
     config = json.loads((home_directory() / "config/suitecontainer.json").read_text(encoding="utf-8-sig"))
-    settings = config.get("playwright", {})
-    if not isinstance(settings, dict):
-        raise RuntimeError("The Playwright settings must be an object.")
     previous = (info or {}).get("Config", {}).get("Env", [])
-    if settings.get("enabled") is not True and not any(item.startswith("SUITECONTAINER_PLAYWRIGHT_URL=") for item in previous):
+    requested = OPTIONS.playwright or OPTIONS.playwright_browser is not None
+    if not requested and not any(item.startswith("SUITECONTAINER_PLAYWRIGHT_URL=") for item in previous):
         return None
     spec = importlib.util.spec_from_file_location("suitecontainer_playwright", Path(__file__).with_name("playwright.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.PlaywrightRunner(project=PROJECT, app_name=name, machine=machine, config=config, app_info=info,
                                    podman=podman, command=command, windows=WINDOWS, macos=MACOS,
-                                   machine_path=machine_path, inspect_container=inspect, confirm_owner=confirm_owner, owner=OWNER)
+                                   machine_path=machine_path, inspect_container=inspect, confirm_owner=confirm_owner, owner=OWNER,
+                                   browser=OPTIONS.playwright_browser)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -815,7 +814,7 @@ def launch():
         runner.plan(shared_image_mode)
         replace_app = replace_app or runner.app_changed
     if running and (replace_app or (runner and runner.runner_changed)):
-        runner_stopped = bool(runner and runner.enabled and (not runner.info or not runner.info.get("State", {}).get("Running")))
+        runner_stopped = bool(runner and (not runner.info or not runner.info.get("State", {}).get("Running")))
         assert_app_idle(name, runner_stopped=runner_stopped)
     if runner and (replace_app or runner.runner_changed):
         runner.assert_idle()
@@ -828,7 +827,7 @@ def launch():
             remove_owned_connection(connection["instanceId"])
         # App shutdown also stops its runner. Recreate that runner only after the
         # old app has exited, so shutdown cannot stop the replacement container.
-        if runner and runner.enabled:
+        if runner:
             runner.runner_changed = True
     if runner:
         runner.apply()
@@ -854,6 +853,9 @@ def main(args=()):
     global PROJECT, OPTIONS, IMAGE
     parser = argparse.ArgumentParser(description="Start the SuiteContainer environment and discover its shared API.")
     parser.add_argument("--dev", action="store_true")
+    parser.add_argument("--playwright", action="store_true", help="Start the Playwright runner without saved project settings.")
+    parser.add_argument("--playwright-browser", choices=("container", "local-chrome"),
+                        help="Start Playwright using this browser mode; local-chrome also starts its SSH forward service.")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--non-interactive", action="store_true")
     parser.add_argument("--json", action="store_true")

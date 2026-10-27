@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $runners = @(podman ps --filter "label=suitecontainer.project=$projectRoot" --filter 'name=-playwright$' --format '{{.Names}}')
 if ($LASTEXITCODE -ne 0) { throw 'Could not list containers. Check the Podman connection.' }
-if ($runners.Count -ne 1) { throw 'Expected one running Playwright container for this repository. Relaunch SuiteContainer with Local Chrome selected.' }
+if ($runners.Count -ne 1) { throw 'Expected one running Playwright container for this repository. Relaunch SuiteContainer with --playwright-browser=local-chrome.' }
 $runner = $runners[0]
 $runnerJson = podman inspect $runner
 if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the Playwright container.' }

@@ -1,4 +1,4 @@
-import type { PlaywrightBrowser, PlaywrightSettings } from "./index.ts";
+import type { PlaywrightBrowser, PlaywrightRun } from "./index.ts";
 
 type RunnerState = {
 	state: "idle" | "running" | "succeeded" | "failed";
@@ -39,33 +39,14 @@ export class PlaywrightClient {
 		return this.run.state === "running";
 	}
 
-	status(settings?: PlaywrightSettings) {
-		const enabled = settings?.enabled === true;
-		const browser = settings?.browser ?? "container";
-		const relaunch =
-			enabled &&
-			(!this.url ||
-				(this.available &&
-					(settings.project !== this.run.project ||
-						browser !== (this.run.browser ?? "container"))));
+	status() {
 		return {
 			...this.run,
 			available: this.available,
-			enabled,
-			relaunch,
-			settings: {
-				...(settings ?? {
-					enabled: false,
-					project: "",
-					testFile: "",
-					workers: 1,
-				}),
-				browser,
-			},
 			error:
 				this.error ||
-				(enabled && !this.url
-					? "Save settings and relaunch SuiteContainer to start the test runner."
+				(!this.url
+					? "Launch SuiteContainer with --playwright to start the test runner."
 					: ""),
 		};
 	}
@@ -73,7 +54,7 @@ export class PlaywrightClient {
 	private async request(path: string, input?: unknown): Promise<RunnerState> {
 		if (!this.url || !this.token)
 			throw new Error(
-				"Save settings and relaunch SuiteContainer to start the test runner.",
+				"Launch SuiteContainer with --playwright to start the test runner.",
 			);
 		let response: Response;
 		try {
@@ -123,15 +104,7 @@ export class PlaywrightClient {
 		return this.pending;
 	}
 
-	async start(
-		settings: PlaywrightSettings,
-		host: string,
-		account: string,
-	): Promise<void> {
-		if (!settings.enabled || !settings.project)
-			throw new Error(
-				"Enable Playwright and choose its project directory before running tests.",
-			);
+	async start(input: PlaywrightRun): Promise<void> {
 		if (this.active) throw new Error("Playwright tests are already running.");
 		this.generation++;
 		this.run = {
@@ -141,13 +114,7 @@ export class PlaywrightClient {
 		};
 		this.starting = (async () => {
 			try {
-				this.run = await this.request("/run", {
-					project: settings.project,
-					testFile: settings.testFile ?? "",
-					workers: settings.workers ?? 1,
-					host,
-					account,
-				});
+				this.run = await this.request("/run", input);
 				this.error = "";
 				this.available = true;
 			} catch (error) {

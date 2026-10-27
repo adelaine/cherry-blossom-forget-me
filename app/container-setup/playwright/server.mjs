@@ -13,7 +13,6 @@ if (!token) {
 
 const tokenHash = createHash("sha256").update(token).digest();
 const workspace = "/workspace";
-const configuredProject = process.env.SUITECONTAINER_PLAYWRIGHT_PROJECT || "";
 const configuredBrowser =
 	process.env.SUITECONTAINER_PLAYWRIGHT_BROWSER || "container";
 const logLimit = 512 * 1024;
@@ -22,7 +21,7 @@ const secrets = new Set([token]);
 let logBuffer = Buffer.alloc(0);
 let state = {
 	state: "idle",
-	project: configuredProject,
+	project: "",
 	browser: configuredBrowser,
 };
 let activeJob = null;
@@ -180,17 +179,11 @@ async function confinedPath(root, relative, label) {
 async function validateRun(body) {
 	if (!body || typeof body !== "object" || Array.isArray(body))
 		throw new RequestError(400, "Expected a JSON object.");
-	if (!configuredProject)
-		throw new RequestError(
-			400,
-			"Choose a Playwright project in the app, save it, and relaunch the app.",
-		);
-	if (body.project !== configuredProject) {
-		throw new RequestError(
-			400,
-			"The project must match the runner configuration. Save the project in the app and relaunch it to mount its dependencies.",
-		);
-	}
+	const browser = configuredBrowser;
+	if (browser !== "container" && browser !== "local-chrome")
+		throw new RequestError(400, "Browser must be container or local-chrome.");
+	body.workers ??= 1;
+
 	relativePath(body.project, "Project");
 	const root = await realpath(workspace);
 	const project = await confinedPath(root, body.project, "Project");
@@ -293,6 +286,7 @@ async function validateRun(body) {
 		host: body.host,
 		account: body.account,
 		workers: body.workers,
+		browser,
 	};
 }
 
@@ -309,12 +303,10 @@ function runCommand(job, args, options) {
 				COMPANY_ID: options.account,
 				npm_config_store_dir: "/pnpm/store",
 				PLAYWRIGHT_REMOTE_WS_ENDPOINT:
-					configuredBrowser === "local-chrome"
+					options.browser === "local-chrome"
 						? process.env.PLAYWRIGHT_REMOTE_WS_ENDPOINT
 						: "",
-				...(configuredBrowser === "local-chrome"
-					? { PW_CHANNEL: "chrome" }
-					: {}),
+				...(options.browser === "local-chrome" ? { PW_CHANNEL: "chrome" } : {}),
 			},
 			detached: process.platform !== "win32",
 			stdio: ["ignore", "pipe", "pipe"],
@@ -341,7 +333,7 @@ async function runJob(job, options) {
 	try {
 		const commands = [
 			["install", "--frozen-lockfile", "--store-dir=/pnpm/store"],
-			...(configuredBrowser === "local-chrome"
+			...(options.browser === "local-chrome"
 				? []
 				: [["exec", "playwright", "install"]]),
 			[
@@ -350,7 +342,7 @@ async function runJob(job, options) {
 				"test",
 				...(options.testFile ? [options.testFile] : []),
 				`--workers=${options.workers}`,
-				...(configuredBrowser === "local-chrome" ? ["--headed"] : []),
+				...(options.browser === "local-chrome" ? ["--headed"] : []),
 			],
 		];
 		for (const args of commands) {
@@ -456,14 +448,15 @@ const server = createServer(async (request, response) => {
 		if (request.method === "POST" && route === "/run") {
 			if (activeJob)
 				throw new RequestError(409, "A Playwright run is already in progress.");
-			const options = await validateRun(await readJson(request));
+			const body = await readJson(request);
+			const options = await validateRun(body);
 			if (activeJob || stopping)
 				throw new RequestError(409, "The runner is busy or stopping.");
 			logBuffer = Buffer.alloc(0);
 			state = {
 				state: "running",
-				project: configuredProject,
-				browser: configuredBrowser,
+				project: body.project,
+				browser: options.browser,
 				started: new Date().toISOString(),
 			};
 			const job = { child: null, cancelled: false, done: null };

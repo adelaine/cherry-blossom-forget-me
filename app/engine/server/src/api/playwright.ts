@@ -5,12 +5,18 @@ export const playwrightContracts: ApiContract[] = [
 		method: "POST",
 		path: "/api/playwright/run",
 		schema: {
+			required: ["project"],
 			fields: {
-				config: { type: "config" },
+				project: { type: "string" },
+				testFile: { type: "string" },
+				workers: { type: "number" },
 				targetId: { type: "string" },
+				host: { type: "string" },
+				account: { type: "string" },
 			},
 			description:
-				"Provide targetId or legacy config with enabled Playwright project settings.",
+				"Provide the project and targetId or host and account for this run. " +
+				"Optional testFile and workers (default 1). No saved Playwright settings are used or changed.",
 		},
 		responseFields: ["operationId", "instanceId", "playwright"],
 		cancelSupported: true,

@@ -28,12 +28,5 @@
 			}
 		}
 	],
-	"PM_MODE": false,
-	"playwright": {
-		"enabled": false,
-		"project": "",
-		"browser": "container",
-		"testFile": "",
-		"workers": 1
-	}
+	"PM_MODE": false
 }

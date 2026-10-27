@@ -18,25 +18,26 @@ with the runner container taking the place of Codebox.
 
 Chrome opens in a separate test profile. Your regular Chrome window is not used.
 
-## 1. Select local Chrome and relaunch SuiteContainer
+## 1. Request the runner from the launcher
 
-In the app's Playwright section, select **Local Chrome (separate window)**,
-save test settings, and relaunch SuiteContainer with its usual start script.
+Playwright no longer uses saved project settings. Start the runner explicitly:
 
-For ABSI, the settings are:
-
-```json
-{
-	"enabled": true,
-	"project": "absi-nsn/FileCabinet/SuiteApps/com.netsuite.autobankstmtimport/test/test-pw",
-	"browser": "local-chrome",
-	"testFile": "",
-	"workers": 1
-}
+```shell
+bash start/start-codebox --json --playwright
 ```
 
-The project is relative to `home/repos`; it does not use the SuiteApp's `localPath`.
-Set **Test file** if you want to run only one file.
+For local Chrome, use the usual platform launcher with
+`--playwright-browser=local-chrome` instead. This also requests the runner and
+starts its SSH forwarding service. Container mode does not start SSH.
+The same options work with the Windows and macOS launchers.
+An ordinary relaunch preserves an already requested runner and its browser mode.
+Use `--playwright-browser=container` to switch back to browsers inside the container.
+These options do not deploy a SuiteApp or run tests.
+
+The runner discovers dependency mounts across the registered checkouts at launch.
+Choose the project in each run request. Changing between mounted projects does
+not require saving settings or relaunching. A newly added checkout or package
+may require a relaunch to refresh its dependency mounts.
 
 The launcher prepares a dedicated SSH key and a pinned SSH host key under the
 ignored `home/.cache/playwright` folder. The runner's SSH port is published on laptop localhost.
@@ -68,9 +69,32 @@ After the opening message, a successful SSH connection normally prints nothing.
 It forwards port 9222 inside the runner to port 9222 on your laptop.
 It should not ask for a password or an unverified host-key confirmation.
 
-## 4. Run tests from the app
+## 4. Submit a test run
 
-Click **Run tests**. Laptop mode supplies:
+Use the shared API with the verified connection descriptor and bearer token.
+Submit `POST /api/playwright/run` with an idempotency key and per-run inputs:
+
+```json
+{
+	"project": "absi-nsn/FileCabinet/SuiteApps/com.netsuite.autobankstmtimport/test/test-pw",
+	"targetId": "<ID returned by /api/targets>",
+	"testFile": "",
+	"workers": 1
+}
+```
+
+The project is relative to `home/repos`. It must contain the existing Playwright
+configuration and lockfile. Omit `testFile` to run the project and `workers` to
+use one worker. To select a target independently of saved deployment settings,
+provide `host` and `account` instead of `targetId`. No saved configuration is
+written by this request. Legacy `config.playwright` values are ignored; callers
+must now provide `project` directly.
+
+Follow the returned operation and incremental logs until completion. The app's
+Playwright section shows status and output and can stop an active test run.
+This endpoint continues to run project tests.
+
+Laptop mode supplies:
 
 - `PLAYWRIGHT_REMOTE_WS_ENDPOINT=ws://127.0.0.1:9222/`
 - `PW_CHANNEL=chrome`
@@ -103,8 +127,8 @@ After SuiteContainer recreates the runner, repeat step 3 because its published
 SSH port or generated key directory may have changed. The old SSH connection
 ends when its runner stops.
 
-To run browsers inside the container again, select **Container browser**, save,
-and relaunch SuiteContainer.
+To run browsers inside the container again, relaunch with
+`--playwright-browser=container`.
 
 ## Troubleshooting
 
@@ -112,7 +136,7 @@ and relaunch SuiteContainer.
   `podman exec --workdir /workspace/absi-nsn/FileCabinet/SuiteApps/com.netsuite.autobankstmtimport/test/test-pw <runner-name> pnpm exec playwright --version`.
   Restart terminal 1 using that exact version.
 - **Connection refused / no Chrome window:** confirm the Playwright server and
-  SSH terminal are still running, and Local Chrome is selected in the app.
+  SSH terminal are still running, and the runner was requested with `--playwright-browser=local-chrome`.
 - **Remote port forwarding failed:** close the previous SSH forward before
   opening another. The runner reserves its loopback port 9222 for this connection.
 - **Laptop port 9222 is occupied:** use a different server port, such as

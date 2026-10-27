@@ -61,7 +61,6 @@ export const createServices = (
 	);
 	const sftp = new SftpApplicationService(configuration, credentials);
 	const playwright = new PlaywrightService(
-		configuration,
 		credentials,
 		suiteapps,
 		operations,
@@ -79,13 +78,10 @@ export const createServices = (
 		const cert = credentials.certificateState(auth);
 		const ready = suiteapps.readiness(text);
 		let config: Record<string, unknown> = {};
-		let testConfig: Config | undefined;
-		let testConfigError = "";
 		try {
 			config = configObject(text);
-			testConfig = suiteapps.validate(config);
-		} catch (error) {
-			testConfigError = message(error);
+		} catch {
+			/* Workspace readiness reports malformed configuration independently. */
 		}
 		let relaunch = false;
 		try {
@@ -131,7 +127,7 @@ export const createServices = (
 			run: deployment.status(),
 			sql: sql.status(config),
 			sftp: sftp.status(auth),
-			playwright: playwright.status(testConfig, testConfigError),
+			playwright: playwright.status(),
 			operations: operations
 				.list()
 				.map(({ result: _result, ...operation }) => operation),

@@ -6,29 +6,13 @@ import { playwright } from "../../src/tools/playwright.tsx";
 import { renderSite, updateSite } from "../browser-harness.ts";
 import { createRuntimeFixture, serverState } from "../runtime-fixture.ts";
 
-const config = {
-	suiteapps: [],
-	vms: [{ account: "000071", url: "fixture.vm.eng.netsuite.com" }],
-	playwright: {
-		enabled: true,
-		project: "fixture/test-pw",
-		browser: "container" as const,
-		testFile: "",
-		workers: 1,
-	},
-};
-
 function readyState(
 	changes: Partial<ServerState["playwright"]> = {},
-	text = JSON.stringify(config),
 ): ServerState {
 	return serverState({
-		config: text,
+		config: "{ unfinished workspace configuration",
 		playwright: {
 			...serverState().playwright,
-			project: config.playwright.project,
-			settings: config.playwright,
-			enabled: true,
 			available: true,
 			canRun: true,
 			...changes,
@@ -36,90 +20,48 @@ function readyState(
 	});
 }
 
-test("Playwright saves edited settings, reports results, and cancels the next active run", async (t) => {
+test("Playwright reports results and cancels without reading or saving project settings", async (t) => {
 	let state = readyState();
-	const actions: { path: string; data: Record<string, unknown> }[] = [];
+	const actions: { path: string; data: unknown }[] = [];
 	const fixture = createRuntimeFixture({
 		state,
 		respond(request) {
-			if (
-				[
-					"/api/settings",
-					"/api/playwright/run",
-					"/api/playwright/cancel",
-				].includes(request.path)
-			) {
-				const data = JSON.parse(String(request.options?.body)) as Record<
-					string,
-					unknown
-				>;
-				actions.push({ path: request.path, data });
-				if (request.path === "/api/settings") {
-					const saved = JSON.parse(String(data.config)) as typeof config;
-					state = readyState(
-						{ settings: saved.playwright },
-						String(data.config),
-					);
-				} else {
-					const running = request.path === "/api/playwright/run";
-					state = readyState(
-						{
-							settings: state.playwright.settings,
-							state: running ? "running" : "failed",
-							canRun: !running,
-							log: running
-								? "Starting selected tests…"
-								: "Run stopped by the developer.",
-						},
-						state.config,
-					);
-				}
+			if (request.path === "/api/playwright/cancel") {
+				actions.push({
+					path: request.path,
+					data: JSON.parse(String(request.options?.body)),
+				});
+				state = readyState({
+					state: "failed",
+					log: "Run stopped by the developer.",
+				});
 			}
 			return state;
 		},
 	});
 	const view = await renderSite(fixture, [playwright]);
 	t.after(view.cleanup);
-	assert.equal(view.element("playwright-run").disabled, false);
-	view.element("playwright-file").value = " tests/login.spec.ts ";
-	await view.element("playwright-file").input();
-	view.element("playwright-workers").value = "3";
-	await view.element("playwright-workers").input();
-	assert.equal(view.element("playwright-run").disabled, true);
-	assert.match(
-		view.element("playwright-message").textContent,
-		/Save before running/,
+	assert.match(view.element("playwright-message").textContent, /Ready to run/);
+	assert.equal(view.element("playwright-cancel").disabled, true);
+	assert.doesNotMatch(
+		view.root.innerHTML,
+		/id="playwright-(?:project|enabled|browser|file|workers|save)"/,
 	);
-	await view.element("playwright-save").click();
-	const submitted = JSON.parse(
-		String(actions[0]!.data.config),
-	) as typeof config;
-	assert.equal(actions[0]!.path, "/api/settings");
-	assert.deepEqual(submitted.playwright, {
-		...config.playwright,
-		testFile: "tests/login.spec.ts",
-		workers: 3,
-	});
-	assert.deepEqual(submitted.vms, config.vms);
-	assert.equal(view.element("playwright-run").disabled, false);
-	await view.element("playwright-run").click();
-	assert.equal(actions[1]!.path, "/api/playwright/run");
-	assert.deepEqual(actions[1]!.data, { config: state.config });
-	assert.equal(view.element("playwright-run").disabled, true);
-	assert.equal(view.element("playwright-save").disabled, true);
+	state = readyState({ state: "running", log: "Starting tests…" });
+	await updateSite(fixture.runtime.refresh);
 	assert.equal(view.element("playwright-cancel").disabled, false);
+	await view.element("playwright-cancel").click();
+	assert.deepEqual(actions, [{ path: "/api/playwright/cancel", data: {} }]);
+	assert.equal(fixture.runtime.configText, state.config);
 	assert.match(
 		view.element("playwright-message").textContent,
-		/tests are running/,
+		/failed or were stopped/,
 	);
-	state = readyState(
-		{
-			settings: state.playwright.settings,
-			state: "succeeded",
-			log: "\x1b[32m2 passed <selected>\x1b[0m",
-		},
-		state.config,
-	);
+	assert.equal(view.element("playwright-cancel").disabled, true);
+	state = readyState({
+		state: "succeeded",
+		log: "\x1b[32m2 passed <selected>\x1b[0m",
+	});
 	await updateSite(fixture.runtime.refresh);
 	assert.match(view.element("playwright-message").textContent, /tests passed/);
 	assert.match(view.element("playwright-log").innerHTML, /ansi-fg-2/);
@@ -127,64 +69,33 @@ test("Playwright saves edited settings, reports results, and cancels the next ac
 		view.element("playwright-log").innerHTML,
 		/2 passed &lt;selected&gt;/,
 	);
-	assert.equal(view.element("playwright-run").disabled, false);
-	assert.equal(view.element("playwright-cancel").disabled, true);
-	await view.element("playwright-run").click();
-	await view.element("playwright-cancel").click();
-	assert.equal(actions[3]!.path, "/api/playwright/cancel");
-	assert.deepEqual(actions[3]!.data, {});
-	assert.match(
-		view.element("playwright-message").textContent,
-		/tests failed or were stopped/,
-	);
-	assert.match(
-		view.element("playwright-log").innerHTML,
-		/Run stopped by the developer/,
-	);
-	assert.equal(view.element("playwright-run").disabled, false);
-	assert.equal(view.element("playwright-cancel").disabled, true);
 });
 
-test("Playwright request errors retain edited settings and leave the controls usable", async (t) => {
-	const state = readyState();
+test("Playwright cancellation errors leave the active runner controls usable", async (t) => {
+	const state = readyState({ state: "running" });
 	const fixture = createRuntimeFixture({
 		state,
 		respond(request) {
-			if (request.path === "/api/playwright/run")
+			if (request.path === "/api/playwright/cancel")
 				return Response.json(
-					{ error: "The test runner is busy. Wait for its results." },
+					{ error: "The runner could not cancel the active run." },
 					{ status: 409 },
-				);
-			if (request.path === "/api/settings")
-				return Response.json(
-					{ error: "The test project is not available in this workspace." },
-					{ status: 400 },
 				);
 			return state;
 		},
 	});
 	const view = await renderSite(fixture, [playwright]);
 	t.after(view.cleanup);
-	await view.element("playwright-run").click();
+	await view.element("playwright-cancel").click();
 	assert.match(
 		view.element("playwright-message").textContent,
-		/test runner is busy/,
+		/could not cancel/,
 	);
-	assert.equal(view.element("playwright-run").disabled, false);
+	assert.equal(view.element("playwright-cancel").disabled, false);
 	await updateSite(fixture.runtime.refresh);
 	assert.match(
 		view.element("playwright-message").textContent,
-		/test runner is busy/,
+		/could not cancel/,
 	);
-	view.element("playwright-project").value = "changed/test-pw";
-	await view.element("playwright-project").input();
-	await view.element("playwright-save").click();
-	assert.equal(view.element("playwright-project").value, "changed/test-pw");
-	assert.match(
-		view.element("playwright-message").textContent,
-		/project is not available/,
-	);
-	assert.equal(view.element("playwright-project").disabled, false);
-	assert.equal(view.element("playwright-save").disabled, false);
-	assert.equal(view.element("playwright-run").disabled, true);
+	assert.equal(fixture.runtime.configText, state.config);
 });

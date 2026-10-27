@@ -1,9 +1,11 @@
 /* Copyright (c) 2026, Oracle and/or its affiliates. */
 export type PlaywrightBrowser = "container" | "local-chrome";
-export interface PlaywrightSettings {
-	enabled: boolean;
+
+/** Inputs supplied for one test run, independent of saved workspace settings. */
+export interface PlaywrightRun {
 	project: string;
-	browser?: PlaywrightBrowser;
+	host: string;
+	account: string;
 	testFile?: string;
 	workers?: number;
 }

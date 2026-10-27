@@ -21,10 +21,8 @@ def environment(info):
     return dict(setting.split("=", 1) for setting in (info or {}).get("Config", {}).get("Env", []) if "=" in setting)
 
 
-def discover_package_directories(checkouts, configured_project):
+def discover_package_directories(checkouts):
     """Find dependency mounts without following links outside registered checkouts."""
-    if not configured_project:
-        return []
     packages = set()
     excluded = {".git", "node_modules", ".cache", ".pnpm-store"}
 
@@ -38,8 +36,6 @@ def discover_package_directories(checkouts, configured_project):
         checkout = Path(checkout)
         if linked(checkout) or not checkout.is_dir() or not (checkout / ".git").exists():
             continue
-        if PurePosixPath(configured_project).parts[0] == directory:
-            packages.add(configured_project)
         boundary = checkout.resolve()
         for current, children, files in os.walk(checkout, topdown=True, followlinks=False, onerror=unreadable):
             current = Path(current)
@@ -57,14 +53,14 @@ def discover_package_directories(checkouts, configured_project):
 
 class PlaywrightRunner:
     def __init__(self, *, project, app_name, machine, config, app_info, podman, command,
-                 windows, macos, machine_path, inspect_container, confirm_owner, owner):
+                 windows, macos, machine_path, inspect_container, confirm_owner, owner, browser=None):
         self.project, self.app_name, self.machine = project, app_name, machine
         self.home = project / "home"
         self.config, self.app_info = config, app_info
         self.podman, self.command = podman, command
         self.windows, self.macos, self.machine_path = windows, macos, machine_path
         self.inspect_container, self.confirm_owner, self.owner = inspect_container, confirm_owner, owner
-        self.enabled = config.get("playwright", {}).get("enabled") is True
+        self.requested_browser = browser
         self.name = app_name + "-playwright"
         self.network = app_name + "-network"
         self.info = None
@@ -84,18 +80,7 @@ class PlaywrightRunner:
         if len(items) != 1 or (items[0].get("Labels") or items[0].get("labels") or {}).get(self.owner) != str(self.project):
             raise RuntimeError(f"Another project owns the Playwright {kind} named {name}. It was left untouched.")
 
-    def configuration(self):
-        settings = self.config.get("playwright", {})
-        self.browser = settings.get("browser", "container")
-        if self.browser not in ("container", "local-chrome"):
-            raise RuntimeError("Playwright browser must be container or local-chrome.")
-        configured = settings.get("project", "")
-        if not isinstance(configured, str):
-            raise RuntimeError("The Playwright project must be a directory relative to repos.")
-        relative = configured.strip().replace("\\", "/")
-        if relative and (relative.startswith("/") or ":" in relative or any(part in ("", ".", "..") for part in relative.split("/"))) or re.search(r"[,\r\n\0]", relative):
-            raise RuntimeError("The Playwright project must be a directory relative to repos, such as absi-nsn/test-pw.")
-        self.test_project = str(PurePosixPath(relative)) if relative else ""
+    def workspace_mounts(self):
         self.mounts = ["--mount", f"type=bind,src={self.home / 'repos'},dst=/workspace"]
         self.checkouts = []
         local_paths = []
@@ -236,18 +221,14 @@ class PlaywrightRunner:
         self.info = self.inspect_container(self.name)
         if self.info:
             self.confirm_owner(self.info)
-        if not self.enabled:
-            self.app_changed = bool(previous.get("SUITECONTAINER_PLAYWRIGHT_URL"))
-            self.runner_changed = bool(self.info)
-            return
-        local_paths = self.configuration()
-        self.package_directories = discover_package_directories(self.checkouts, self.test_project)
+        self.browser = self.requested_browser or environment(self.info).get("SUITECONTAINER_PLAYWRIGHT_BROWSER", "container")
+        local_paths = self.workspace_mounts()
+        self.package_directories = discover_package_directories(self.checkouts)
         npmrc, ca, npm_environment = self.npm_configuration()
         token = previous.get("SUITECONTAINER_PLAYWRIGHT_TOKEN") or environment(self.info).get("SUITECONTAINER_PLAYWRIGHT_TOKEN") or secrets.token_hex(32)
         endpoint = f"http://{self.name}:8787"
         app_environment = {"SUITECONTAINER_PLAYWRIGHT_URL": endpoint, "SUITECONTAINER_PLAYWRIGHT_TOKEN": token}
         runner_environment = {**npm_environment, "SUITECONTAINER_PLAYWRIGHT_TOKEN": token,
-                              "SUITECONTAINER_PLAYWRIGHT_PROJECT": self.test_project,
                               "SUITECONTAINER_PLAYWRIGHT_BROWSER": self.browser,
                               "SUITECONTAINER_PLAYWRIGHT_APP_URL": f"http://{self.app_name}:8080",
                               "NPM_CONFIG_USERCONFIG": f"{RUNTIME}/npmrc"}
@@ -287,8 +268,6 @@ class PlaywrightRunner:
             raise RuntimeError("Playwright is running or its activity could not be checked. The containers were left untouched. Wait for tests to finish, or use Stop app before relaunching.")
 
     def prepare_resources(self):
-        if not self.enabled:
-            return
         self.owned_resource("network", self.network)
         self.store = self.app_name + "-playwright-store"
         self.owned_resource("volume", self.store)
@@ -299,12 +278,6 @@ class PlaywrightRunner:
             self.modules.append((volume, directory))
 
     def apply(self):
-        if not self.enabled:
-            if self.info:
-                if self.info.get("State", {}).get("Running"):
-                    self.podman("stop", self.name, capture=True)
-                self.podman("rm", self.name, capture=True)
-            return
         if not self.runner_changed:
             return
         mounts = [*self.mounts, "--mount", f"type=volume,src={self.store},dst=/pnpm/store",
