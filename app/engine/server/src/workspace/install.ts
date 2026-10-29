@@ -2,15 +2,18 @@ import { join, resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { cloneRepos, run } from "./clone.ts";
-import { readConfig, validateConfig } from "./config.ts";
-import { deployRepos } from "./deploy.ts";
-import { prepareCertificates, verifyCertificates } from "./certificates.ts";
+import { readConfig } from "./config.ts";
+import { prepareCertificates } from "./certificates.ts";
+import { deployFromApi } from "./deployment-client.ts";
 import { prepareToken, removeToken } from "./gitlab-token.ts";
 import { launchMounts, prepareConfiguration } from "./launch.ts";
 import { prepareWebMounts, webPathRequests, webSshTarget } from "./mounts.ts";
 import { startWebServer } from "../main.ts";
 
-export const main = (args: string[] = process.argv.slice(2)): number => {
+export const main = (
+	args: string[] = process.argv.slice(2),
+): number | Promise<number> => {
+	if (args[0] === "--deploy") return deployFromApi(args.slice(1));
 	if (args[0] === "--serve") {
 		startWebServer();
 		return 0;
@@ -39,7 +42,6 @@ export const main = (args: string[] = process.argv.slice(2)): number => {
 	if (prepareLaunch && prepareConfiguration(projectRoot)) return 10;
 	const validateOnly = args[0] === "--validate";
 	const certificatePathsOnly = args[0] === "--certificate-paths";
-	const deploy = args[0] === "--deploy";
 	const prepareCertificatesOnly =
 		args[0] === "--prepare-certificates" || prepareLaunch;
 	const localPathsOnly = args[0] === "--local-paths";
@@ -115,27 +117,12 @@ export const main = (args: string[] = process.argv.slice(2)): number => {
 		return 0;
 	}
 
-	if (deploy) {
-		// Deployment settings are checked here after handling an empty SuiteApp list.
-		validateConfig(config, true);
-	}
-	const privateKeyPath =
-		deploy && config.authentication?.method !== "browser"
-			? verifyCertificates(
-					process.env.SUITECONTAINER_PUBLIC_KEY,
-					process.env.SUITECONTAINER_PRIVATE_KEY,
-				)
-			: null;
 	try {
 		if (config.suiteapps.some((repo) => !repo.localPath))
 			prepareToken(authPath);
 		cloneRepos(config.suiteapps);
-		if (deploy) {
-			deployRepos(config, privateKeyPath!);
-		} else {
-			console.log("Ready. Type exit when you are done.");
-			run("bash", []);
-		}
+		console.log("Ready. Type exit when you are done.");
+		run("bash", []);
 	} finally {
 		removeToken();
 	}
@@ -147,7 +134,7 @@ if (
 	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
 	try {
-		process.exitCode = main();
+		process.exitCode = await main();
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : String(error));
 		process.exitCode = 1;

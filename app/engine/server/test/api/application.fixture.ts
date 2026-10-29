@@ -35,9 +35,9 @@ export function createApplicationFixture(
 		configDirectory: workspace.root,
 	});
 	const app = createApplication(lifecycle);
-	const origin = "http://127.0.0.1:8080";
+	const origin = "http://127.0.0.1:8521";
 	const headers = {
-		Host: "127.0.0.1:8080",
+		Host: "127.0.0.1:8521",
 		"Content-Type": "application/json",
 	};
 	async function request<T>(

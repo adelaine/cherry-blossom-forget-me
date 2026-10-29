@@ -63,7 +63,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 export { main };
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-    try { process.exitCode = main(); }
+    try { process.exitCode = await main(); }
     catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; }
 }
 `,

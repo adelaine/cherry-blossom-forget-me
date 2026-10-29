@@ -128,7 +128,7 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(len(self.calls_with("--web-paths")), 1)
                 self.assertEqual(len(self.calls_with("--web-mounts")), 1)
                 serve = self.calls_with("--serve")[0]
-                self.assertIn("127.0.0.1::8080", serve)
+                self.assertIn("127.0.0.1::8521", serve)
                 self.assertIn(f"type=bind,src={self.home / 'repos'},dst=/workspace", serve)
                 self.assertFalse(self.calls_with("--deploy"))
                 if host == "linux":

@@ -254,7 +254,7 @@ class PlaywrightRunner:
         app_environment = {"SUITECONTAINER_PLAYWRIGHT_URL": endpoint, "SUITECONTAINER_PLAYWRIGHT_TOKEN": token}
         runner_environment = {**npm_environment, "SUITECONTAINER_PLAYWRIGHT_TOKEN": token,
                               "SUITECONTAINER_PLAYWRIGHT_BROWSER": self.browser,
-                              "SUITECONTAINER_PLAYWRIGHT_APP_URL": f"http://{self.app_name}:8080",
+                              "SUITECONTAINER_PLAYWRIGHT_APP_URL": f"http://{self.app_name}:8521",
                               "NPM_CONFIG_USERCONFIG": f"{RUNTIME}/npmrc"}
         if self.browser == "local-chrome":
             runner_environment["PLAYWRIGHT_REMOTE_WS_ENDPOINT"] = "ws://127.0.0.1:9222/"

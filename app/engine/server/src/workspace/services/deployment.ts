@@ -45,9 +45,19 @@ export class DeploymentService {
 		// A string config is the original browser contract and retains explicit multi-target deployment.
 		const legacy =
 			input.__legacyConfig === true && input.targetId === undefined;
+		if (
+			input.allTargets === true &&
+			(input.targetId !== undefined || input.config !== undefined)
+		)
+			throw new ServiceError(
+				"invalid_input",
+				"Choose allTargets or a targetId, without a configuration override.",
+			);
 		const value = legacy
 			? (input.config as Record<string, unknown>)
-			: this.suiteapps.select(input.targetId);
+			: input.allTargets === true
+				? this.configuration.read()
+				: this.suiteapps.select(input.targetId);
 		if (legacy) this.configuration.write(value);
 		const ready = this.suiteapps.readiness(value);
 		if (!ready.ready || !ready.config || !ready.auth || !ready.cert)
@@ -95,11 +105,13 @@ export class DeploymentService {
 				this.workerScript ??
 				fileURLToPath(
 					new URL(
-						import.meta.url.endsWith(".ts") ? "../install.ts" : "../install.js",
+						import.meta.url.endsWith(".ts")
+							? "../deployment-worker.ts"
+							: "../deployment-worker.js",
 						import.meta.url,
 					),
 				);
-			const worker = spawn(process.execPath, [script, "--deploy"], {
+			const worker = spawn(process.execPath, [script], {
 				stdio: ["ignore", "pipe", "pipe", "ipc"],
 				detached: true,
 				windowsHide: true,

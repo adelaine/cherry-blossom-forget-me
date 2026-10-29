@@ -207,7 +207,7 @@ export const startWebServer = (options: ServerOptions = {}): Server => {
 		void lifecycle.dispose();
 		process.exitCode = 1;
 	});
-	server.listen(options.port ?? 8080, options.host ?? "0.0.0.0", () => {
+	server.listen(options.port ?? 8521, options.host ?? "0.0.0.0", () => {
 		writeFileSync(
 			options.sessionFile ?? "/tmp/suitecontainer-web-url",
 			`/#session=${lifecycle.session}`,

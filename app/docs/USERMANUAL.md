@@ -132,6 +132,10 @@ Deployment processes the VMs in order and, within each VM, the SuiteApps in orde
 
 Progress, warnings, and errors appear in the deployment output. If deployment fails, correct the reported issue and retry. Earlier successful deployments are not rolled back automatically.
 
+The existing workspace command also accepts `--deploy` while SuiteContainer is running. It uses the saved settings and deploys all configured targets through the authenticated API. Add `--target <id>` to select one target using its ID from `/api/targets`. The command prints deployment output and exits when the operation completes. It does not save configuration changes.
+
+If the command loses its connection or you interrupt it, deployment may continue. Check the operation in SuiteContainer before starting another deployment. The command never automatically resubmits a deployment.
+
 After a deployment starts, Credentials, Settings, SQL, and SFTP collapse. You can reopen them whenever needed. When all four are collapsed, they appear horizontally on wider screens.
 
 ## SQL

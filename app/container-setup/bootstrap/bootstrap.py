@@ -506,7 +506,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
             raise RuntimeError("Could not inspect the existing app. Check the Podman connection and retry. It will not be reused or removed.")
         confirm_owner(info)
         podman("rm", name, capture=True)
-    arguments = ["run", "-d", "--name", name, "--label", f"{OWNER}={PROJECT}", "--cgroups=disabled", "--publish", "127.0.0.1::8080", "--publish", "127.0.0.1::8000", "--env", "SUITECONTAINER_SFTP=1"]
+    arguments = ["run", "-d", "--name", name, "--label", f"{OWNER}={PROJECT}", "--cgroups=disabled", "--publish", "127.0.0.1::8521", "--publish", "127.0.0.1::8000", "--env", "SUITECONTAINER_SFTP=1"]
     arguments += ["--publish", "127.0.0.1:52300:52300"]
     if instance_id:
         directory = runtime_directory()
@@ -514,6 +514,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
                       "--env", f"SUITECONTAINER_INSTANCE_ID={instance_id}",
                       "--env", "SUITECONTAINER_ACCESS_TOKEN_FILE=/run/suitecontainer/access-token",
                       "--env", "SUITECONTAINER_CONNECTION_FILE=/run/suitecontainer/connection.json",
+                      "--env", "SUITECONTAINER_INTERNAL_API_URL=http://127.0.0.1:8521",
                       "--env", f"SUITECONTAINER_MODE={'development' if OPTIONS.dev else 'production'}",
                       "--mount", f"type=bind,src={directory},dst=/run/suitecontainer",
                       "--mount", f"type=bind,src={directory / 'access-token'},dst=/run/suitecontainer/access-token,ro=true"]
@@ -531,7 +532,7 @@ def start_web(name, extra_arguments=(), instance_id=None, dependencies=None):
                 arguments += ["--env", f"{variable}={os.environ[variable]}"]
     if not (WINDOWS or MACOS):
         arguments += ["--env", f"SUITECONTAINER_HOST_FQDN={command('hostname', '-f', capture=True, optional=True).stdout.strip()}"]
-    execution = ["--prefix", "/app", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"] if OPTIONS.dev else ["--serve"]
+    execution = ["--prefix", "/app", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8521"] if OPTIONS.dev else ["--serve"]
     podman(*arguments, *extra_arguments, *mounts, IMAGE, *execution, capture=True)
 
 
@@ -605,7 +606,7 @@ def prepare_dependencies(name, fingerprint):
 def assert_app_idle(name, runner_stopped=False):
     # Older app images do not expose activity on /health. Read their authenticated
     # state locally without returning a session token or application log to the host.
-    script = "const runnerStopped=" + json.dumps(runner_stopped) + ";\n" + """const health=await fetch('http://127.0.0.1:8080/health?activity=1',{signal:AbortSignal.timeout(5000)});
+    script = "const runnerStopped=" + json.dumps(runner_stopped) + ";\n" + """const health=await fetch('http://127.0.0.1:8521/health?activity=1',{signal:AbortSignal.timeout(5000)});
 if(!health.ok)process.exit(2);
 let state=await health.json();
 if(runnerStopped&&typeof state.localBusy==='boolean')state.busy=state.localBusy;
@@ -613,7 +614,7 @@ else if(typeof state.busy!=='boolean'||runnerStopped){
  const {readFileSync}=await import('node:fs');
  const suffix=readFileSync('/tmp/suitecontainer-web-url','utf8').trim();
  const token=new URL('http://localhost'+suffix).hash.slice(1);
- const response=await fetch('http://127.0.0.1:8080/api/state',{headers:{'x-session-token':new URLSearchParams(token).get('session')||''},signal:AbortSignal.timeout(5000)});
+ const response=await fetch('http://127.0.0.1:8521/api/state',{headers:{'x-session-token':new URLSearchParams(token).get('session')||''},signal:AbortSignal.timeout(5000)});
  if(!response.ok)process.exit(2);
  state=await response.json();
  if(typeof state.run?.state!=='string'||typeof state.sql?.state!=='string')process.exit(2);
@@ -716,7 +717,7 @@ def new_credentials():
 
 
 def discover(name, instance_id, dependencies=None):
-    addresses = podman("port", name, "8080/tcp", capture=True).stdout.splitlines()
+    addresses = podman("port", name, "8521/tcp", capture=True).stdout.splitlines()
     if not addresses or not re.fullmatch(r"127\.0\.0\.1:[0-9]+", addresses[0].strip()):
         raise RuntimeError("Could not discover a host-loopback application port from Podman.")
     connection = {"schemaVersion": 1, "apiVersion": 1, "instanceId": instance_id,

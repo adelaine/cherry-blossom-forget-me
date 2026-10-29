@@ -54,7 +54,7 @@ export default defineConfig(() => {
 		return (
 			path.startsWith(source) &&
 			!path.includes("/api/") &&
-			!/\/(?:main|install|deploy|gitlab-token)\.ts$|\/common\/operations\.ts$/.test(
+			!/\/(?:main|install|deploy|deployment-worker|deployment-client|gitlab-token)\.ts$|\/common\/operations\.ts$/.test(
 				path,
 			)
 		);
@@ -68,7 +68,7 @@ export default defineConfig(() => {
 		clearScreen: false,
 		server: {
 			host: "0.0.0.0",
-			port: 8080,
+			port: 8521,
 			strictPort: true,
 			cors: false,
 			// The client derives the published host port from its own import URL.

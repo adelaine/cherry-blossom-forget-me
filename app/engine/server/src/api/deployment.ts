@@ -9,9 +9,11 @@ export const deploymentContracts: ApiContract[] = [
 			fields: {
 				config: { type: "config" },
 				targetId: { type: "string" },
+				allTargets: { type: "boolean" },
 			},
 			description:
-				"New requests require targetId from /api/targets and execute the saved configuration for that target. Legacy string config requests retain explicit configured multi-target behavior.",
+				"Use targetId from /api/targets or allTargets=true to execute saved settings. " +
+				"Legacy string config requests retain explicit configured multi-target behavior.",
 		},
 		responseFields: ["operationId", "instanceId", "run", "ready"],
 		cancelSupported: false,
