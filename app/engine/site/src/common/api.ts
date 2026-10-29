@@ -39,7 +39,7 @@ export const createSiteApi = (
 		const timeout = AbortSignal.timeout(
 			path === "sftp" || path === "playwright/cancel"
 				? 30000
-				: path === "playwright/run"
+				: path === "playwright/run" || path === "suitecloud/login"
 					? 20000
 					: 10000,
 		);

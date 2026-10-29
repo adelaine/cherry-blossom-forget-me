@@ -42,6 +42,11 @@ export class RemoteSftpService {
 		return this.state === "starting" || this.probeState === "checking";
 	}
 
+	/** Retain this service graph until every container it created has been stopped. */
+	get ownsContainers(): boolean {
+		return this.owned.size > 0;
+	}
+
 	setTarget(target: string): void {
 		if (target === this.target) return;
 		++this.generation;

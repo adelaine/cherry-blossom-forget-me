@@ -21,12 +21,14 @@ import type { CredentialsService } from "./credentials.ts";
 import type { SuiteAppsService } from "./suiteapps.ts";
 import { ServiceError } from "../../common/errors.ts";
 import type { Auth } from "../../common/auth.ts";
+import type { Operation } from "../../common/operations.ts";
 
 /** Own the browser login process and its bounded lifetime. */
 export class SuiteCloudAuthenticationService {
 	private worker?: ChildProcess;
 	private completed?: Promise<void>;
 	private operationId?: string;
+	private terminalOperation?: Operation;
 	private configuration: ConfigurationService;
 	private credentials: CredentialsService;
 	private suiteapps: SuiteAppsService;
@@ -134,9 +136,11 @@ export class SuiteCloudAuthenticationService {
 				},
 			]),
 		);
-		const operation = this.operationId
-			? this.configuration.operations.get(this.operationId)
-			: undefined;
+		const operation =
+			this.terminalOperation ??
+			(this.operationId
+				? this.configuration.operations.get(this.operationId)
+				: undefined);
 		return {
 			method: auth?.method ?? "browser",
 			accounts,
@@ -212,6 +216,7 @@ export class SuiteCloudAuthenticationService {
 			},
 		);
 		this.operationId = operation.id;
+		this.terminalOperation = undefined;
 		let rejectUrl: (error: Error) => void = () => {};
 		let closeWatcher = () => {};
 		const url = new Promise<string>((resolve, reject) => {
@@ -379,6 +384,9 @@ export class SuiteCloudAuthenticationService {
 								: new Error("SuiteCloud sign-in failed."),
 						);
 					} finally {
+						// Keep the login outcome after disposable operation history expires.
+						if (this.operationId === operation.id && !this.terminalOperation)
+							this.terminalOperation = operations.get(operation.id);
 						closeWatcher();
 						rejectUrl(
 							new Error("SuiteCloud sign-in ended before opening the browser."),
@@ -393,6 +401,7 @@ export class SuiteCloudAuthenticationService {
 		} catch (error) {
 			this.worker?.kill();
 			operations.fail(operation.id, error);
+			this.terminalOperation = operations.get(operation.id);
 			throw error;
 		} finally {
 			closeWatcher();

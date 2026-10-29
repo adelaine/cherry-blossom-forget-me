@@ -38,7 +38,11 @@ export class SftpApplicationService {
 		}
 	}
 	get active(): boolean {
-		return this.implementation.active;
+		return (
+			this.implementation.active ||
+			(this.implementation instanceof RemoteSftpService &&
+				this.implementation.ownsContainers)
+		);
 	}
 	status(auth: Auth) {
 		if (this.implementation instanceof RemoteSftpService)
